@@ -114,7 +114,8 @@ function getMonthStr(offset = 0) {
 }
 
 function getWeekRange(date) {
-  const d = new Date(date);
+  // 'T12:00:00' evita que o fuso horário (UTC-3) empurre a data para o dia anterior
+  const d = new Date(date + 'T12:00:00');
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   const monday = new Date(d.setDate(diff));
