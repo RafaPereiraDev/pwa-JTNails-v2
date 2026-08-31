@@ -122,6 +122,8 @@ async function openProfessionalModal(id = null) {
     </form>
   `;
 
+  attachPhoneMask('pf-phone');
+
   document.getElementById('prof-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const errEl = document.getElementById('pf-error');

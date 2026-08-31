@@ -69,7 +69,7 @@ function renderAppointmentDetail(appt) {
         <i class="fa fa-check"></i> Confirmar
       </button>
       <button class="appt-action-btn" style="background:#f59e0b" onclick="quickStatus(${appt.id},'in_progress')">
-        <i class="fa fa-scissors"></i> Iniciar
+        <i class="fa fa-paintbrush"></i> Iniciar
       </button>`;
   }
   if (appt.status === 'in_progress') {
@@ -438,6 +438,8 @@ async function openQuickClient() {
 
   // Salva estado para o botão Voltar
   window._prevModalState = { title: prevTitle, body: prevBody, cls: prevClass };
+
+  attachPhoneMask('qc-phone');
 
   document.getElementById('quick-client-form').addEventListener('submit', async (e) => {
     e.preventDefault();

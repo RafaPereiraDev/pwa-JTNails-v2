@@ -7,23 +7,26 @@ router.get('/dashboard', authenticateToken, (req, res) => {
   const today = new Date().toLocaleDateString('en-CA');
   const month = today.slice(0, 7);
 
+  // profId vem do JWT (não de entrada direta), mas usamos placeholder por segurança e consistência
   let profWhere = '';
   const profId  = req.user.role === 'professional' ? req.user.professional_id : null;
-  if (profId) profWhere = ` AND a.professional_id=${profId}`;
+  if (profId) profWhere = ' AND a.professional_id = ?';
+  // Argumentos extras de profId para cada query que usa profWhere
+  const pArg = profId ? [profId] : [];
 
   const todayStats = prepare(`
     SELECT COUNT(*) as total,
       COUNT(CASE WHEN status='completed' THEN 1 END) as completed,
       COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END),0) as revenue
     FROM appointments a WHERE date=? AND status NOT IN ('cancelled','no_show') ${profWhere}
-  `).get(today);
+  `).get(today, ...pArg);
 
   const monthStats = prepare(`
     SELECT COUNT(*) as total,
       COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END),0) as revenue,
       COALESCE(AVG(CASE WHEN status='completed' THEN price ELSE NULL END),0) as avg_ticket
     FROM appointments a WHERE date LIKE ? AND status NOT IN ('cancelled','no_show') ${profWhere}
-  `).get(`${month}%`);
+  `).get(`${month}%`, ...pArg);
 
   const nextAppointments = prepare(`
     SELECT a.*, c.name as client_name, c.phone as client_phone,
@@ -35,7 +38,7 @@ router.get('/dashboard', authenticateToken, (req, res) => {
     WHERE a.date>=? AND a.status IN ('scheduled','confirmed','in_progress')
     ${profWhere}
     ORDER BY a.date, a.start_time LIMIT 10
-  `).all(today);
+  `).all(today, ...pArg);
 
   const profStats = prepare(`
     SELECT p.id, p.name, p.color,

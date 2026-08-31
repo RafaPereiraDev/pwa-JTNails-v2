@@ -137,7 +137,7 @@ async function openClientDetail(id) {
 
       <div class="stats-grid" style="margin-bottom:20px">
         <div class="stat-card">
-          <div class="stat-icon pink"><i class="fa fa-scissors"></i></div>
+          <div class="stat-icon pink"><i class="fa fa-paintbrush"></i></div>
           <div class="stat-info">
             <div class="stat-value">${client.total_appointments || 0}</div>
             <div class="stat-label">Atendimentos</div>
@@ -235,6 +235,8 @@ async function openClientModal(id = null) {
       </div>
     </form>
   `;
+
+  attachPhoneMask('cf-phone');
 
   document.getElementById('client-form').addEventListener('submit', async (e) => {
     e.preventDefault();

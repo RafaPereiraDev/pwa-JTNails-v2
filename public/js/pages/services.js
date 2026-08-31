@@ -21,7 +21,7 @@ async function renderServicesTable() {
   try {
     const services = await api.getServices();
     if (services.length === 0) {
-      container.innerHTML = `<div class="card"><div class="card-body">${emptyState('Nenhum serviço cadastrado', 'fa-scissors')}</div></div>`;
+      container.innerHTML = `<div class="card"><div class="card-body">${emptyState('Nenhum serviço cadastrado', 'fa-paintbrush')}</div></div>`;
       return;
     }
 

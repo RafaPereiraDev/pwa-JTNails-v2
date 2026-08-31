@@ -45,7 +45,7 @@ function getStatusIcon(status) {
   const map = {
     scheduled: 'fa-clock',
     confirmed: 'fa-check',
-    in_progress: 'fa-scissors',
+    in_progress: 'fa-paintbrush',
     completed: 'fa-check-circle',
     cancelled: 'fa-times-circle',
     no_show: 'fa-user-times'
@@ -193,4 +193,49 @@ function reliabilityBadge(reliability, showLabel = true) {
   return `<span class="reliability-badge" style="background:${cfg.bg};color:${cfg.color}" title="${cfg.label}">
     <i class="fa ${cfg.icon}"></i>${label}
   </span>`;
+}
+
+// ===== MÁSCARAS DE ENTRADA (padrão brasileiro) =====
+
+/** Aplica máscara de telefone (XX) XXXXX-XXXX enquanto o usuário digita */
+function maskPhone(value) {
+  const d = (value || '').replace(/\D/g, '').slice(0, 11);
+  if (d.length === 0) return '';
+  if (d.length <= 2)  return `(${d}`;
+  if (d.length <= 6)  return `(${d.slice(0,2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+}
+
+/** Aplica máscara de CPF XXX.XXX.XXX-XX enquanto o usuário digita */
+function maskCPF(value) {
+  const d = (value || '').replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 3)  return d;
+  if (d.length <= 6)  return `${d.slice(0,3)}.${d.slice(3)}`;
+  if (d.length <= 9)  return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`;
+  return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+}
+
+/**
+ * Liga a máscara de telefone a um input pelo id.
+ * Formata o valor inicial e a cada digitação.
+ */
+function attachPhoneMask(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.value = maskPhone(el.value);
+  el.addEventListener('input', () => {
+    const pos = el.selectionStart;
+    el.value = maskPhone(el.value);
+    // mantém o cursor no fim quando digitando no final
+    if (pos >= el.value.length - 1) el.setSelectionRange(el.value.length, el.value.length);
+  });
+}
+
+/** Liga a máscara de CPF a um input pelo id. */
+function attachCPFMask(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.value = maskCPF(el.value);
+  el.addEventListener('input', () => { el.value = maskCPF(el.value); });
 }

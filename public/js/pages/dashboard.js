@@ -23,7 +23,7 @@ async function loadDashboard() {
         </button>
         ${currentUser.role === 'admin' ? `
         <button class="quick-btn" onclick="navigateTo('services')">
-          <i class="fa fa-scissors" style="color:var(--success)"></i> Ver Serviços
+          <i class="fa fa-paintbrush" style="color:var(--success)"></i> Ver Serviços
         </button>` : ''}
         <button class="quick-btn" onclick="navigateTo('agenda')">
           <i class="fa fa-calendar" style="color:var(--info)"></i> Ver Agenda
@@ -60,7 +60,7 @@ async function loadDashboard() {
       <h3 class="font-bold mb-3" style="color:var(--dark)">Este mês</h3>
       <div class="stats-grid mb-6">
         <div class="stat-card">
-          <div class="stat-icon pink"><i class="fa fa-scissors"></i></div>
+          <div class="stat-icon pink"><i class="fa fa-paintbrush"></i></div>
           <div class="stat-info">
             <div class="stat-value">${month.total}</div>
             <div class="stat-label">Atendimentos</div>

@@ -116,8 +116,8 @@ router.put('/:id', authenticateToken, (req, res) => {
 
   // Profissional só pode editar as próprias despesas
   if (req.user.role === 'professional') {
-    if (tx.type !== 'expense') return res.status(403).json({ error: 'Acesso negado' });
-    if (tx.professional_id !== req.user.professional_id) return res.status(403).json({ error: 'Acesso negado' });
+    if (tx.type !== 'expense') return res.status(403).json({ error: 'Você só pode editar as suas próprias despesas' });
+    if (tx.professional_id !== req.user.professional_id) return res.status(403).json({ error: 'Você só pode editar as suas próprias despesas' });
   }
 
   const { description, category, amount, payment_method, date, notes } = req.body;
@@ -140,8 +140,8 @@ router.delete('/:id', authenticateToken, (req, res) => {
 
   // Profissional só pode excluir as próprias despesas
   if (req.user.role === 'professional') {
-    if (tx.type !== 'expense') return res.status(403).json({ error: 'Acesso negado' });
-    if (tx.professional_id !== req.user.professional_id) return res.status(403).json({ error: 'Acesso negado' });
+    if (tx.type !== 'expense') return res.status(403).json({ error: 'Você só pode excluir as suas próprias despesas' });
+    if (tx.professional_id !== req.user.professional_id) return res.status(403).json({ error: 'Você só pode excluir as suas próprias despesas' });
   }
 
   prepare('DELETE FROM transactions WHERE id = ?').run(req.params.id);

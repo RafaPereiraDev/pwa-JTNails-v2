@@ -19,7 +19,7 @@ async function apiRequest(method, endpoint, data = null) {
   const json = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    const err = new Error(json.error || json.message || 'Erro na requisição');
+    const err = new Error(json.error || json.message || 'Não foi possível concluir a operação. Tente novamente.');
     err.status = res.status;
     err.data = json;
     throw err;

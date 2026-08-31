@@ -17,7 +17,7 @@ function navigateTo(page) {
 
   // Check admin-only pages
   if (pageConfig[page].adminOnly && currentUser.role !== 'admin') {
-    toast('Acesso negado', 'error');
+    toast('Esta área é exclusiva para administradores', 'error');
     return;
   }
 

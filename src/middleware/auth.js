@@ -13,12 +13,12 @@ function authenticateToken(req, res, next) {
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ error: 'Token de acesso necessário' });
+    return res.status(401).json({ error: 'Você precisa estar logada para acessar esta área' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      return res.status(403).json({ error: 'Token inválido ou expirado' });
+      return res.status(403).json({ error: 'Sua sessão expirou. Faça login novamente.' });
     }
     req.user = user;
     next();
