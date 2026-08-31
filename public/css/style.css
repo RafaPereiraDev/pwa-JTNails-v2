@@ -40,6 +40,8 @@ body {
   line-height: 1.5;
   min-height: 100vh;
 }
+/* Impede rolagem horizontal da página inteira no mobile */
+html, body { max-width: 100%; overflow-x: hidden; }
 a { text-decoration: none; color: inherit; }
 button { cursor: pointer; border: none; background: none; font-family: inherit; }
 input, select, textarea { font-family: inherit; }
@@ -952,13 +954,19 @@ tbody tr:hover { background: var(--gray-50); }
   .sidebar-overlay.open { display: block; }
   .btn-close-sidebar { display: block; }
   .btn-menu { display: flex; }
-  .main-content { margin-left: 0; }
+  .main-content { margin-left: 0; max-width: 100%; }
   .topbar { padding: 0 16px; }
-  .page-content { padding: 16px; }
+  .page-content { padding: 16px; max-width: 100%; }
   .form-row { grid-template-columns: 1fr; }
   .form-row.cols-3 { grid-template-columns: 1fr; }
   .financial-summary { grid-template-columns: 1fr; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  /* Impede que a barra da agenda estoure a largura da tela */
+  .agenda-date-display { min-width: 0; width: 100%; }
+  .agenda-toolbar { width: 100%; }
+  .view-tabs { flex-wrap: wrap; }
+  /* Cabeçalho de página quebra em vez de empurrar */
+  .page-header { flex-wrap: wrap; gap: 10px; }
 }
 @media (max-width: 600px) {
   .stats-grid { grid-template-columns: 1fr 1fr; }
@@ -968,6 +976,11 @@ tbody tr:hover { background: var(--gray-50); }
   .agenda-toolbar { gap: 8px; }
   .modal { border-radius: 16px 16px 0 0; }
   .modal-overlay { align-items: flex-end; padding: 0; }
+  /* Busca ocupa a largura toda sem forçar overflow */
+  .search-input-wrap { min-width: 0; width: 100%; }
+  .search-bar { flex-wrap: wrap; }
+  /* Toasts não estouram a largura da tela */
+  .toast-container { max-width: calc(100vw - 24px); left: 12px; right: 12px; }
 }
 @media (max-width: 400px) {
   .stats-grid { grid-template-columns: 1fr; }
