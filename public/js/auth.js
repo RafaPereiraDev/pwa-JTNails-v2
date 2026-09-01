@@ -8,14 +8,37 @@ function clearToken() { localStorage.removeItem('token'); }
 function setCurrentUser(user) {
   currentUser = user;
   document.getElementById('user-name-display').textContent = user.name;
-  document.getElementById('user-role-display').textContent =
-    user.role === 'admin' ? 'Administrador' : 'Profissional';
-  document.getElementById('user-avatar').textContent = getInitials(user.name);
+  const roleLabels = { master: 'Administrador Mestre', admin: 'Administradora', professional: 'Profissional' };
+  document.getElementById('user-role-display').textContent = roleLabels[user.role] || 'Usuário';
+  applySidebarAvatar();
 
-  // Show/hide admin-only items
+  const isAdminLevel = user.role === 'admin' || user.role === 'master';
+
+  // Itens admin+master (gestão): visíveis para admin e master
   document.querySelectorAll('.admin-only').forEach(el => {
-    el.style.display = user.role === 'admin' ? '' : 'none';
+    el.style.display = isAdminLevel ? '' : 'none';
   });
+
+  // Itens exclusivos do master
+  document.querySelectorAll('.master-only').forEach(el => {
+    el.style.display = user.role === 'master' ? '' : 'none';
+  });
+}
+
+// Mostra a foto de perfil no avatar da sidebar, ou as iniciais se não houver foto.
+function applySidebarAvatar() {
+  const el = document.getElementById('user-avatar');
+  if (!el || !currentUser) return;
+  const photo = currentUser.professional_photo;
+  if (photo) {
+    el.textContent = '';
+    el.style.backgroundImage = `url("${photo}")`;
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+  } else {
+    el.style.backgroundImage = '';
+    el.textContent = getInitials(currentUser.name);
+  }
 }
 
 function togglePassword() {
@@ -49,6 +72,17 @@ async function initAuth() {
 function showLoginPage() {
   document.getElementById('login-page').style.display = '';
   document.getElementById('app').style.display = 'none';
+
+  // Reseta o formulário de login ao estado inicial (evita botão travado em "Entrando...")
+  const btn = document.getElementById('login-btn');
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<span>Entrar</span>';
+  }
+  const errEl = document.getElementById('login-error');
+  if (errEl) errEl.style.display = 'none';
+  const pwInput = document.getElementById('login-password');
+  if (pwInput) pwInput.value = '';
 }
 
 function showApp() {

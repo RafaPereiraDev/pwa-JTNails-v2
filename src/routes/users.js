@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const bcrypt  = require('bcryptjs');
 const { prepare }                      = require('../database/db');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { authenticateToken, requireAdmin, requireMaster } = require('../middleware/auth');
 
 router.get('/', authenticateToken, requireAdmin, (req, res) => {
   const users = prepare(`
@@ -20,6 +20,9 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Nome, e-mail, senha e função são obrigatórios' });
   if (!['admin','professional'].includes(role))
     return res.status(400).json({ error: 'Função inválida' });
+  // Só o master pode criar outro master (via role 'master', que não é permitido pela UI comum)
+  if (role === 'master' && req.user.role !== 'master')
+    return res.status(403).json({ error: 'Apenas o administrador mestre pode criar outro mestre' });
   if (password.length < 6)
     return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
 
@@ -38,10 +41,19 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
   const user = prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
 
+  // Ninguém além do master mexe na conta do master
+  if (user.role === 'master' && req.user.role !== 'master')
+    return res.status(403).json({ error: 'Apenas o administrador mestre pode alterar a conta mestre' });
+
+  // Admin comum não pode promover ninguém a master
+  const newRole = role || user.role;
+  if (newRole === 'master' && req.user.role !== 'master')
+    return res.status(403).json({ error: 'Apenas o administrador mestre pode definir a função mestre' });
+
   prepare('UPDATE users SET name=?,email=?,role=?,professional_id=?,active=? WHERE id=?').run(
     name || user.name,
     email ? email.toLowerCase().trim() : user.email,
-    role  || user.role,
+    newRole,
     professional_id !== undefined ? professional_id : user.professional_id,
     active !== undefined ? active : user.active,
     req.params.id
@@ -49,10 +61,13 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
   res.json({ message: 'Usuário atualizado com sucesso' });
 });
 
-router.put('/:id/reset-password', authenticateToken, requireAdmin, (req, res) => {
+// Redefinição de senha de outro usuário: exclusivo do administrador mestre
+router.put('/:id/reset-password', authenticateToken, requireMaster, (req, res) => {
   const { new_password } = req.body;
   if (!new_password || new_password.length < 6)
     return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
+  const target = prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Usuário não encontrado' });
   prepare('UPDATE users SET password = ? WHERE id = ?').run(bcrypt.hashSync(new_password, 10), req.params.id);
   res.json({ message: 'Senha redefinida com sucesso' });
 });
@@ -60,6 +75,11 @@ router.put('/:id/reset-password', authenticateToken, requireAdmin, (req, res) =>
 router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
   if (parseInt(req.params.id) === req.user.id)
     return res.status(400).json({ error: 'Não é possível excluir seu próprio usuário' });
+  const target = prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Usuário não encontrado' });
+  // Só o master pode desativar uma conta master
+  if (target.role === 'master' && req.user.role !== 'master')
+    return res.status(403).json({ error: 'Apenas o administrador mestre pode desativar a conta mestre' });
   prepare('UPDATE users SET active = 0 WHERE id = ?').run(req.params.id);
   res.json({ message: 'Usuário desativado com sucesso' });
 });

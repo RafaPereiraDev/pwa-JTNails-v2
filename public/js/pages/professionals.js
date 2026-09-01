@@ -37,16 +37,19 @@ async function renderProfessionalsList() {
           <div class="card">
             <div class="card-body">
               <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-                <div style="width:60px;height:60px;border-radius:50%;background:${p.color};color:white;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;flex-shrink:0">
-                  ${getInitials(p.name)}
+                <div style="width:60px;height:60px;border-radius:50%;overflow:hidden;background:${p.color};color:white;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;flex-shrink:0">
+                  ${p.photo
+                    ? `<img src="${esc(p.photo)}" alt="${esc(p.name)}" style="width:100%;height:100%;object-fit:cover" />`
+                    : getInitials(p.name)}
                 </div>
                 <div style="flex:1;min-width:200px">
                   <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-                    <h3 style="font-size:18px;font-weight:700">${p.name}</h3>
+                    <h3 style="font-size:18px;font-weight:700">${esc(p.name)}</h3>
                     <span class="badge ${p.active ? 'badge-active' : 'badge-inactive'}">${p.active ? 'Ativa' : 'Inativa'}</span>
                   </div>
                   ${p.phone ? `<div class="text-sm text-muted"><i class="fa fa-phone"></i> ${formatPhone(p.phone)}</div>` : ''}
-                  ${p.email ? `<div class="text-sm text-muted"><i class="fa fa-envelope"></i> ${p.email}</div>` : ''}
+                  ${p.email ? `<div class="text-sm text-muted"><i class="fa fa-envelope"></i> ${esc(p.email)}</div>` : ''}
+                  ${p.bio ? `<div class="text-sm" style="margin-top:6px;color:var(--gray-600);font-style:italic">"${esc(p.bio)}"</div>` : ''}
                 </div>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;flex:2;min-width:280px">
                   <div class="text-center">
@@ -97,15 +100,15 @@ async function openProfessionalModal(id = null) {
     <form id="prof-form">
       <div class="form-group">
         <label>Nome *</label>
-        <input type="text" id="pf-name" value="${prof ? prof.name : ''}" required placeholder="Nome da profissional" />
+        <input type="text" id="pf-name" value="${prof ? esc(prof.name) : ''}" required placeholder="Nome da profissional" />
       </div>
       <div class="form-group">
         <label>Telefone</label>
-        <input type="tel" id="pf-phone" value="${prof ? (prof.phone || '') : ''}" placeholder="(11) 99999-9999" />
+        <input type="tel" id="pf-phone" value="${prof ? esc(prof.phone || '') : ''}" placeholder="(11) 99999-9999" />
       </div>
       <div class="form-group">
         <label>E-mail</label>
-        <input type="email" id="pf-email" value="${prof ? (prof.email || '') : ''}" placeholder="email@exemplo.com" />
+        <input type="email" id="pf-email" value="${prof ? esc(prof.email || '') : ''}" placeholder="email@exemplo.com" />
       </div>
       <div class="form-group">
         <label>Cor na agenda</label>

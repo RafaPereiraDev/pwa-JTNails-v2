@@ -52,17 +52,17 @@ async function renderClientsTable(search = '') {
                     <div style="display:flex;align-items:center;gap:10px">
                       <div class="client-avatar">${getInitials(c.name)}</div>
                       <div>
-                        <div class="font-semibold">${c.name}</div>
+                        <div class="font-semibold">${esc(c.name)}</div>
                         <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
                           ${reliabilityBadge(c.reliability || 'new')}
-                          ${c.email ? `<span class="text-xs text-muted">${c.email}</span>` : ''}
+                          ${c.email ? `<span class="text-xs text-muted">${esc(c.email)}</span>` : ''}
                         </div>
                       </div>
                     </div>
                   </td>
                   <td>
                     <a href="tel:${c.phone}" style="color:var(--gray-700)">${formatPhone(c.phone)}</a>
-                    <button class="btn btn-xs whatsapp-btn" style="margin-left:4px" onclick="sendWhatsApp('${c.phone}', '${c.name.replace(/'/g,'')}')" title="WhatsApp">
+                    <button class="btn btn-xs whatsapp-btn" style="margin-left:4px" onclick="sendWhatsApp('${esc(c.phone)}', '${esc(c.name).replace(/'/g,'&#39;')}')" title="WhatsApp">
                       <i class="fab fa-whatsapp"></i>
                     </button>
                   </td>
@@ -80,7 +80,7 @@ async function renderClientsTable(search = '') {
                       <button class="btn btn-secondary btn-xs" onclick="openNewAppointment(null, null, ${c.id})" title="Novo agendamento">
                         <i class="fa fa-calendar-plus"></i>
                       </button>
-                      ${currentUser.role === 'admin' ? `
+                      ${isAdminLevel() ? `
                       <button class="btn btn-danger btn-xs" onclick="deleteClientConfirm(${c.id})" title="Excluir cliente">
                         <i class="fa fa-trash"></i>
                       </button>` : ''}
@@ -120,10 +120,10 @@ async function openClientDetail(id) {
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px">
         <div class="client-avatar" style="width:56px;height:56px;font-size:22px">${getInitials(client.name)}</div>
         <div>
-          <h3 style="font-size:20px;font-weight:700">${client.name}</h3>
+          <h3 style="font-size:20px;font-weight:700">${esc(client.name)}</h3>
           <div style="color:var(--gray-500);margin-bottom:4px">
             <i class="fa fa-phone"></i> ${formatPhone(client.phone)}
-            ${client.email ? ` · <i class="fa fa-envelope"></i> ${client.email}` : ''}
+            ${client.email ? ` · <i class="fa fa-envelope"></i> ${esc(client.email)}` : ''}
           </div>
           ${reliabilityBadge(client.reliability || 'new')}
           ${client.birth_date ? `<div class="text-sm text-muted" style="margin-top:4px"><i class="fa fa-birthday-cake"></i> ${formatDate(client.birth_date)}</div>` : ''}
@@ -159,7 +159,7 @@ async function openClientDetail(id) {
         </div>
       </div>
 
-      ${client.notes ? `<div class="alert alert-info mb-4"><i class="fa fa-sticky-note"></i> ${client.notes}</div>` : ''}
+      ${client.notes ? `<div class="alert alert-info mb-4"><i class="fa fa-sticky-note"></i> ${esc(client.notes)}</div>` : ''}
 
       <h4 class="font-bold mb-3">Histórico de Atendimentos</h4>
       ${client.history.length === 0 ? emptyState('Nenhum atendimento ainda', 'fa-calendar') : `
@@ -172,8 +172,8 @@ async function openClientDetail(id) {
             ${client.history.map(h => `
               <tr>
                 <td>${formatDate(h.date)}<br><span class="text-xs text-muted">${h.start_time}</span></td>
-                <td>${h.service_name}</td>
-                <td>${h.professional_name}</td>
+                <td>${esc(h.service_name)}</td>
+                <td>${esc(h.professional_name)}</td>
                 <td class="font-semibold">${formatCurrency(h.price)}</td>
                 <td>${getPaymentLabel(h.payment_method)}</td>
                 <td>${statusBadge(h.status)}</td>
@@ -187,7 +187,7 @@ async function openClientDetail(id) {
         <button class="btn btn-outline" onclick="closeModal();openClientModal(${client.id})">
           <i class="fa fa-edit"></i> Editar
         </button>
-        <button class="btn whatsapp-btn btn-sm" onclick="sendWhatsApp('${client.phone}','${client.name.replace(/'/g,'')}')">
+        <button class="btn whatsapp-btn btn-sm" onclick="sendWhatsApp('${esc(client.phone)}','${esc(client.name).replace(/'/g,'&#39;')}')">
           <i class="fab fa-whatsapp"></i> WhatsApp
         </button>
       </div>
@@ -209,28 +209,28 @@ async function openClientModal(id = null) {
     <form id="client-form">
       <div class="form-group">
         <label>Nome completo *</label>
-        <input type="text" id="cf-name" value="${client ? client.name : ''}" required placeholder="Nome da cliente" />
+        <input type="text" id="cf-name" value="${client ? esc(client.name) : ''}" required placeholder="Nome da cliente" />
       </div>
       <div class="form-group">
         <label>Telefone *</label>
-        <input type="tel" id="cf-phone" value="${client ? client.phone : ''}" required placeholder="(11) 99999-9999" />
+        <input type="tel" id="cf-phone" value="${client ? esc(client.phone) : ''}" required placeholder="(11) 99999-9999" />
       </div>
       <div class="form-group">
         <label>E-mail</label>
-        <input type="email" id="cf-email" value="${client ? (client.email || '') : ''}" placeholder="email@exemplo.com" />
+        <input type="email" id="cf-email" value="${client ? esc(client.email || '') : ''}" placeholder="email@exemplo.com" />
       </div>
       <div class="form-group">
         <label>Data de nascimento</label>
-        <input type="date" id="cf-birth" value="${client ? (client.birth_date || '') : ''}" />
+        <input type="date" id="cf-birth" value="${client ? esc(client.birth_date || '') : ''}" />
       </div>
       <div class="form-group">
         <label>Observações</label>
-        <textarea id="cf-notes">${client ? (client.notes || '') : ''}</textarea>
+        <textarea id="cf-notes">${client ? esc(client.notes || '') : ''}</textarea>
       </div>
       <div id="cf-error" class="alert alert-error" style="display:none"></div>
       <div class="modal-footer" style="padding:0;margin-top:16px">
         <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        ${id && currentUser.role === 'admin' ? `<button type="button" class="btn btn-danger btn-sm" onclick="deleteClientConfirm(${id})"><i class="fa fa-trash"></i></button>` : ''}
+        ${id && isAdminLevel() ? `<button type="button" class="btn btn-danger btn-sm" onclick="deleteClientConfirm(${id})"><i class="fa fa-trash"></i></button>` : ''}
         <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar</button>
       </div>
     </form>

@@ -27,7 +27,7 @@ function renderAgendaShell(container) {
         onclick="setAgendaProf('${p.id}')"
         style="${agendaProfFilter === String(p.id) ? `border-color:${p.color};color:${p.color}` : ''}">
         <span class="prof-dot" style="background:${p.color}"></span>
-        ${p.name}
+        ${esc(p.name)}
       </button>
     `).join('')}
   `;
@@ -170,9 +170,9 @@ function renderDayView(container, date, appointments, blocked) {
         <button class="appt-delete-btn" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
           <i class="fa fa-trash"></i>
         </button>
-        <div class="appt-block-title">${a.start_time} ${a.client_name}</div>
-        <div class="appt-block-sub">${a.service_name} · ${formatCurrency(a.price)}</div>
-        ${agendaProfFilter === 'all' ? `<div class="appt-block-sub">${a.professional_name}</div>` : ''}
+        <div class="appt-block-title">${a.start_time} ${esc(a.client_name)}</div>
+        <div class="appt-block-sub">${esc(a.service_name)} · ${formatCurrency(a.price)}</div>
+        ${agendaProfFilter === 'all' ? `<div class="appt-block-sub">${esc(a.professional_name)}</div>` : ''}
         <div class="appt-block-sub">${statusBadge(a.status)}</div>
       </div>`;
   }).join('');
@@ -183,8 +183,8 @@ function renderDayView(container, date, appointments, blocked) {
     return `
       <div class="blocked-block" style="position:absolute;top:${top}px;height:${height}px;left:4px;right:4px;z-index:4"
         onclick="event.stopPropagation();deleteBlockedTime(${b.id})">
-        <div class="blocked-block-title"><i class="fa fa-ban"></i> ${b.reason || 'Bloqueado'}</div>
-        <div style="font-size:11px;color:var(--gray-500)">${b.start_time} - ${b.end_time} · ${b.professional_name}</div>
+        <div class="blocked-block-title"><i class="fa fa-ban"></i> ${esc(b.reason || 'Bloqueado')}</div>
+        <div style="font-size:11px;color:var(--gray-500)">${b.start_time} - ${b.end_time} · ${esc(b.professional_name)}</div>
       </div>`;
   }).join('');
 
@@ -303,14 +303,14 @@ function renderWeekView(container, range, appointments, blocked) {
                   <button class="appt-delete-btn appt-delete-btn-sm" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
                     <i class="fa fa-trash"></i>
                   </button>
-                  <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:18px">${a.start_time} ${a.client_name}</div>
-                  <div style="opacity:0.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.service_name}</div>
+                  <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:18px">${a.start_time} ${esc(a.client_name)}</div>
+                  <div style="opacity:0.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.service_name)}</div>
                 </div>`).join('')}
               ${dayBlocked.map(b => `
                 <div class="blocked-block"
                   style="position:absolute;top:${getTop(b.start_time)}px;height:${getHeight(b.start_time,b.end_time)}px;left:2px;right:2px;font-size:11px;z-index:5"
                   onclick="event.stopPropagation();deleteBlockedTime(${b.id})">
-                  <div class="blocked-block-title"><i class="fa fa-ban"></i> ${b.reason || 'Bloqueado'}</div>
+                  <div class="blocked-block-title"><i class="fa fa-ban"></i> ${esc(b.reason || 'Bloqueado')}</div>
                 </div>`).join('')}
             </div>`;
         }).join('')}
@@ -361,7 +361,7 @@ function renderMonthView(container, year, month, appointments) {
               ${shown.map(a => `
                 <div class="month-appt" style="background:${a.professional_color || '#e91e8c'};position:relative;padding-right:20px"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
-                  ${a.start_time} ${a.client_name}
+                  ${a.start_time} ${esc(a.client_name)}
                   <button class="appt-delete-btn appt-delete-btn-month" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
                     <i class="fa fa-times"></i>
                   </button>
@@ -407,7 +407,7 @@ async function deleteBlockedTime(id) {
 
 function openBlockTimeModal() {
   const profOptions = agendaProfessionals.map(p =>
-    `<option value="${p.id}" ${currentUser.professional_id === p.id ? 'selected' : ''}>${p.name}</option>`
+    `<option value="${p.id}" ${currentUser.professional_id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`
   ).join('');
 
   const timeSlots = generateTimeSlots('07:00', '23:00', 30);

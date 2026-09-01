@@ -38,8 +38,10 @@ if (isProd && allowedOrigins.length > 0) {
 }
 
 // Limite de tamanho do payload — evita ataques de payload gigante
-app.use(express.json({ limit: '100kb' }));
-app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+// 2MB acomoda fotos de perfil em base64 (redimensionadas no navegador antes do envio).
+// A rota /professionals/me/profile ainda valida o tamanho real da imagem (máx ~1.5MB).
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Sanitização base de todo corpo de requisição (apara strings, remove control chars)
 const { sanitizeBody } = require('./src/middleware/sanitize');

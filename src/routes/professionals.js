@@ -11,6 +11,52 @@ router.get('/active', authenticateToken, (req, res) => {
   res.json(prepare('SELECT * FROM professionals WHERE active = 1 ORDER BY name').all());
 });
 
+// Dados da própria profissional (para a aba Meu Perfil)
+router.get('/me/profile', authenticateToken, (req, res) => {
+  const profId = req.user.professional_id;
+  if (!profId)
+    return res.status(403).json({ error: 'Seu usuário não está vinculado a uma profissional' });
+  const prof = prepare('SELECT * FROM professionals WHERE id = ?').get(profId);
+  if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
+  res.json(prof);
+});
+
+// Perfil próprio: a profissional (ou admin com professional_id) edita a própria foto e bio.
+// Precisa vir ANTES de '/:id' para o Express não interpretar "me" como um id.
+router.put('/me/profile', authenticateToken, (req, res) => {
+  const profId = req.user.professional_id;
+  if (!profId)
+    return res.status(403).json({ error: 'Seu usuário não está vinculado a uma profissional' });
+
+  const prof = prepare('SELECT * FROM professionals WHERE id = ?').get(profId);
+  if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
+
+  let { photo, bio } = req.body;
+
+  // Validação da bio (máx. 500 caracteres)
+  if (bio !== undefined && bio !== null) {
+    bio = String(bio);
+    if (bio.length > 500)
+      return res.status(400).json({ error: 'A biografia deve ter no máximo 500 caracteres' });
+  }
+
+  // Validação da foto: deve ser um data URL de imagem e caber no limite (~1.5MB em base64)
+  if (photo !== undefined && photo !== null && photo !== '') {
+    if (!/^data:image\/(png|jpe?g|webp);base64,/.test(photo))
+      return res.status(400).json({ error: 'Formato de imagem inválido' });
+    if (photo.length > 1500000)
+      return res.status(400).json({ error: 'A imagem é muito grande. Escolha uma foto menor.' });
+  }
+
+  prepare('UPDATE professionals SET photo = ?, bio = ? WHERE id = ?').run(
+    photo !== undefined ? (photo || null) : prof.photo,
+    bio   !== undefined ? (bio || null)   : prof.bio,
+    profId
+  );
+
+  res.json({ message: 'Perfil atualizado com sucesso', photo: photo !== undefined ? (photo || null) : prof.photo });
+});
+
 router.get('/:id/stats', authenticateToken, (req, res) => {
   const { month, year } = req.query;
   const d = new Date();

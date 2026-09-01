@@ -25,19 +25,28 @@ function authenticateToken(req, res, next) {
   });
 }
 
+// Admin e Master têm poderes administrativos (gerir clientes, serviços, agenda, etc.)
 function requireAdmin(req, res, next) {
-  if (req.user.role !== 'admin') {
+  if (req.user.role !== 'admin' && req.user.role !== 'master') {
     return res.status(403).json({ error: 'Acesso negado. Apenas administradores.' });
+  }
+  next();
+}
+
+// Apenas o Master (admin mestre) — recuperação de senha das admins e visão geral
+function requireMaster(req, res, next) {
+  if (req.user.role !== 'master') {
+    return res.status(403).json({ error: 'Acesso negado. Apenas o administrador mestre.' });
   }
   next();
 }
 
 function requireAdminOrSelf(req, res, next) {
   const targetId = parseInt(req.params.id);
-  if (req.user.role === 'admin' || req.user.id === targetId) {
+  if (req.user.role === 'admin' || req.user.role === 'master' || req.user.id === targetId) {
     return next();
   }
   return res.status(403).json({ error: 'Acesso negado.' });
 }
 
-module.exports = { authenticateToken, requireAdmin, requireAdminOrSelf, JWT_SECRET };
+module.exports = { authenticateToken, requireAdmin, requireMaster, requireAdminOrSelf, JWT_SECRET };

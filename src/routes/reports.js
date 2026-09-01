@@ -7,9 +7,10 @@ router.get('/dashboard', authenticateToken, (req, res) => {
   const today = new Date().toLocaleDateString('en-CA');
   const month = today.slice(0, 7);
 
-  // profId vem do JWT (não de entrada direta), mas usamos placeholder por segurança e consistência
+  // Só o master vê o dashboard geral. Admin e profissional veem só os próprios dados.
+  // profId vem do JWT (não de entrada direta), mas usamos placeholder por segurança.
   let profWhere = '';
-  const profId  = req.user.role === 'professional' ? req.user.professional_id : null;
+  const profId  = req.user.role === 'master' ? null : req.user.professional_id;
   if (profId) profWhere = ' AND a.professional_id = ?';
   // Argumentos extras de profId para cada query que usa profWhere
   const pArg = profId ? [profId] : [];
@@ -40,14 +41,30 @@ router.get('/dashboard', authenticateToken, (req, res) => {
     ORDER BY a.date, a.start_time LIMIT 10
   `).all(today, ...pArg);
 
-  const profStats = prepare(`
-    SELECT p.id, p.name, p.color,
-      COUNT(a.id) as total,
-      COALESCE(SUM(CASE WHEN a.status='completed' THEN a.price ELSE 0 END),0) as revenue
-    FROM professionals p
-    LEFT JOIN appointments a ON a.professional_id=p.id AND a.date LIKE ?
-    WHERE p.active=1 GROUP BY p.id ORDER BY p.name
-  `).all(`${month}%`);
+  // Faturamento por profissional é visão geral — só o master enxerga todas.
+  // Admin/profissional recebem apenas a própria linha.
+  let profStats;
+  if (req.user.role === 'master') {
+    profStats = prepare(`
+      SELECT p.id, p.name, p.color,
+        COUNT(a.id) as total,
+        COALESCE(SUM(CASE WHEN a.status='completed' THEN a.price ELSE 0 END),0) as revenue
+      FROM professionals p
+      LEFT JOIN appointments a ON a.professional_id=p.id AND a.date LIKE ?
+      WHERE p.active=1 GROUP BY p.id ORDER BY p.name
+    `).all(`${month}%`);
+  } else if (profId) {
+    profStats = prepare(`
+      SELECT p.id, p.name, p.color,
+        COUNT(a.id) as total,
+        COALESCE(SUM(CASE WHEN a.status='completed' THEN a.price ELSE 0 END),0) as revenue
+      FROM professionals p
+      LEFT JOIN appointments a ON a.professional_id=p.id AND a.date LIKE ?
+      WHERE p.id = ? GROUP BY p.id
+    `).all(`${month}%`, profId);
+  } else {
+    profStats = [];
+  }
 
   res.json({
     today:             { ...todayStats, date: today },
@@ -59,8 +76,9 @@ router.get('/dashboard', authenticateToken, (req, res) => {
 
 router.get('/appointments', authenticateToken, (req, res) => {
   const { start_date, end_date, professional_id, service_id, status } = req.query;
+  // Só o master vê o relatório geral; admin/profissional só os próprios atendimentos
   let prof = professional_id;
-  if (req.user.role === 'professional' && req.user.professional_id) prof = req.user.professional_id;
+  if (req.user.role !== 'master' && req.user.professional_id) prof = req.user.professional_id;
 
   let sql = `
     SELECT a.*, c.name as client_name, c.phone as client_phone,

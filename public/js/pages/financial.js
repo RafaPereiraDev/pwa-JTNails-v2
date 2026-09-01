@@ -77,11 +77,9 @@ async function renderFinancialData() {
 
   const { start, end } = getPeriodDates();
 
-  // Profissional só vê os próprios dados de receita
+  // Só o master vê o financeiro geral. Admin/profissional só o próprio (backend já força o filtro).
+  const master = isMaster();
   const summaryParams = { start_date: start, end_date: end };
-  if (currentUser.role === 'professional' && currentUser.professional_id) {
-    summaryParams.professional_id = currentUser.professional_id;
-  }
 
   try {
     const [summary, transactions] = await Promise.all([
@@ -89,18 +87,15 @@ async function renderFinancialData() {
       api.getTransactions({ start_date: start, end_date: end })
     ]);
 
-    // Para profissional: filtrar receitas apenas dela, mas despesas são gerais (visíveis a todos)
-    const income = transactions.filter(t =>
-      t.type === 'income' &&
-      (currentUser.role === 'admin' || t.professional_id === currentUser.professional_id)
-    );
+    // O backend já retorna só o que este usuário pode ver
+    const income = transactions.filter(t => t.type === 'income');
     const expenses = transactions.filter(t => t.type === 'expense');
 
     container.innerHTML = `
       <!-- Summary cards -->
       <div class="financial-summary mb-6">
         <div class="finance-card income">
-          <div><i class="fa fa-arrow-up" style="color:var(--success)"></i> ${currentUser.role === 'admin' ? 'Receitas' : 'Minha Receita'}</div>
+          <div><i class="fa fa-arrow-up" style="color:var(--success)"></i> ${master ? 'Receitas' : 'Minha Receita'}</div>
           <div class="amount">${formatCurrency(summary.total_income)}</div>
           <div class="label">${income.length} transação(ões)</div>
         </div>
@@ -109,7 +104,7 @@ async function renderFinancialData() {
           <div class="amount">${formatCurrency(summary.total_expenses)}</div>
           <div class="label">${expenses.length} lançamento(s)</div>
         </div>
-        ${currentUser.role === 'admin' ? `
+        ${master ? `
         <div class="finance-card result">
           <div><i class="fa fa-chart-line" style="color:var(--primary)"></i> Resultado</div>
           <div class="amount" style="color:${summary.result >= 0 ? 'var(--success)' : 'var(--danger)'}">
@@ -125,8 +120,8 @@ async function renderFinancialData() {
       </div>
 
       <div class="grid-2 mb-6">
-        <!-- By professional — ADMIN ONLY -->
-        ${currentUser.role === 'admin' ? `
+        <!-- By professional — MASTER ONLY -->
+        ${master ? `
         <div class="card">
           <div class="card-header">
             <div class="card-title">Por Profissional</div>
@@ -136,7 +131,7 @@ async function renderFinancialData() {
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
                 <div style="display:flex;align-items:center;gap:8px">
                   <span class="color-dot" style="background:${p.color};width:14px;height:14px"></span>
-                  <span class="font-semibold">${p.name}</span>
+                  <span class="font-semibold">${esc(p.name)}</span>
                 </div>
                 <div class="text-right">
                   <div class="font-bold" style="color:var(--primary)">${formatCurrency(p.revenue)}</div>
@@ -151,13 +146,11 @@ async function renderFinancialData() {
             <div class="card-title">Meu Faturamento</div>
           </div>
           <div class="card-body">
-            ${summary.by_professional.filter(p => p.id === currentUser.professional_id).map(p => `
-              <div style="text-align:center;padding:16px 0">
-                <div style="width:56px;height:56px;border-radius:50%;background:${p.color};color:white;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;margin:0 auto 12px">${getInitials(p.name)}</div>
-                <div style="font-size:28px;font-weight:700;color:var(--primary)">${formatCurrency(p.revenue)}</div>
-                <div class="text-muted text-sm">${p.count} atendimento(s) no período</div>
-              </div>
-            `).join('')}
+            <div style="text-align:center;padding:16px 0">
+              <div style="width:56px;height:56px;border-radius:50%;background:${(currentUser.professional_color || 'var(--primary)')};color:white;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;margin:0 auto 12px">${getInitials(currentUser.name)}</div>
+              <div style="font-size:28px;font-weight:700;color:var(--primary)">${formatCurrency(summary.total_income)}</div>
+              <div class="text-muted text-sm">Receita no período (${income.length} lançamento(s))</div>
+            </div>
           </div>
         </div>`}
 
@@ -170,7 +163,7 @@ async function renderFinancialData() {
             ${summary.by_category.length === 0 ? '<div class="text-muted text-center">Sem despesas neste período</div>' :
               summary.by_category.map(c => `
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-                  <span>${c.category || 'Outros'}</span>
+                  <span>${esc(c.category || 'Outros')}</span>
                   <span class="font-bold text-danger">${formatCurrency(c.total)}</span>
                 </div>
               `).join('')
@@ -236,19 +229,19 @@ function renderTransactionsTable(transactions, type) {
             <tr>
               <td>${formatDate(t.date)}</td>
               <td>
-                <div class="font-semibold">${t.description}</div>
-                ${t.client_name ? `<div class="text-xs text-muted">${t.client_name}</div>` : ''}
+                <div class="font-semibold">${esc(t.description)}</div>
+                ${t.client_name ? `<div class="text-xs text-muted">${esc(t.client_name)}</div>` : ''}
               </td>
               ${type === 'income'
-                ? `<td>${t.professional_name || '-'}</td>`
-                : `<td><span class="badge badge-inactive">${t.category || 'Outros'}</span></td>`}
+                ? `<td>${esc(t.professional_name || '-')}</td>`
+                : `<td><span class="badge badge-inactive">${esc(t.category || 'Outros')}</span></td>`}
               <td>${getPaymentLabel(t.payment_method)}</td>
               <td>
                 <span style="color:${type === 'income' ? 'var(--success)' : 'var(--danger)'};font-weight:700">
                   ${type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}
                 </span>
               </td>
-              ${type === 'expense' && (currentUser.role === 'admin' || currentUser.role === 'professional') ? `
+              ${type === 'expense' ? `
                 <td>
                   <div style="display:flex;gap:4px">
                     <button class="btn btn-secondary btn-xs" onclick="openExpenseModal(${t.id})"><i class="fa fa-edit"></i></button>
@@ -280,7 +273,7 @@ async function openExpenseModal(id = null) {
     <form id="expense-form">
       <div class="form-group">
         <label>Descrição *</label>
-        <input type="text" id="ef-desc" value="${tx ? tx.description : ''}" required placeholder="Ex: Compra de esmaltes" />
+        <input type="text" id="ef-desc" value="${tx ? esc(tx.description) : ''}" required placeholder="Ex: Compra de esmaltes" />
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -312,7 +305,7 @@ async function openExpenseModal(id = null) {
       </div>
       <div class="form-group">
         <label>Observações</label>
-        <textarea id="ef-notes">${tx ? (tx.notes || '') : ''}</textarea>
+        <textarea id="ef-notes">${tx ? esc(tx.notes || '') : ''}</textarea>
       </div>
       <div id="ef-error" class="alert alert-error" style="display:none"></div>
       <div class="modal-footer" style="padding:0;margin-top:16px">

@@ -47,6 +47,8 @@ const api = {
   createProfessional: (data) => api.post('/professionals', data),
   updateProfessional: (id, data) => api.put(`/professionals/${id}`, data),
   deleteProfessional: (id) => api.delete(`/professionals/${id}`),
+  getMyProfile: () => api.get('/professionals/me/profile'),
+  updateMyProfile: (data) => api.put('/professionals/me/profile', data),
 
   // Clients
   getClients: (search = '') =>

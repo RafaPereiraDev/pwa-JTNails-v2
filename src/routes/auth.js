@@ -12,7 +12,7 @@ router.post('/login', (req, res) => {
     return res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
 
   const user = prepare(`
-    SELECT u.*, p.name as professional_name, p.color as professional_color
+    SELECT u.*, p.name as professional_name, p.color as professional_color, p.photo as professional_photo
     FROM users u
     LEFT JOIN professionals p ON u.professional_id = p.id
     WHERE u.email = ? AND u.active = 1
@@ -34,7 +34,8 @@ router.post('/login', (req, res) => {
       id: user.id, name: user.name, email: user.email,
       role: user.role, professional_id: user.professional_id,
       professional_name: user.professional_name,
-      professional_color: user.professional_color
+      professional_color: user.professional_color,
+      professional_photo: user.professional_photo
     }
   });
 });
@@ -43,7 +44,7 @@ router.post('/login', (req, res) => {
 router.get('/me', authenticateToken, (req, res) => {
   const user = prepare(`
     SELECT u.id, u.name, u.email, u.role, u.professional_id,
-           p.name as professional_name, p.color as professional_color
+           p.name as professional_name, p.color as professional_color, p.photo as professional_photo
     FROM users u LEFT JOIN professionals p ON u.professional_id = p.id
     WHERE u.id = ?
   `).get(req.user.id);

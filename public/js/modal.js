@@ -103,12 +103,12 @@ function renderAppointmentDetail(appt) {
 
     <!-- Header colorido com info principal -->
     <div style="background:${color};border-radius:10px;padding:16px;margin-bottom:16px;color:white">
-      <div style="font-size:18px;font-weight:700;margin-bottom:4px">${appt.client_name}</div>
-      <div style="opacity:0.9;font-size:14px">${appt.service_name} · ${formatCurrency(appt.price)}</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:4px">${esc(appt.client_name)}</div>
+      <div style="opacity:0.9;font-size:14px">${esc(appt.service_name)} · ${formatCurrency(appt.price)}</div>
       <div style="opacity:0.85;font-size:13px;margin-top:6px">
         <i class="fa fa-calendar"></i> ${formatDate(appt.date)} às ${appt.start_time}–${appt.end_time}
         &nbsp;·&nbsp;
-        <i class="fa fa-user"></i> ${appt.professional_name}
+        <i class="fa fa-user"></i> ${esc(appt.professional_name)}
       </div>
     </div>
 
@@ -128,12 +128,12 @@ function renderAppointmentDetail(appt) {
 
     ${appt.notes ? `
     <div style="background:#f9fafb;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:13px;color:#6b7280">
-      <i class="fa fa-sticky-note"></i> ${appt.notes}
+      <i class="fa fa-sticky-note"></i> ${esc(appt.notes)}
     </div>` : ''}
 
     ${appt.client_phone ? `
     <div style="margin-bottom:16px">
-      <button class="appt-action-btn" style="background:#25d366" onclick="sendReminderWpp('${appt.client_phone}','${appt.client_name.replace(/'/g,'')}','${appt.date}','${appt.start_time}','${appt.service_name.replace(/'/g,'')}')">
+      <button class="appt-action-btn" style="background:#25d366" onclick="sendReminderWpp('${esc(appt.client_phone)}','${esc(appt.client_name).replace(/'/g,'&#39;')}','${appt.date}','${appt.start_time}','${esc(appt.service_name).replace(/'/g,'&#39;')}')">
         <i class="fab fa-whatsapp"></i> Enviar lembrete no WhatsApp
       </button>
     </div>` : ''}
@@ -252,7 +252,7 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
   const today = getTodayStr();
 
   const clientOptions = clients.map(c =>
-    `<option value="${c.id}" data-reliability="${c.reliability || 'new'}" ${appt && appt.client_id === c.id ? 'selected' : ''}>${c.name} - ${formatPhone(c.phone)}</option>`
+    `<option value="${c.id}" data-reliability="${c.reliability || 'new'}" ${appt && appt.client_id === c.id ? 'selected' : ''}>${esc(c.name)} - ${formatPhone(c.phone)}</option>`
   ).join('');
 
   const profOptions = professionals.map(p =>
@@ -261,11 +261,11 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       (!appt && prefillProfId && parseInt(prefillProfId) === p.id) ||
       (!appt && !prefillProfId && currentUser.professional_id === p.id)
         ? 'selected' : ''
-    }>${p.name}</option>`
+    }>${esc(p.name)}</option>`
   ).join('');
 
   const svcOptions = services.map(s =>
-    `<option value="${s.id}" data-price="${s.price}" data-duration="${s.duration}" ${appt && appt.service_id === s.id ? 'selected' : ''}>${s.name} - ${formatCurrency(s.price)}</option>`
+    `<option value="${s.id}" data-price="${s.price}" data-duration="${s.duration}" ${appt && appt.service_id === s.id ? 'selected' : ''}>${esc(s.name)} - ${formatCurrency(s.price)}</option>`
   ).join('');
 
   const statusOptions = [
@@ -331,7 +331,7 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       </div>
       <div class="form-group mb-4">
         <label>Observações</label>
-        <textarea id="appt-notes" rows="2">${appt ? (appt.notes || '') : ''}</textarea>
+        <textarea id="appt-notes" rows="2">${appt ? esc(appt.notes || '') : ''}</textarea>
       </div>
       <div id="appt-error" class="alert alert-error" style="display:none"></div>
       <div class="modal-footer" style="padding:0;margin-top:8px">

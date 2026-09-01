@@ -13,6 +13,8 @@ function initDatabase() {
       email      TEXT,
       active     INTEGER DEFAULT 1,
       color      TEXT    DEFAULT '#e91e8c',
+      photo      TEXT,
+      bio        TEXT,
       created_at TEXT    DEFAULT (datetime('now','localtime'))
     );
 
@@ -21,7 +23,7 @@ function initDatabase() {
       name            TEXT    NOT NULL,
       email           TEXT    UNIQUE NOT NULL,
       password        TEXT    NOT NULL,
-      role            TEXT    NOT NULL CHECK(role IN ('admin','professional')),
+      role            TEXT    NOT NULL CHECK(role IN ('master','admin','professional')),
       professional_id INTEGER,
       active          INTEGER DEFAULT 1,
       created_at      TEXT    DEFAULT (datetime('now','localtime')),
@@ -103,6 +105,52 @@ function initDatabase() {
     console.log('Migration: coluna reliability adicionada em clients');
   } catch(e) {
     // Column already exists — safe to ignore
+  }
+
+  // ── Migration: add photo/bio columns to professionals if not exist ────────
+  try {
+    exec(`ALTER TABLE professionals ADD COLUMN photo TEXT`);
+    console.log('Migration: coluna photo adicionada em professionals');
+  } catch(e) { /* já existe */ }
+  try {
+    exec(`ALTER TABLE professionals ADD COLUMN bio TEXT`);
+    console.log('Migration: coluna bio adicionada em professionals');
+  } catch(e) { /* já existe */ }
+
+  // ── Migration: permitir role 'master' na tabela users ─────────────────────
+  // SQLite não altera CHECK constraint com ALTER; recriamos a tabela se o
+  // constraint antigo (sem 'master') ainda estiver presente.
+  try {
+    const usersSql = prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
+    ).get();
+    if (usersSql && usersSql.sql && !usersSql.sql.includes("'master'")) {
+      exec('PRAGMA foreign_keys = OFF;');
+      exec('BEGIN TRANSACTION;');
+      exec(`
+        CREATE TABLE users_new (
+          id              INTEGER PRIMARY KEY AUTOINCREMENT,
+          name            TEXT    NOT NULL,
+          email           TEXT    UNIQUE NOT NULL,
+          password        TEXT    NOT NULL,
+          role            TEXT    NOT NULL CHECK(role IN ('master','admin','professional')),
+          professional_id INTEGER,
+          active          INTEGER DEFAULT 1,
+          created_at      TEXT    DEFAULT (datetime('now','localtime')),
+          FOREIGN KEY (professional_id) REFERENCES professionals(id)
+        );
+      `);
+      exec(`INSERT INTO users_new (id,name,email,password,role,professional_id,active,created_at)
+            SELECT id,name,email,password,role,professional_id,active,created_at FROM users;`);
+      exec('DROP TABLE users;');
+      exec('ALTER TABLE users_new RENAME TO users;');
+      exec('COMMIT;');
+      exec('PRAGMA foreign_keys = ON;');
+      console.log("Migration: role 'master' habilitado na tabela users");
+    }
+  } catch(e) {
+    try { exec('ROLLBACK;'); } catch(_) {}
+    console.error('Migration users role falhou:', e.message);
   }
 
   // ── Seed (only if DB is empty) ────────────────────────────────────────────

@@ -1,12 +1,11 @@
 // ===== SERVICES PAGE =====
 async function loadServices() {
   const container = document.getElementById('page-services');
-  const isAdmin = currentUser.role === 'admin';
 
   container.innerHTML = `
     <div class="page-header">
       <h2>Serviços</h2>
-      ${isAdmin ? `<button class="btn btn-primary" onclick="openServiceModal()">
+      ${isAdminLevel() ? `<button class="btn btn-primary" onclick="openServiceModal()">
         <i class="fa fa-plus"></i> Novo Serviço
       </button>` : ''}
     </div>
@@ -17,6 +16,7 @@ async function loadServices() {
 
 async function renderServicesTable() {
   const container = document.getElementById('services-container');
+  const isAdmin = isAdminLevel();
   loading(container);
   try {
     const services = await api.getServices();
@@ -36,18 +36,18 @@ async function renderServicesTable() {
                 <th>Preço</th>
                 <th>Duração</th>
                 <th>Status</th>
-                ${currentUser.role === 'admin' ? '<th style="text-align:center">Ações</th>' : ''}
+                ${isAdmin ? '<th style="text-align:center">Ações</th>' : ''}
               </tr>
             </thead>
             <tbody>
               ${services.map(s => `
                 <tr>
-                  <td class="font-semibold" style="opacity:${s.active ? 1 : 0.5}">${s.name}</td>
-                  <td class="text-sm text-muted">${s.description || '-'}</td>
+                  <td class="font-semibold" style="opacity:${s.active ? 1 : 0.5}">${esc(s.name)}</td>
+                  <td class="text-sm text-muted">${esc(s.description || '-')}</td>
                   <td><span style="color:var(--primary);font-weight:700">${formatCurrency(s.price)}</span></td>
                   <td>${s.duration} min</td>
                   <td>
-                    ${currentUser.role === 'admin' ? `
+                    ${isAdmin ? `
                       <button class="status-toggle ${s.active ? 'active' : 'inactive'}" onclick="toggleService(${s.id}, ${s.active ? 0 : 1})" title="${s.active ? 'Clique para desativar' : 'Clique para ativar'}">
                         <span class="toggle-dot"></span>
                         <span class="toggle-label">${s.active ? 'Ativo' : 'Inativo'}</span>
@@ -56,7 +56,7 @@ async function renderServicesTable() {
                       <span class="badge ${s.active ? 'badge-active' : 'badge-inactive'}">${s.active ? 'Ativo' : 'Inativo'}</span>
                     `}
                   </td>
-                  ${currentUser.role === 'admin' ? `
+                  ${isAdmin ? `
                   <td style="text-align:center">
                     <div style="display:flex;gap:6px;justify-content:center">
                       <button class="btn btn-secondary btn-xs" onclick="openServiceModal(${s.id})" title="Editar serviço">
@@ -93,11 +93,11 @@ async function openServiceModal(id = null) {
     <form id="service-form">
       <div class="form-group">
         <label>Nome *</label>
-        <input type="text" id="sf-name" value="${service ? service.name : ''}" required placeholder="Ex: Manicure" />
+        <input type="text" id="sf-name" value="${service ? esc(service.name) : ''}" required placeholder="Ex: Manicure" />
       </div>
       <div class="form-group">
         <label>Descrição</label>
-        <input type="text" id="sf-desc" value="${service ? (service.description || '') : ''}" placeholder="Descrição opcional" />
+        <input type="text" id="sf-desc" value="${service ? esc(service.description || '') : ''}" placeholder="Descrição opcional" />
       </div>
       <div class="form-row">
         <div class="form-group">

@@ -21,7 +21,7 @@ async function loadDashboard() {
         <button class="quick-btn" onclick="openNewClientModal()">
           <i class="fa fa-user-plus" style="color:var(--secondary)"></i> Novo Cliente
         </button>
-        ${currentUser.role === 'admin' ? `
+        ${currentUser.role !== 'professional' ? `
         <button class="quick-btn" onclick="navigateTo('services')">
           <i class="fa fa-paintbrush" style="color:var(--success)"></i> Ver Serviços
         </button>` : ''}
@@ -105,12 +105,12 @@ async function loadDashboard() {
                 ${next_appointments.slice(0, 8).map(a => `
                   <tr style="cursor:pointer" onclick="openEditAppointment(${a.id})">
                     <td><span class="font-semibold">${formatDate(a.date)}</span><br><span class="text-sm text-muted">${a.start_time}</span></td>
-                    <td>${a.client_name}</td>
-                    <td class="text-sm">${a.service_name}</td>
+                    <td>${esc(a.client_name)}</td>
+                    <td class="text-sm">${esc(a.service_name)}</td>
                     <td>
                       <span style="display:flex;align-items:center;gap:5px">
                         <span class="color-dot" style="background:${a.professional_color}"></span>
-                        ${a.professional_name}
+                        ${esc(a.professional_name)}
                       </span>
                     </td>
                     <td>${statusBadge(a.status)}</td>
@@ -124,17 +124,17 @@ async function loadDashboard() {
         <!-- Per professional — admin only -->
         <div class="card">
           <div class="card-header">
-            <div class="card-title">${currentUser.role === 'admin' ? 'Faturamento por Profissional' : 'Meu Faturamento'}</div>
+            <div class="card-title">${currentUser.role === 'master' ? 'Faturamento por Profissional' : 'Meu Faturamento'}</div>
             <span class="text-sm text-muted">${new Date().toLocaleDateString('pt-BR', {month:'long', year:'numeric'})}</span>
           </div>
           <div class="card-body">
-            ${currentUser.role === 'admin' ? `
+            ${currentUser.role === 'master' ? `
               ${professionals.map(p => `
                 <div style="margin-bottom:20px">
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
                     <div style="display:flex;align-items:center;gap:8px">
                       <span class="color-dot" style="background:${p.color};width:14px;height:14px"></span>
-                      <span class="font-semibold">${p.name}</span>
+                      <span class="font-semibold">${esc(p.name)}</span>
                     </div>
                     <div class="text-right">
                       <div class="font-bold" style="color:var(--primary)">${formatCurrency(p.revenue)}</div>

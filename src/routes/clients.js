@@ -72,7 +72,7 @@ router.put('/:id', authenticateToken, (req, res) => {
 });
 
 router.delete('/:id', authenticateToken, (req, res) => {
-  if (req.user.role !== 'admin')
+  if (req.user.role !== 'admin' && req.user.role !== 'master')
     return res.status(403).json({ error: 'Apenas administradores podem excluir clientes' });
 
   const cnt = prepare("SELECT COUNT(*) as c FROM appointments WHERE client_id = ? AND status NOT IN ('cancelled','no_show')").get(req.params.id);

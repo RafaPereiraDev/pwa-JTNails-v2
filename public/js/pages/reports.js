@@ -95,8 +95,8 @@ async function loadReports() {
       }
     });
 
-    // Hide prof filter for non-admins
-    if (currentUser.role !== 'admin') {
+    // Filtro por profissional só faz sentido para o master (visão geral)
+    if (currentUser.role !== 'master') {
       ['ra-prof-wrap','rf-prof-wrap'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -160,9 +160,9 @@ async function runAppointmentsReport() {
               ${appointments.map(a => `
                 <tr>
                   <td>${formatDate(a.date)}<br><span class="text-xs text-muted">${a.start_time}</span></td>
-                  <td>${a.client_name}</td>
-                  <td>${a.service_name}</td>
-                  <td>${a.professional_name}</td>
+                  <td>${esc(a.client_name)}</td>
+                  <td>${esc(a.service_name)}</td>
+                  <td>${esc(a.professional_name)}</td>
                   <td class="font-semibold">${formatCurrency(a.price)}</td>
                   <td>${getPaymentLabel(a.payment_method)}</td>
                   <td>${statusBadge(a.status)}</td>
@@ -223,8 +223,8 @@ async function runFinancialReport() {
                 <tr>
                   <td>${formatDate(t.date)}</td>
                   <td><span class="badge badge-${t.type}">${t.type === 'income' ? 'Receita' : 'Despesa'}</span></td>
-                  <td>${t.description}</td>
-                  <td>${t.category || '-'}</td>
+                  <td>${esc(t.description)}</td>
+                  <td>${esc(t.category || '-')}</td>
                   <td style="color:${t.type === 'income' ? 'var(--success)' : 'var(--danger)'};font-weight:700">
                     ${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount)}
                   </td>

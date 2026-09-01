@@ -15,9 +15,15 @@ const pageConfig = {
 function navigateTo(page) {
   if (!pageConfig[page]) return;
 
-  // Check admin-only pages
-  if (pageConfig[page].adminOnly && currentUser.role !== 'admin') {
+  // Check admin-only pages (admin e master têm acesso)
+  const isAdminLevel = currentUser.role === 'admin' || currentUser.role === 'master';
+  if (pageConfig[page].adminOnly && !isAdminLevel) {
     toast('Esta área é exclusiva para administradores', 'error');
+    return;
+  }
+  // Check master-only pages
+  if (pageConfig[page].masterOnly && currentUser.role !== 'master') {
+    toast('Esta área é exclusiva para o administrador mestre', 'error');
     return;
   }
 

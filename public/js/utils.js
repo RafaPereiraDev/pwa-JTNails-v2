@@ -29,6 +29,53 @@ function getInitials(name) {
   return parts[0].slice(0, 2).toUpperCase();
 }
 
+// Helpers de papel (role). currentUser é global (definido em auth.js)
+function isMaster()     { return typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'master'; }
+function isAdminLevel() { return typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || currentUser.role === 'master'); }
+
+// Redimensiona uma imagem (File) para um quadrado max x max e retorna um data URL JPEG.
+// Reduz o tamanho antes de enviar ao servidor (foto de perfil não precisa ser grande).
+function resizeImageToDataURL(file, max = 400, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('O arquivo selecionado não é uma imagem'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // Recorte central em quadrado
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2;
+        const sy = (img.height - side) / 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = max;
+        canvas.height = max;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, max, max);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Não foi possível ler a imagem'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Falha ao ler o arquivo'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// Escapa HTML para prevenir XSS ao inserir dados do usuário via innerHTML.
+// Use SEMPRE que interpolar texto vindo do banco/usuário em template de HTML.
+function esc(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function getStatusLabel(status) {
   const map = {
     scheduled: 'Agendado',
@@ -78,7 +125,9 @@ function toast(message, type = 'success', duration = 3000) {
   const container = document.getElementById('toast-container');
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
-  el.innerHTML = `<i class="fa ${icons[type] || icons.info}"></i> ${message}`;
+  // Escapa a mensagem para evitar XSS; permite apenas o ícone controlado internamente
+  el.innerHTML = `<i class="fa ${icons[type] || icons.info}"></i> <span></span>`;
+  el.querySelector('span').textContent = message;
   container.appendChild(el);
   setTimeout(() => {
     el.style.opacity = '0';

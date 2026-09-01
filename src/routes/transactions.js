@@ -6,9 +6,10 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
 router.get('/summary', authenticateToken, (req, res) => {
   const { start_date, end_date, professional_id } = req.query;
 
-  // Profissional só pode ver o próprio faturamento — ignora qualquer professional_id passado
+  // Apenas o master vê o faturamento geral. Admin e profissional veem só o próprio.
+  const isMaster = req.user.role === 'master';
   let prof = professional_id;
-  if (req.user.role === 'professional') {
+  if (!isMaster) {
     prof = req.user.professional_id; // força o próprio ID, ignora query param
   }
 
@@ -18,9 +19,8 @@ router.get('/summary', authenticateToken, (req, res) => {
   let profWhere = '';
   const profArgs = [];
   if (prof) {
-    profWhere = req.user.role === 'professional'
-      ? ' AND professional_id = ?'
-      : ' AND (professional_id = ? OR professional_id IS NULL)';
+    // Não-master (admin/profissional): estritamente o próprio professional_id
+    profWhere = ' AND professional_id = ?';
     profArgs.push(prof);
   }
 
@@ -28,14 +28,15 @@ router.get('/summary', authenticateToken, (req, res) => {
   const expenses = prepare(`SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE type='expense' AND date>=? AND date<=?${profWhere}`).get(s, e, ...profArgs);
   const byCategory = prepare(`SELECT category, SUM(amount) as total FROM transactions WHERE type='expense' AND date>=? AND date<=?${profWhere} GROUP BY category`).all(s, e, ...profArgs);
 
-  const byProfessional = prepare(`
+  // Faturamento por profissional é visão geral — só o master enxerga
+  const byProfessional = isMaster ? prepare(`
     SELECT p.id, p.name, p.color,
       COALESCE(SUM(t.amount),0) as revenue,
       COUNT(t.id) as count
     FROM professionals p
     LEFT JOIN transactions t ON t.professional_id=p.id AND t.type='income' AND t.date>=? AND t.date<=?
     WHERE p.active=1 GROUP BY p.id ORDER BY revenue DESC
-  `).all(s, e);
+  `).all(s, e) : [];
 
   res.json({
     total_income:    income.total,
@@ -49,9 +50,10 @@ router.get('/summary', authenticateToken, (req, res) => {
 router.get('/', authenticateToken, (req, res) => {
   const { type, professional_id, start_date, end_date, category } = req.query;
 
-  // Profissional só vê as próprias receitas (despesas são gerais — visíveis a todos)
+  // Apenas o master vê tudo. Admin e profissional veem só as próprias transações.
+  const isMaster = req.user.role === 'master';
   let prof = professional_id;
-  if (req.user.role === 'professional') {
+  if (!isMaster) {
     prof = req.user.professional_id;
   }
 
@@ -66,14 +68,15 @@ router.get('/', authenticateToken, (req, res) => {
   `;
   const params = [];
 
-  if (req.user.role === 'professional' && prof) {
-    // Profissional: só vê as próprias receitas e as próprias despesas
+  if (!isMaster && prof) {
+    // Admin/Profissional: só veem as próprias receitas e despesas
     sql += ` AND (
       (t.type = 'income'  AND t.professional_id = ?) OR
       (t.type = 'expense' AND t.professional_id = ?)
     )`;
     params.push(prof, prof);
-  } else if (prof) {
+  } else if (isMaster && prof) {
+    // Master pode filtrar por um profissional específico se quiser
     sql += ' AND (t.professional_id=? OR t.professional_id IS NULL)';
     params.push(prof);
   }
@@ -94,13 +97,15 @@ router.post('/', authenticateToken, (req, res) => {
   if (isNaN(amount) || amount <= 0)
     return res.status(400).json({ error: 'Valor inválido' });
 
-  // Profissional só pode criar despesas (não receitas manuais)
-  const txType = req.user.role === 'professional' ? 'expense' : (type || 'expense');
-  if (req.user.role === 'professional' && type && type !== 'expense')
-    return res.status(403).json({ error: 'Profissionais só podem lançar despesas' });
+  const isMaster = req.user.role === 'master';
 
-  // Vincula ao professional_id da profissional logada
-  const profId = req.user.role === 'professional' ? req.user.professional_id : (req.body.professional_id || null);
+  // Só o master pode lançar receitas manuais. Admin/profissional só lançam despesas.
+  const txType = isMaster ? (type || 'expense') : 'expense';
+  if (!isMaster && type && type !== 'expense')
+    return res.status(403).json({ error: 'Você só pode lançar despesas' });
+
+  // Não-master vincula a despesa ao próprio professional_id. Master pode escolher (ou geral).
+  const profId = isMaster ? (req.body.professional_id || null) : req.user.professional_id;
 
   const result = prepare(
     'INSERT INTO transactions (type,professional_id,description,category,amount,payment_method,date,notes) VALUES (?,?,?,?,?,?,?,?)'
@@ -114,8 +119,8 @@ router.put('/:id', authenticateToken, (req, res) => {
   if (!tx) return res.status(404).json({ error: 'Transação não encontrada' });
   if (tx.appointment_id) return res.status(400).json({ error: 'Não é possível editar receitas geradas automaticamente' });
 
-  // Profissional só pode editar as próprias despesas
-  if (req.user.role === 'professional') {
+  // Não-master (admin/profissional) só pode editar as próprias despesas
+  if (req.user.role !== 'master') {
     if (tx.type !== 'expense') return res.status(403).json({ error: 'Você só pode editar as suas próprias despesas' });
     if (tx.professional_id !== req.user.professional_id) return res.status(403).json({ error: 'Você só pode editar as suas próprias despesas' });
   }
@@ -138,8 +143,8 @@ router.delete('/:id', authenticateToken, (req, res) => {
   if (!tx) return res.status(404).json({ error: 'Transação não encontrada' });
   if (tx.appointment_id) return res.status(400).json({ error: 'Não é possível excluir receitas geradas por agendamentos' });
 
-  // Profissional só pode excluir as próprias despesas
-  if (req.user.role === 'professional') {
+  // Não-master (admin/profissional) só pode excluir as próprias despesas
+  if (req.user.role !== 'master') {
     if (tx.type !== 'expense') return res.status(403).json({ error: 'Você só pode excluir as suas próprias despesas' });
     if (tx.professional_id !== req.user.professional_id) return res.status(403).json({ error: 'Você só pode excluir as suas próprias despesas' });
   }
