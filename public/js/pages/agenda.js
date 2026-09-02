@@ -151,6 +151,52 @@ const TIME_START = 7;
 const TIME_END = 23;
 const SLOT_HEIGHT = 52; // px per hour
 
+// Calcula o posicionamento lado a lado para agendamentos que se sobrepõem no tempo.
+// Retorna um Map: id do appt -> { col, cols } (coluna ocupada e total de colunas do grupo).
+function computeOverlapLayout(appts) {
+  const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const items = appts.map(a => ({
+    a,
+    start: toMin(a.start_time),
+    end: toMin(a.end_time)
+  })).sort((x, y) => x.start - y.start || x.end - y.end);
+
+  const layout = new Map();
+  let i = 0;
+  while (i < items.length) {
+    let clusterEnd = items[i].end;
+    const cluster = [items[i]];
+    let j = i + 1;
+    while (j < items.length && items[j].start < clusterEnd) {
+      cluster.push(items[j]);
+      clusterEnd = Math.max(clusterEnd, items[j].end);
+      j++;
+    }
+    const colEnds = [];
+    cluster.forEach(item => {
+      let placed = false;
+      for (let c = 0; c < colEnds.length; c++) {
+        if (item.start >= colEnds[c]) { item.col = c; colEnds[c] = item.end; placed = true; break; }
+      }
+      if (!placed) { item.col = colEnds.length; colEnds.push(item.end); }
+    });
+    const totalCols = colEnds.length;
+    cluster.forEach(item => layout.set(item.a.id, { col: item.col, cols: totalCols }));
+    i = j;
+  }
+  return layout;
+}
+
+// Gera o CSS de posição horizontal (left/width) de um bloco dado seu layout de sobreposição.
+function overlapStyle(layout, id) {
+  const info = (layout && layout.get(id)) || { col: 0, cols: 1 };
+  if (info.cols <= 1) return 'left:2px;right:2px;';
+  const gap = 2;
+  const widthPct = 100 / info.cols;
+  const leftPct = widthPct * info.col;
+  return `left:calc(${leftPct}% + ${gap}px);width:calc(${widthPct}% - ${gap * 2}px);`;
+}
+
 function renderDayView(container, date, appointments, blocked) {
   const today = getTodayStr();
   const hours = [];
@@ -169,13 +215,14 @@ function renderDayView(container, date, appointments, blocked) {
   }
 
   const totalHeight = hours.length * SLOT_HEIGHT;
+  const dayLayout = computeOverlapLayout(appointments);
 
   const apptBlocks = appointments.map(a => {
     const top = getTop(a.start_time);
     const height = getHeight(a.start_time, a.end_time);
     const color = a.professional_color || '#e91e8c';
     return `
-      <div class="appt-block" style="background:${color};position:absolute;top:${top}px;height:${height}px;left:4px;right:4px;z-index:5"
+      <div class="appt-block" style="background:${color};position:absolute;top:${top}px;height:${height}px;${overlapStyle(dayLayout, a.id)}z-index:5"
         onclick="event.stopPropagation();openEditAppointment(${a.id})">
         <button class="appt-delete-btn" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
           <i class="fa fa-trash"></i>
@@ -302,13 +349,14 @@ function renderWeekView(container, range, appointments, blocked) {
         ${days.map(day => {
           const dayAppts = appointments.filter(a => a.date === day);
           const dayBlocked = blocked.filter(b => b.date === day);
+          const dayLayout = computeOverlapLayout(dayAppts);
           return `
             <div style="position:relative;height:${totalH}px;border-left:1px solid var(--gray-200);cursor:pointer"
               onclick="handleWeekColClick(event, '${day}')">
               ${hours.map(() => `<div style="height:${SLOT_HEIGHT}px;border-bottom:1px solid var(--gray-100)"></div>`).join('')}
               ${dayAppts.map(a => `
                 <div class="appt-block"
-                  style="background:${a.professional_color || '#e91e8c'};position:absolute;top:${getTop(a.start_time)}px;height:${getHeight(a.start_time,a.end_time)}px;left:2px;right:2px;font-size:11px;z-index:5"
+                  style="background:${a.professional_color || '#e91e8c'};position:absolute;top:${getTop(a.start_time)}px;height:${getHeight(a.start_time,a.end_time)}px;${overlapStyle(dayLayout, a.id)}font-size:11px;z-index:5"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
                   <button class="appt-delete-btn appt-delete-btn-sm" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
                     <i class="fa fa-trash"></i>

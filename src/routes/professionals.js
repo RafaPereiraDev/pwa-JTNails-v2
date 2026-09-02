@@ -156,7 +156,13 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
 });
 
 router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
-  const linkedUser = prepare('SELECT id FROM users WHERE professional_id = ?').get(req.params.id);
+  const linkedUser = prepare('SELECT id, role FROM users WHERE professional_id = ?').get(req.params.id);
+
+  // Uma admin não pode excluir outra admin (ou master). Só o master pode.
+  if (linkedUser && (linkedUser.role === 'admin' || linkedUser.role === 'master') && req.user.role !== 'master') {
+    return res.status(403).json({ error: 'Apenas o administrador mestre pode excluir uma administradora' });
+  }
+
   const cnt = prepare('SELECT COUNT(*) as c FROM appointments WHERE professional_id = ?').get(req.params.id);
 
   if (cnt.c > 0) {

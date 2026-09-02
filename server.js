@@ -69,10 +69,11 @@ const loginLimiter = rateLimit({
   message: { error: 'Muitas tentativas de login. Aguarde 15 minutos e tente novamente.' }
 });
 
-// Limite para criação de agendamento público — protege contra spam de agendamentos falsos
+// Limite para criação de agendamento público — protege contra spam de bots,
+// mas alto o suficiente para não atrapalhar várias clientes no mesmo Wi-Fi.
 const publicBookingLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hora
-  max: 8,                    // até 8 agendamentos por IP por hora
+  max: 30,                   // até 30 agendamentos por IP por hora
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Muitos agendamentos em pouco tempo. Tente novamente mais tarde.' }

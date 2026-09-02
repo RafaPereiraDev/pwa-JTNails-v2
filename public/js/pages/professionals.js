@@ -27,6 +27,14 @@ async function renderProfessionalsList() {
     const month = getMonthStr();
     const [y, m] = month.split('-');
 
+    // Mapa professional_id -> papel do login vinculado, para saber quem é admin/master.
+    // Só admin+master acessam esta aba, então getUsers() é permitido.
+    const roleByProf = {};
+    try {
+      const users = await api.getUsers();
+      users.forEach(u => { if (u.professional_id) roleByProf[u.professional_id] = u.role; });
+    } catch(e) { /* se falhar, o backend ainda bloqueia a exclusão indevida */ }
+
     // Get stats for each professional
     const statsPromises = professionals.map(p => api.getProfessionalStats(p.id, m, y));
     const stats = await Promise.all(statsPromises.map(p => p.catch(() => ({ total_appointments: 0, total_revenue: 0, avg_ticket: 0 }))));
@@ -72,6 +80,15 @@ async function renderProfessionalsList() {
                   <button class="btn btn-secondary btn-sm" onclick="openProfessionalModal(${p.id})">
                     <i class="fa fa-edit"></i> Editar
                   </button>
+                  ${(() => {
+                    const profRole = roleByProf[p.id]; // papel do login vinculado (admin/master/professional/undefined)
+                    const isAdminProf = profRole === 'admin' || profRole === 'master';
+                    // Admin comum não exclui outra admin; só o master pode. Profissional comum, qualquer admin exclui.
+                    const podeExcluir = isMaster() || (isAdminLevel() && !isAdminProf);
+                    return podeExcluir ? `<button class="btn btn-danger btn-sm" onclick="deleteProfessionalConfirm(${p.id}, '${esc(p.name).replace(/'/g,'&#39;')}')">
+                    <i class="fa fa-trash"></i> Excluir
+                  </button>` : '';
+                  })()}
                 </div>
               </div>
             </div>
@@ -173,6 +190,21 @@ async function toggleProfActive(id, active) {
     await api.updateProfessional(id, { active });
     toast(active ? 'Profissional ativada' : 'Profissional desativada', 'success');
     closeModal();
+    renderProfessionalsList();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function deleteProfessionalConfirm(id, name) {
+  const ok = await confirmDialog(
+    `Tem certeza que deseja excluir <strong>${esc(name)}</strong>?<br>` +
+    `<small style="color:#9ca3af">Se houver agendamentos vinculados, ela será apenas desativada para preservar o histórico. O login dela também é desativado.</small>`
+  );
+  if (!ok) return;
+  try {
+    const res = await api.deleteProfessional(id);
+    toast(res.message || 'Profissional excluída', 'success');
     renderProfessionalsList();
   } catch(e) {
     toast(e.message, 'error');

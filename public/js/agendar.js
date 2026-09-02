@@ -56,14 +56,26 @@ async function apiGet(path) {
   return j;
 }
 async function apiPost(path, data) {
-  const r = await fetch(API + path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || 'Erro na requisição');
-  return j;
+  // Timeout de 15s: se o servidor não responder, aborta em vez de travar para sempre
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const r = await fetch(API + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      signal: controller.signal
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'Erro na requisição');
+    return j;
+  } catch (e) {
+    if (e.name === 'AbortError')
+      throw new Error('A conexão demorou demais. Verifique sua internet e tente novamente.');
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ---------- Navegação entre passos ----------
@@ -346,12 +358,14 @@ async function submitBooking() {
   } catch (e) {
     err.textContent = e.message;
     err.hidden = false;
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa fa-check"></i> Confirmar agendamento';
     // Se o horário foi ocupado, volta para o passo 3 para reescolher
     if (/ocupado|conflito|horário/i.test(e.message)) {
       setTimeout(() => { goStep(3); if (state.date) selectDate(state.date); }, 1800);
     }
+  } finally {
+    // Sempre reseta o botão — evita que ele fique preso em "Confirmando..." após sucesso ou erro
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa fa-check"></i> Confirmar agendamento';
   }
 }
 
@@ -382,6 +396,11 @@ function restart() {
   state.date = null; state.time = null;
   state.client = { name: '', phone: '', notes: '' };
   document.getElementById('client-form').reset();
+  // Reseta o botão de confirmar ao estado inicial (evita ficar preso em "Confirmando...")
+  const btn = document.getElementById('confirm-btn');
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa fa-check"></i> Confirmar agendamento'; }
+  const cErr = document.getElementById('confirm-error');
+  if (cErr) cErr.hidden = true;
   goStep(1);
 }
 
