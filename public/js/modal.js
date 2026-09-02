@@ -251,9 +251,9 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
   const isEdit = !!appt;
   const today = getTodayStr();
 
-  const clientOptions = clients.map(c =>
-    `<option value="${c.id}" data-reliability="${c.reliability || 'new'}" ${appt && appt.client_id === c.id ? 'selected' : ''}>${esc(c.name)} - ${formatPhone(c.phone)}</option>`
-  ).join('');
+  // Lista de clientes disponível para o autocomplete de busca
+  window._apptClients = clients;
+  const preSelected = appt ? clients.find(c => c.id === appt.client_id) : null;
 
   const profOptions = professionals.map(p =>
     `<option value="${p.id}" ${
@@ -285,8 +285,15 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
         <div class="form-group">
           <label>Cliente *</label>
           <div style="display:flex;gap:8px;align-items:flex-start;flex-direction:column">
-            <div style="display:flex;gap:8px;width:100%">
-              <select id="appt-client" required style="flex:1" onchange="onClientChange()">${clientOptions}</select>
+            <div style="display:flex;gap:8px;width:100%;position:relative">
+              <div style="flex:1;position:relative">
+                <input type="text" id="appt-client-search" autocomplete="off"
+                  placeholder="Buscar por nome ou telefone..."
+                  value="${preSelected ? esc(preSelected.name) + ' - ' + formatPhone(preSelected.phone) : ''}"
+                  oninput="onClientSearch()" onfocus="onClientSearch()" style="width:100%" />
+                <input type="hidden" id="appt-client" value="${preSelected ? preSelected.id : ''}" required />
+                <div id="client-suggestions" class="client-suggestions" style="display:none"></div>
+              </div>
               <button type="button" class="btn btn-secondary btn-sm" onclick="openQuickClient()" title="Novo cliente">
                 <i class="fa fa-plus"></i>
               </button>
@@ -352,8 +359,15 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
     const errEl = document.getElementById('appt-error');
     errEl.style.display = 'none';
 
+    const clientId = document.getElementById('appt-client').value;
+    if (!clientId) {
+      errEl.textContent = 'Selecione uma cliente da lista de busca.';
+      errEl.style.display = '';
+      return;
+    }
+
     const data = {
-      client_id: parseInt(document.getElementById('appt-client').value),
+      client_id: parseInt(clientId),
       professional_id: parseInt(document.getElementById('appt-professional').value),
       service_id: parseInt(document.getElementById('appt-service').value),
       date: document.getElementById('appt-date').value,
@@ -390,22 +404,77 @@ function onServiceChange() {
   if (priceInput && price) priceInput.value = parseFloat(price).toFixed(2);
 }
 
+// Mostra o badge de confiabilidade da cliente atualmente selecionada
 function onClientChange() {
-  const sel   = document.getElementById('appt-client');
-  const hint  = document.getElementById('client-reliability-hint');
-  if (!sel || !hint) return;
-  const opt   = sel.selectedOptions[0];
-  if (!opt) { hint.innerHTML = ''; return; }
-  const rel   = opt.dataset.reliability || 'new';
-  // only show hint for irregular/unreliable to não poluir a UI
-  if (rel === 'good' || rel === 'new') {
-    hint.innerHTML = rel === 'good'
-      ? reliabilityBadge('good')
-      : '';
-  } else {
-    hint.innerHTML = reliabilityBadge(rel);
-  }
+  const hidden = document.getElementById('appt-client');
+  const hint   = document.getElementById('client-reliability-hint');
+  if (!hidden || !hint) return;
+  const id = parseInt(hidden.value);
+  const client = (window._apptClients || []).find(c => c.id === id);
+  if (!client) { hint.innerHTML = ''; return; }
+  const rel = client.reliability || 'new';
+  hint.innerHTML = (rel === 'good' || rel === 'new')
+    ? (rel === 'good' ? reliabilityBadge('good') : '')
+    : reliabilityBadge(rel);
 }
+
+// Filtra as clientes conforme o texto digitado (nome ou telefone)
+function onClientSearch() {
+  const input = document.getElementById('appt-client-search');
+  const box   = document.getElementById('client-suggestions');
+  if (!input || !box) return;
+
+  const termRaw = input.value.trim().toLowerCase();
+  const termDigits = termRaw.replace(/\D/g, '');
+  const clients = window._apptClients || [];
+
+  // Se o campo foi alterado manualmente, invalida a seleção anterior
+  document.getElementById('appt-client').value = '';
+  onClientChange();
+
+  let matches = clients;
+  if (termRaw) {
+    matches = clients.filter(c => {
+      const nameMatch = c.name.toLowerCase().includes(termRaw);
+      const phoneMatch = termDigits && (c.phone || '').replace(/\D/g, '').includes(termDigits);
+      return nameMatch || phoneMatch;
+    });
+  }
+  matches = matches.slice(0, 8); // limita a 8 sugestões
+
+  if (matches.length === 0) {
+    box.innerHTML = `<div class="client-suggestion-empty">Nenhuma cliente encontrada. Use o + para cadastrar.</div>`;
+    box.style.display = 'block';
+    return;
+  }
+
+  box.innerHTML = matches.map(c => `
+    <div class="client-suggestion" onclick="selectClientFromSearch(${c.id})">
+      <span class="client-suggestion-name">${esc(c.name)}</span>
+      <span class="client-suggestion-phone">${formatPhone(c.phone)}</span>
+    </div>
+  `).join('');
+  box.style.display = 'block';
+}
+
+// Seleciona uma cliente da lista de sugestões
+function selectClientFromSearch(id) {
+  const client = (window._apptClients || []).find(c => c.id === id);
+  if (!client) return;
+  document.getElementById('appt-client').value = client.id;
+  document.getElementById('appt-client-search').value = `${client.name} - ${formatPhone(client.phone)}`;
+  document.getElementById('client-suggestions').style.display = 'none';
+  onClientChange();
+}
+
+// Fecha a lista de sugestões ao clicar fora
+document.addEventListener('click', (e) => {
+  const box = document.getElementById('client-suggestions');
+  const input = document.getElementById('appt-client-search');
+  if (box && input && !box.contains(e.target) && e.target !== input) {
+    box.style.display = 'none';
+  }
+});
 
 // cancelAppointment mantido por compatibilidade — usa quickCancel internamente
 async function cancelAppointment(id) {
@@ -450,14 +519,17 @@ async function openQuickClient() {
     try {
       const client = await api.createClient({ name, phone });
       toast(`Cliente ${client.name} criado!`, 'success');
-      // Restaura o modal de agendamento e adiciona o cliente ao select
+      // Restaura o modal de agendamento e já seleciona o cliente recém-criado no autocomplete
       restoreAppointmentModal();
       setTimeout(() => {
-        const sel = document.getElementById('appt-client');
-        if (sel) {
-          const opt = new Option(`${client.name} - ${formatPhone(client.phone)}`, client.id, true, true);
-          sel.appendChild(opt);
-          sel.value = client.id;
+        // Adiciona à lista em memória e seleciona
+        if (!window._apptClients) window._apptClients = [];
+        window._apptClients.push(client);
+        const hidden = document.getElementById('appt-client');
+        const search = document.getElementById('appt-client-search');
+        if (hidden && search) {
+          hidden.value = client.id;
+          search.value = `${client.name} - ${formatPhone(client.phone)}`;
           onClientChange();
         }
       }, 50);

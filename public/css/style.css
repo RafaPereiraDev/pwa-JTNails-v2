@@ -870,6 +870,35 @@ tbody tr:hover { background: var(--gray-50); }
   white-space: nowrap;
 }
 
+/* ===== AUTOCOMPLETE DE CLIENTE ===== */
+.client-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--border-radius-sm);
+  box-shadow: var(--shadow-md);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.client-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--gray-100);
+}
+.client-suggestion:last-child { border-bottom: none; }
+.client-suggestion:hover { background: var(--primary-light); }
+.client-suggestion-name { font-weight: 600; color: var(--dark); }
+.client-suggestion-phone { font-size: 13px; color: var(--gray-500); white-space: nowrap; }
+.client-suggestion-empty { padding: 12px; color: var(--gray-500); font-size: 13px; text-align: center; }
+
 /* ===== TABS ===== */
 .tabs {
   display: flex;

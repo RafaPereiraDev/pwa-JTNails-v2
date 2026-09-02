@@ -69,9 +69,20 @@ const loginLimiter = rateLimit({
   message: { error: 'Muitas tentativas de login. Aguarde 15 minutos e tente novamente.' }
 });
 
+// Limite para criação de agendamento público — protege contra spam de agendamentos falsos
+const publicBookingLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  max: 8,                    // até 8 agendamentos por IP por hora
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Muitos agendamentos em pouco tempo. Tente novamente mais tarde.' }
+});
+
 app.use('/api', apiLimiter);
 app.use('/api/auth/login', loginLimiter);
+app.use('/api/public/appointments', publicBookingLimiter);
 
+app.use('/api/public',        require('./src/routes/public'));
 app.use('/api/auth',          require('./src/routes/auth'));
 app.use('/api/users',         require('./src/routes/users'));
 app.use('/api/professionals', require('./src/routes/professionals'));
@@ -81,6 +92,11 @@ app.use('/api/appointments',  require('./src/routes/appointments'));
 app.use('/api/transactions',  require('./src/routes/transactions'));
 app.use('/api/reports',       require('./src/routes/reports'));
 app.use('/api/blocked-times', require('./src/routes/blockedTimes'));
+
+// Página pública de agendamento (acessível sem login)
+app.get(['/agendar', '/agendar/'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'agendar.html'));
+});
 
 // SPA fallback — apenas para rotas não-API
 app.get('*', (req, res, next) => {

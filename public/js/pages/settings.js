@@ -57,12 +57,10 @@ async function loadSettings() {
     <!-- Users (admin e master) -->
     ${isAdminLevel() ? `
     <div id="settings-users" class="tab-panel">
-      <div class="page-header" style="margin-bottom:16px">
+      <div class="page-header" style="margin-bottom:8px">
         <h3>Usuários do Sistema</h3>
-        <button class="btn btn-primary btn-sm" onclick="openUserModal()">
-          <i class="fa fa-plus"></i> Novo Usuário
-        </button>
       </div>
+      <p class="text-sm text-muted mb-4">Para adicionar alguém novo, use a aba <strong>Profissionais</strong>. Aqui você ajusta a função de cada usuário.</p>
       <div id="users-table"></div>
     </div>` : ''}
   `;
@@ -233,7 +231,7 @@ async function loadUsersTable() {
                   <td><span class="badge ${u.active ? 'badge-active' : 'badge-inactive'}">${u.active ? 'Ativo' : 'Inativo'}</span></td>
                   <td>
                     <div style="display:flex;gap:6px">
-                      <button class="btn btn-secondary btn-xs" onclick="openUserModal(${u.id})"><i class="fa fa-edit"></i></button>
+                      <button class="btn btn-secondary btn-xs" onclick="openUserModal(${u.id})" title="Editar função"><i class="fa fa-user-gear"></i> Função</button>
                       ${isMaster() ? `<button class="btn btn-secondary btn-xs" onclick="openResetPassword(${u.id}, '${esc(u.name).replace(/'/g,'&#39;')}')" title="Redefinir senha"><i class="fa fa-key"></i></button>` : ''}
                     </div>
                   </td>
@@ -249,76 +247,58 @@ async function loadUsersTable() {
   }
 }
 
-async function openUserModal(id = null) {
-  openModal(id ? 'Editar Usuário' : 'Novo Usuário', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-sm');
+// Edita apenas a FUNÇÃO (papel) do usuário. Criação de gente é feita na aba Profissionais.
+async function openUserModal(id) {
+  openModal('Editar Função', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-sm');
 
   let user = null;
-  let professionals = [];
   try {
-    professionals = await api.getProfessionals(true);
-    if (id) {
-      const users = await api.getUsers();
-      user = users.find(u => u.id === id);
-    }
+    const users = await api.getUsers();
+    user = users.find(u => u.id === id);
   } catch(e) {}
 
-  const profOptions = professionals.map(p =>
-    `<option value="${p.id}" ${user && user.professional_id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`
-  ).join('');
+  if (!user) {
+    document.getElementById('modal-body').innerHTML = `<div class="alert alert-error">Usuário não encontrado</div>`;
+    return;
+  }
+
+  // O usuário mestre não tem a função alterada por aqui
+  const isMasterUser = user.role === 'master';
 
   document.getElementById('modal-body').innerHTML = `
+    <div style="margin-bottom:16px">
+      <div class="font-semibold" style="font-size:16px">${esc(user.name)}</div>
+      <div class="text-sm text-muted">${esc(user.email)}</div>
+    </div>
     <form id="user-form">
-      <div class="form-group">
-        <label>Nome *</label>
-        <input type="text" id="uf-name" value="${user ? esc(user.name) : ''}" required />
-      </div>
-      <div class="form-group">
-        <label>E-mail *</label>
-        <input type="email" id="uf-email" value="${user ? esc(user.email) : ''}" required />
-      </div>
-      ${!id ? `
-      <div class="form-group">
-        <label>Senha *</label>
-        <input type="password" id="uf-password" required minlength="6" placeholder="Mínimo 6 caracteres" />
-      </div>` : ''}
-      <div class="form-group">
-        <label>Função *</label>
-        <select id="uf-role">
-          <option value="professional" ${user && user.role === 'professional' ? 'selected' : ''}>Profissional</option>
-          <option value="admin" ${user && user.role === 'admin' ? 'selected' : ''}>Administrador</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Profissional vinculada</label>
-        <select id="uf-prof">
-          <option value="">Nenhuma</option>
-          ${profOptions}
-        </select>
-      </div>
+      ${isMasterUser ? `
+        <div class="alert alert-info">A função do administrador mestre não pode ser alterada.</div>
+      ` : `
+        <div class="form-group">
+          <label>Função *</label>
+          <select id="uf-role">
+            <option value="professional" ${user.role === 'professional' ? 'selected' : ''}>Profissional (só atende)</option>
+            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administradora (atende + gerencia)</option>
+          </select>
+        </div>
+      `}
       <div id="uf-error" class="alert alert-error" style="display:none"></div>
       <div class="modal-footer" style="padding:0;margin-top:16px">
-        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        ${id ? `<button type="button" class="btn btn-danger btn-sm" onclick="deactivateUser(${id})"><i class="fa fa-ban"></i> Desativar</button>` : ''}
-        <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Fechar</button>
+        ${isMasterUser ? '' : `<button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar função</button>`}
       </div>
     </form>
   `;
+
+  if (isMasterUser) return;
 
   document.getElementById('user-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const errEl = document.getElementById('uf-error');
     errEl.style.display = 'none';
-    const data = {
-      name: document.getElementById('uf-name').value,
-      email: document.getElementById('uf-email').value,
-      role: document.getElementById('uf-role').value,
-      professional_id: document.getElementById('uf-prof').value || null
-    };
-    if (!id) data.password = document.getElementById('uf-password').value;
     try {
-      if (id) await api.updateUser(id, data);
-      else await api.createUser(data);
-      toast(id ? 'Usuário atualizado!' : 'Usuário criado!', 'success');
+      await api.updateUser(id, { role: document.getElementById('uf-role').value });
+      toast('Função atualizada!', 'success');
       closeModal();
       loadUsersTable();
     } catch(err) {

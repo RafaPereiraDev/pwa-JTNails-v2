@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#e91e8c" />
+  <title>Agendar — Tainara Nails</title>
+  <link rel="stylesheet" href="css/agendar.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+
+  <!-- Cabeçalho fixo com marca e progresso -->
+  <header class="pub-header">
+    <div class="pub-brand">
+      <span class="pub-logo"><i class="fa fa-hand-sparkles"></i></span>
+      <span class="pub-brand-name">Tainara Nails</span>
+    </div>
+    <div class="pub-steps" id="pub-steps">
+      <span class="pub-step-dot active" data-step="1"></span>
+      <span class="pub-step-dot" data-step="2"></span>
+      <span class="pub-step-dot" data-step="3"></span>
+      <span class="pub-step-dot" data-step="4"></span>
+      <span class="pub-step-dot" data-step="5"></span>
+    </div>
+  </header>
+
+  <main class="pub-main">
+
+    <!-- PASSO 1 — Profissional -->
+    <section class="pub-step" id="step-1">
+      <button class="pub-back" style="visibility:hidden"><i class="fa fa-arrow-left"></i></button>
+      <h1 class="pub-title">Escolha a profissional</h1>
+      <p class="pub-subtitle">Quem você gostaria que fizesse seu atendimento?</p>
+      <div id="professionals-list" class="pub-cards">
+        <div class="pub-loading"><i class="fa fa-spinner fa-spin"></i> Carregando...</div>
+      </div>
+    </section>
+
+    <!-- PASSO 2 — Serviço -->
+    <section class="pub-step" id="step-2" hidden>
+      <button class="pub-back" onclick="goStep(1)"><i class="fa fa-arrow-left"></i> Voltar</button>
+      <h1 class="pub-title">Escolha o serviço</h1>
+      <p class="pub-subtitle" id="step2-subtitle"></p>
+      <div id="services-list" class="pub-list">
+        <div class="pub-loading"><i class="fa fa-spinner fa-spin"></i> Carregando...</div>
+      </div>
+    </section>
+
+    <!-- PASSO 3 — Data e horário -->
+    <section class="pub-step" id="step-3" hidden>
+      <button class="pub-back" onclick="goStep(2)"><i class="fa fa-arrow-left"></i> Voltar</button>
+      <h1 class="pub-title">Data e horário</h1>
+      <p class="pub-subtitle" id="step3-subtitle"></p>
+
+      <div class="pub-calendar" id="calendar">
+        <div class="pub-cal-head">
+          <button class="pub-cal-nav" id="cal-prev" aria-label="Mês anterior"><i class="fa fa-chevron-left"></i></button>
+          <span class="pub-cal-month" id="cal-month"></span>
+          <button class="pub-cal-nav" id="cal-next" aria-label="Próximo mês"><i class="fa fa-chevron-right"></i></button>
+        </div>
+        <div class="pub-cal-weekdays">
+          <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+        </div>
+        <div class="pub-cal-grid" id="cal-grid"></div>
+      </div>
+
+      <div id="slots-area" class="pub-slots-area" hidden>
+        <h2 class="pub-slots-title" id="slots-title">Horários disponíveis</h2>
+        <div id="slots-list" class="pub-slots"></div>
+      </div>
+    </section>
+
+    <!-- PASSO 4 — Dados do cliente -->
+    <section class="pub-step" id="step-4" hidden>
+      <button class="pub-back" onclick="goStep(3)"><i class="fa fa-arrow-left"></i> Voltar</button>
+      <h1 class="pub-title">Seus dados</h1>
+      <p class="pub-subtitle">Falta pouco! Precisamos apenas do seu contato.</p>
+      <form id="client-form" class="pub-form" novalidate>
+        <div class="pub-field">
+          <label for="cli-name">Nome completo</label>
+          <input type="text" id="cli-name" autocomplete="name" placeholder="Como podemos te chamar?" required />
+        </div>
+        <div class="pub-field">
+          <label for="cli-phone">WhatsApp / Telefone</label>
+          <input type="tel" id="cli-phone" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-9999" required />
+        </div>
+        <div class="pub-field">
+          <label for="cli-notes">Observações <span class="pub-optional">(opcional)</span></label>
+          <textarea id="cli-notes" rows="2" placeholder="Alguma preferência ou observação?"></textarea>
+        </div>
+        <div id="form-error" class="pub-error" hidden></div>
+        <button type="submit" class="pub-btn pub-btn-primary pub-btn-block">
+          Revisar agendamento <i class="fa fa-arrow-right"></i>
+        </button>
+      </form>
+    </section>
+
+    <!-- PASSO 5 — Confirmação -->
+    <section class="pub-step" id="step-5" hidden>
+      <button class="pub-back" onclick="goStep(4)"><i class="fa fa-arrow-left"></i> Voltar</button>
+      <h1 class="pub-title">Confirme seu agendamento</h1>
+      <div class="pub-summary" id="summary"></div>
+      <div id="confirm-error" class="pub-error" hidden></div>
+      <button type="button" class="pub-btn pub-btn-primary pub-btn-block" id="confirm-btn" onclick="submitBooking()">
+        <i class="fa fa-check"></i> Confirmar agendamento
+      </button>
+    </section>
+
+    <!-- TELA DE SUCESSO -->
+    <section class="pub-step pub-success" id="step-done" hidden>
+      <div class="pub-success-icon"><i class="fa fa-check"></i></div>
+      <h1 class="pub-title">Agendamento confirmado!</h1>
+      <div class="pub-summary" id="done-summary"></div>
+      <p class="pub-subtitle" style="margin-top:16px">Guarde os detalhes. Até breve! 🌸</p>
+      <button type="button" class="pub-btn pub-btn-outline pub-btn-block" onclick="restart()">
+        Fazer outro agendamento
+      </button>
+    </section>
+
+  </main>
+
+  <!-- Modal de biografia -->
+  <div class="pub-modal-overlay" id="bio-modal" hidden onclick="closeBio(event)">
+    <div class="pub-modal">
+      <button class="pub-modal-close" onclick="closeBio()" aria-label="Fechar"><i class="fa fa-times"></i></button>
+      <div class="pub-modal-avatar" id="bio-avatar"></div>
+      <h2 class="pub-modal-name" id="bio-name"></h2>
+      <p class="pub-modal-bio" id="bio-text"></p>
+      <button class="pub-btn pub-btn-primary pub-btn-block" id="bio-select-btn">Selecionar esta profissional</button>
+    </div>
+  </div>
+
+  <script src="js/agendar.js"></script>
+</body>
+</html>

@@ -107,9 +107,22 @@ async function openProfessionalModal(id = null) {
         <input type="tel" id="pf-phone" value="${prof ? esc(prof.phone || '') : ''}" placeholder="(11) 99999-9999" />
       </div>
       <div class="form-group">
-        <label>E-mail</label>
-        <input type="email" id="pf-email" value="${prof ? esc(prof.email || '') : ''}" placeholder="email@exemplo.com" />
+        <label>E-mail ${id ? '' : '*'} <span class="text-xs text-muted">(login de acesso)</span></label>
+        <input type="email" id="pf-email" value="${prof ? esc(prof.email || '') : ''}" placeholder="email@exemplo.com" ${id ? '' : 'required'} />
       </div>
+      ${!id ? `
+      <div class="form-group">
+        <label>Senha de acesso *</label>
+        <input type="password" id="pf-password" required minlength="6" placeholder="Mínimo 6 caracteres" />
+      </div>
+      <div class="form-group">
+        <label>Função *</label>
+        <select id="pf-role">
+          <option value="professional" selected>Profissional (só atende)</option>
+          <option value="admin">Administradora (atende + gerencia)</option>
+        </select>
+      </div>
+      ` : ''}
       <div class="form-group">
         <label>Cor na agenda</label>
         <input type="color" id="pf-color" value="${prof ? (prof.color || '#e91e8c') : '#e91e8c'}" style="height:40px;padding:4px" />
@@ -123,6 +136,7 @@ async function openProfessionalModal(id = null) {
         <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar</button>
       </div>
     </form>
+    ${!id ? '<p class="text-xs text-muted" style="margin-top:12px;text-align:center">A profissional já poderá entrar no sistema com este e-mail e senha. A função pode ser alterada depois em Configurações → Usuários.</p>' : ''}
   `;
 
   attachPhoneMask('pf-phone');
@@ -137,6 +151,10 @@ async function openProfessionalModal(id = null) {
       email: document.getElementById('pf-email').value || null,
       color: document.getElementById('pf-color').value
     };
+    if (!id) {
+      data.password = document.getElementById('pf-password').value;
+      data.role = document.getElementById('pf-role').value;
+    }
     try {
       if (id) await api.updateProfessional(id, data);
       else await api.createProfessional(data);

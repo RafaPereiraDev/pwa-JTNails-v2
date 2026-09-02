@@ -10,22 +10,27 @@
 
 const MAX_STRING_LENGTH = 5000;
 
-function sanitizeValue(value) {
+// Campos que carregam conteúdo grande e legítimo (ex: imagem em base64).
+// Não devem ser truncados pelo limite de string; cada rota valida o próprio tamanho.
+const EXEMPT_KEYS = new Set(['photo']);
+
+function sanitizeValue(value, key) {
   if (typeof value === 'string') {
     // Remove caracteres de controle (exceto \n, \r, \t) e apara
     let clean = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim();
-    if (clean.length > MAX_STRING_LENGTH) {
+    // Não trunca campos isentos (data URLs de imagem, etc.)
+    if (!EXEMPT_KEYS.has(key) && clean.length > MAX_STRING_LENGTH) {
       clean = clean.slice(0, MAX_STRING_LENGTH);
     }
     return clean;
   }
   if (Array.isArray(value)) {
-    return value.map(sanitizeValue);
+    return value.map(v => sanitizeValue(v, key));
   }
   if (value && typeof value === 'object') {
     const out = {};
-    for (const key of Object.keys(value)) {
-      out[key] = sanitizeValue(value[key]);
+    for (const k of Object.keys(value)) {
+      out[k] = sanitizeValue(value[k], k);
     }
     return out;
   }
@@ -34,7 +39,7 @@ function sanitizeValue(value) {
 
 function sanitizeBody(req, res, next) {
   if (req.body && typeof req.body === 'object') {
-    req.body = sanitizeValue(req.body);
+    req.body = sanitizeValue(req.body, null);
   }
   next();
 }

@@ -1,0 +1,327 @@
+/* ===== TAINARA NAILS — AGENDAMENTO PÚBLICO (MOBILE-FIRST) ===== */
+:root {
+  --primary: #e91e8c;
+  --primary-dark: #c2166f;
+  --primary-light: #fce4f3;
+  --secondary: #9c27b0;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --dark: #1e1b2e;
+  --gray-50: #fafafa;
+  --gray-100: #f4f4f5;
+  --gray-200: #e4e4e7;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --white: #fff;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --touch: 48px; /* altura mínima de alvos de toque */
+  --shadow: 0 2px 10px rgba(0,0,0,0.06);
+  --shadow-md: 0 6px 20px rgba(0,0,0,0.10);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* Garante que o atributo hidden funcione mesmo em elementos com display:flex/grid */
+[hidden] { display: none !important; }
+html, body { max-width: 100%; overflow-x: hidden; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--gray-50);
+  color: var(--gray-700);
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+input, textarea { font-family: inherit; }
+img { max-width: 100%; display: block; }
+
+/* ===== HEADER ===== */
+.pub-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--white);
+  border-bottom: 1px solid var(--gray-200);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pub-brand { display: flex; align-items: center; gap: 8px; }
+.pub-logo {
+  width: 34px; height: 34px; border-radius: 9px;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.pub-brand-name { font-weight: 800; color: var(--dark); font-size: 16px; }
+.pub-steps { display: flex; gap: 6px; }
+.pub-step-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--gray-200); transition: all .25s;
+}
+.pub-step-dot.active { background: var(--primary); transform: scale(1.25); }
+.pub-step-dot.done { background: var(--primary-light); }
+
+/* ===== LAYOUT ===== */
+.pub-main {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 18px 16px 40px;
+}
+.pub-step { animation: fadeIn .25s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.pub-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--gray-500); font-size: 14px; font-weight: 600;
+  padding: 8px 0; margin-bottom: 4px; min-height: 40px;
+}
+.pub-back:active { color: var(--primary); }
+
+.pub-title { font-size: 22px; font-weight: 800; color: var(--dark); margin-bottom: 4px; }
+.pub-subtitle { color: var(--gray-500); font-size: 14px; margin-bottom: 20px; }
+
+/* ===== BOTÕES ===== */
+.pub-btn {
+  min-height: var(--touch);
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 15px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform .1s, filter .15s, background .15s;
+}
+.pub-btn:active { transform: scale(0.98); }
+.pub-btn-block { width: 100%; }
+.pub-btn-primary { background: var(--primary); color: #fff; }
+.pub-btn-primary:active { background: var(--primary-dark); }
+.pub-btn-primary:disabled { opacity: .6; }
+.pub-btn-outline { background: transparent; border: 1.5px solid var(--gray-300); color: var(--gray-700); }
+.pub-btn-ghost { background: var(--gray-100); color: var(--gray-600); }
+
+/* ===== PASSO 1 — CARDS DE PROFISSIONAIS ===== */
+.pub-cards { display: grid; gap: 14px; }
+.pub-card {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex; align-items: center; gap: 14px;
+  box-shadow: var(--shadow);
+}
+.pub-card-avatar {
+  width: 64px; height: 64px; border-radius: 50%;
+  flex-shrink: 0; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 24px; font-weight: 700;
+}
+.pub-card-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.pub-card-info { flex: 1; min-width: 0; }
+.pub-card-name { font-size: 17px; font-weight: 700; color: var(--dark); }
+.pub-card-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.pub-card-actions .pub-btn { flex: 1; min-width: 110px; padding: 10px 12px; font-size: 14px; }
+
+/* ===== PASSO 2 — LISTA DE SERVIÇOS ===== */
+.pub-list { display: grid; gap: 12px; }
+.pub-service {
+  width: 100%;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 16px;
+  min-height: var(--touch);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  text-align: left;
+  box-shadow: var(--shadow);
+  transition: border-color .15s, transform .1s;
+}
+.pub-service:active { transform: scale(0.99); border-color: var(--primary); }
+.pub-service-name { font-size: 16px; font-weight: 700; color: var(--dark); }
+.pub-service-desc { font-size: 13px; color: var(--gray-500); margin-top: 2px; }
+.pub-service-meta { text-align: right; flex-shrink: 0; }
+.pub-service-price { font-size: 16px; font-weight: 800; color: var(--primary); }
+.pub-service-dur { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+
+/* ===== PASSO 3 — CALENDÁRIO ===== */
+.pub-calendar {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+.pub-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.pub-cal-month { font-size: 16px; font-weight: 700; color: var(--dark); text-transform: capitalize; }
+.pub-cal-nav {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: var(--gray-100); color: var(--gray-600);
+  display: flex; align-items: center; justify-content: center; font-size: 14px;
+}
+.pub-cal-nav:active { background: var(--gray-200); }
+.pub-cal-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  font-size: 11px; font-weight: 700; color: var(--gray-400);
+  text-align: center; margin-bottom: 6px; text-transform: uppercase;
+}
+.pub-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.pub-cal-day {
+  aspect-ratio: 1 / 1;
+  min-height: 42px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 600; color: var(--gray-700);
+  background: var(--gray-50);
+}
+.pub-cal-day.empty { background: transparent; }
+.pub-cal-day.disabled { color: var(--gray-300); background: transparent; }
+.pub-cal-day.today { box-shadow: inset 0 0 0 1.5px var(--primary-light); }
+.pub-cal-day.selectable:active { background: var(--primary-light); }
+.pub-cal-day.selected { background: var(--primary); color: #fff; }
+
+/* ===== HORÁRIOS ===== */
+.pub-slots-area { margin-top: 22px; }
+.pub-slots-title { font-size: 16px; font-weight: 700; color: var(--dark); margin-bottom: 12px; }
+.pub-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pub-slot {
+  min-height: var(--touch);
+  border-radius: var(--radius-sm);
+  background: var(--white); border: 1.5px solid var(--gray-200);
+  font-size: 15px; font-weight: 700; color: var(--gray-700);
+}
+.pub-slot:active { border-color: var(--primary); }
+.pub-slot.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+.pub-slots-empty {
+  grid-column: 1 / -1;
+  text-align: center; color: var(--gray-500); font-size: 14px;
+  padding: 24px 12px; background: var(--gray-100); border-radius: var(--radius-sm);
+}
+
+/* ===== PASSO 4 — FORMULÁRIO ===== */
+.pub-form { display: grid; gap: 16px; }
+.pub-field { display: grid; gap: 6px; }
+.pub-field label { font-size: 14px; font-weight: 700; color: var(--gray-700); }
+.pub-optional { font-weight: 400; color: var(--gray-400); font-size: 12px; }
+.pub-field input, .pub-field textarea {
+  width: 100%;
+  min-height: var(--touch);
+  padding: 12px 14px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  font-size: 16px; /* 16px evita zoom automático no iOS */
+  color: var(--gray-800);
+  background: var(--white);
+}
+.pub-field textarea { min-height: 80px; resize: vertical; }
+.pub-field input:focus, .pub-field textarea:focus {
+  outline: none; border-color: var(--primary);
+}
+
+/* ===== PASSO 5 — RESUMO ===== */
+.pub-summary {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  margin-bottom: 18px;
+}
+.pub-sum-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--gray-100);
+}
+.pub-sum-row:last-child { border-bottom: none; }
+.pub-sum-label { color: var(--gray-500); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.pub-sum-value { font-weight: 700; color: var(--dark); text-align: right; }
+.pub-sum-total { background: var(--primary-light); }
+.pub-sum-total .pub-sum-value { color: var(--primary); font-size: 18px; }
+
+/* ===== SUCESSO ===== */
+.pub-success { text-align: center; padding-top: 20px; }
+.pub-success-icon {
+  width: 84px; height: 84px; border-radius: 50%;
+  background: var(--success); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 38px; margin: 0 auto 18px;
+  animation: pop .4s ease;
+}
+@keyframes pop { 0% { transform: scale(0); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.pub-success .pub-summary { text-align: left; }
+
+/* ===== MODAL BIO ===== */
+.pub-modal-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(0,0,0,0.5);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0;
+}
+.pub-modal {
+  background: var(--white);
+  width: 100%; max-width: 560px;
+  border-radius: 20px 20px 0 0;
+  padding: 24px 20px 28px;
+  text-align: center;
+  animation: slideUp .28s ease;
+  position: relative;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: none; } }
+.pub-modal-close {
+  position: absolute; top: 12px; right: 12px;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--gray-100); color: var(--gray-500);
+  display: flex; align-items: center; justify-content: center;
+}
+/* Avatar sem foto (só iniciais): círculo */
+.pub-modal-avatar {
+  width: 96px; height: 96px; border-radius: 50%;
+  margin: 4px auto 14px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 36px; font-weight: 700;
+}
+/* Quando há foto, a moldura abraça a imagem no formato dela (quadrada, retrato ou paisagem) */
+.pub-modal-avatar.has-photo {
+  width: auto;                  /* deixa a imagem definir a largura */
+  height: auto;
+  max-width: 280px;
+  border-radius: 18px;
+  overflow: hidden;
+  padding: 6px;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  box-shadow: 0 8px 24px rgba(233, 30, 140, 0.28);
+  line-height: 0;               /* remove espaço extra abaixo da imagem */
+}
+.pub-modal-avatar.has-photo img {
+  display: block;
+  width: auto; height: auto;
+  max-width: 100%;
+  max-height: 340px;            /* limite de altura para fotos muito verticais */
+  object-fit: contain;          /* mostra a foto por inteira, sem cortar */
+  border-radius: 13px;
+}
+.pub-modal-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.pub-modal-name { font-size: 20px; font-weight: 800; color: var(--dark); margin-bottom: 10px; }
+.pub-modal-bio {
+  color: var(--gray-600); font-size: 15px; line-height: 1.6;
+  margin-bottom: 20px; white-space: pre-wrap;
+}
+
+/* ===== ESTADOS ===== */
+.pub-loading { text-align: center; color: var(--gray-400); padding: 30px 0; font-size: 14px; }
+.pub-error {
+  background: #fef2f2; color: var(--danger);
+  border: 1px solid #fecaca; border-radius: var(--radius-sm);
+  padding: 12px 14px; font-size: 14px;
+}
+
+/* ===== TELAS MAIORES (tablet/desktop) ===== */
+@media (min-width: 640px) {
+  .pub-slots { grid-template-columns: repeat(4, 1fr); }
+  .pub-modal { border-radius: 20px; margin-bottom: auto; }
+  .pub-modal-overlay { align-items: center; padding: 20px; }
+  .pub-cal-day { min-height: 48px; }
+}

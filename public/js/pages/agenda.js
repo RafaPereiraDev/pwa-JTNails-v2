@@ -3,6 +3,7 @@ let agendaView = 'week'; // day | week | month
 let agendaDate = getTodayStr();
 let agendaProfFilter = 'all';
 let agendaProfessionals = [];
+let agendaFilterInitialized = false; // define o filtro padrão só na primeira abertura
 
 async function loadAgenda() {
   const container = document.getElementById('page-agenda');
@@ -11,6 +12,15 @@ async function loadAgenda() {
     agendaProfessionals = await api.getProfessionals(true);
   } catch(e) {
     agendaProfessionals = [];
+  }
+
+  // Na primeira abertura, se o usuário é uma profissional, já mostra a própria agenda.
+  // O mestre (sem professional_id) continua vendo "Todas".
+  if (!agendaFilterInitialized) {
+    if (currentUser && currentUser.professional_id) {
+      agendaProfFilter = String(currentUser.professional_id);
+    }
+    agendaFilterInitialized = true;
   }
 
   renderAgendaShell(container);

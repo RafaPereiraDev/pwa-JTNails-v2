@@ -1,6 +1,7 @@
 const express = require('express');
 const router  = express.Router();
-const { prepare }                         = require('../database/db');
+const bcrypt  = require('bcryptjs');
+const { prepare, exec }                   = require('../database/db');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 router.get('/', authenticateToken, (req, res) => {
@@ -79,15 +80,47 @@ router.get('/:id', authenticateToken, (req, res) => {
   res.json(prof);
 });
 
+// Cria a profissional E o login dela (usuário vinculado) de uma vez.
 router.post('/', authenticateToken, requireAdmin, (req, res) => {
-  const { name, phone, email, color } = req.body;
-  if (!name) return res.status(400).json({ error: 'Nome é obrigatório' });
+  let { name, phone, email, color, password, role } = req.body;
 
-  const result = prepare(
-    'INSERT INTO professionals (name, phone, email, color) VALUES (?,?,?,?)'
-  ).run(name.trim(), phone || null, email || null, color || '#e91e8c');
+  if (!name || !email || !password)
+    return res.status(400).json({ error: 'Nome, e-mail e senha são obrigatórios' });
 
-  res.status(201).json({ id: result.lastInsertRowid, message: 'Profissional criada com sucesso' });
+  name  = String(name).trim();
+  email = String(email).toLowerCase().trim();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return res.status(400).json({ error: 'E-mail inválido' });
+  if (String(password).length < 6)
+    return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' });
+
+  // Papel: só 'professional' ou 'admin'. Ninguém cria 'master' por aqui.
+  role = (role === 'admin') ? 'admin' : 'professional';
+
+  // E-mail não pode já existir como login
+  const existing = prepare('SELECT id FROM users WHERE email = ?').get(email);
+  if (existing) return res.status(400).json({ error: 'Este e-mail já está cadastrado' });
+
+  try {
+    exec('BEGIN');
+
+    const profResult = prepare(
+      'INSERT INTO professionals (name, phone, email, color) VALUES (?,?,?,?)'
+    ).run(name, phone || null, email, color || '#e91e8c');
+    const profId = profResult.lastInsertRowid;
+
+    prepare(
+      'INSERT INTO users (name, email, password, role, professional_id) VALUES (?,?,?,?,?)'
+    ).run(name, email, bcrypt.hashSync(String(password), 10), role, profId);
+
+    exec('COMMIT');
+    res.status(201).json({ id: profId, message: 'Profissional criada com sucesso' });
+  } catch (e) {
+    try { exec('ROLLBACK'); } catch(_) {}
+    console.error('[ERRO] criar profissional:', e.message);
+    res.status(500).json({ error: 'Não foi possível criar a profissional. Tente novamente.' });
+  }
 });
 
 router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
@@ -95,23 +128,46 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
   const prof = prepare('SELECT * FROM professionals WHERE id = ?').get(req.params.id);
   if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
+  const newName   = name  || prof.name;
+  const newEmail  = email !== undefined ? email : prof.email;
+  const newActive = active !== undefined ? active : prof.active;
+
   prepare('UPDATE professionals SET name=?,phone=?,email=?,color=?,active=? WHERE id=?').run(
-    name  || prof.name,
+    newName,
     phone  !== undefined ? phone  : prof.phone,
-    email  !== undefined ? email  : prof.email,
+    newEmail,
     color  || prof.color,
-    active !== undefined ? active : prof.active,
+    newActive,
     req.params.id
   );
+
+  // Mantém o login vinculado em sincronia (nome, email e status ativo)
+  const linkedUser = prepare('SELECT id FROM users WHERE professional_id = ?').get(req.params.id);
+  if (linkedUser) {
+    prepare('UPDATE users SET name=?, email=?, active=? WHERE id=?').run(
+      newName,
+      newEmail ? String(newEmail).toLowerCase().trim() : null,
+      newActive,
+      linkedUser.id
+    );
+  }
+
   res.json({ message: 'Profissional atualizada com sucesso' });
 });
 
 router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
+  const linkedUser = prepare('SELECT id FROM users WHERE professional_id = ?').get(req.params.id);
   const cnt = prepare('SELECT COUNT(*) as c FROM appointments WHERE professional_id = ?').get(req.params.id);
+
   if (cnt.c > 0) {
+    // Tem histórico: desativa (soft-delete) a profissional e o login dela
     prepare('UPDATE professionals SET active = 0 WHERE id = ?').run(req.params.id);
+    if (linkedUser) prepare('UPDATE users SET active = 0 WHERE id = ?').run(linkedUser.id);
     return res.json({ message: 'Profissional desativada (possui agendamentos vinculados)' });
   }
+
+  // Sem histórico: remove a profissional e desativa o login (não apaga o usuário para preservar integridade)
+  if (linkedUser) prepare('UPDATE users SET active = 0, professional_id = NULL WHERE id = ?').run(linkedUser.id);
   prepare('DELETE FROM professionals WHERE id = ?').run(req.params.id);
   res.json({ message: 'Profissional excluída com sucesso' });
 });
