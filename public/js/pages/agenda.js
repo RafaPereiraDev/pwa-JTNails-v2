@@ -224,6 +224,9 @@ function renderDayView(container, date, appointments, blocked) {
     return `
       <div class="appt-block" style="background:${color};position:absolute;top:${top}px;height:${height}px;${overlapStyle(dayLayout, a.id)}z-index:5"
         onclick="event.stopPropagation();openEditAppointment(${a.id})">
+        ${canCompleteAppt(a) ? `<button class="appt-done-btn" onclick="completeAppointmentFromCalendar(${a.id}, event)" title="Marcar como concluído">
+          <i class="fa fa-check"></i>
+        </button>` : ''}
         ${canModifyAppt(a) ? `<button class="appt-delete-btn" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
           <i class="fa fa-trash"></i>
         </button>` : ''}
@@ -294,6 +297,18 @@ function canModifyAppt(appt) {
   if (!currentUser) return false;
   if (currentUser.role === 'master' || !currentUser.professional_id) return true;
   return appt.professional_id === currentUser.professional_id;
+}
+
+// Só faz sentido concluir um atendimento que ainda está ativo (não cancelado/concluído/faltou),
+// e só na própria agenda.
+function canCompleteAppt(appt) {
+  return canModifyAppt(appt) && ['scheduled','confirmed','in_progress'].includes(appt.status);
+}
+
+// Botão rápido de "Concluído" na agenda: abre o modal de conclusão (registra o pagamento).
+function completeAppointmentFromCalendar(id, event) {
+  if (event) event.stopPropagation();
+  openCompleteModal(id);
 }
 
 function handleWeekColClick(e, day) {
@@ -384,6 +399,9 @@ function renderWeekView(container, range, appointments, blocked) {
                 <div class="appt-block"
                   style="background:${a.professional_color || '#e91e8c'};position:absolute;top:${getTop(a.start_time)}px;height:${getHeight(a.start_time,a.end_time)}px;${overlapStyle(dayLayout, a.id)}font-size:11px;z-index:5"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
+                  ${canCompleteAppt(a) ? `<button class="appt-done-btn appt-done-btn-sm" onclick="completeAppointmentFromCalendar(${a.id}, event)" title="Marcar como concluído">
+                    <i class="fa fa-check"></i>
+                  </button>` : ''}
                   ${canModifyAppt(a) ? `<button class="appt-delete-btn appt-delete-btn-sm" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
                     <i class="fa fa-trash"></i>
                   </button>` : ''}

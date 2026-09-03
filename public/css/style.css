@@ -719,6 +719,32 @@ tbody tr:hover { background: var(--gray-50); }
 .appt-block:hover .appt-delete-btn { opacity: 1; }
 .appt-delete-btn:hover { background: rgba(239,68,68,0.85) !important; }
 .appt-delete-btn-sm { width: 16px; height: 16px; font-size: 9px; top: 3px; right: 3px; }
+
+/* Botão de concluir (check verde) dentro dos blocos do calendário */
+.appt-done-btn {
+  position: absolute;
+  top: 4px;
+  right: 28px;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.25);
+  color: #fff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  z-index: 10;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.appt-block:hover .appt-done-btn { opacity: 1; }
+.appt-done-btn:hover { background: rgba(34,197,94,0.95) !important; }
+.appt-done-btn-sm { width: 16px; height: 16px; font-size: 9px; top: 3px; right: 22px; }
 .appt-delete-btn-month {
   position: absolute;
   top: 50%;
