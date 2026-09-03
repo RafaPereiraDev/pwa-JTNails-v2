@@ -49,18 +49,10 @@ router.get('/dashboard', authenticateToken, (req, res) => {
     ORDER BY a.start_time LIMIT 10
   `).all(today, ...pArg);
 
-  // Master vê despesas do mês por profissional (gestão de custos).
   // Admin/profissional veem apenas a própria linha de faturamento.
+  // Master não precisa de detalhamento por profissional — usa month.expenses (total).
   let profStats;
-  if (req.user.role === 'master') {
-    profStats = prepare(`
-      SELECT p.id, p.name, p.color,
-        COALESCE(SUM(CASE WHEN t.type='expense' AND t.date LIKE ? THEN t.amount ELSE 0 END),0) as expenses
-      FROM professionals p
-      LEFT JOIN transactions t ON t.professional_id=p.id
-      WHERE p.active=1 GROUP BY p.id ORDER BY p.name
-    `).all(`${month}%`);
-  } else if (profId) {
+  if (profId) {
     profStats = prepare(`
       SELECT p.id, p.name, p.color,
         COUNT(a.id) as total,
