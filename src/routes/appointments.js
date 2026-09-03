@@ -172,11 +172,16 @@ router.get('/', authenticateToken, (req, res) => {
   if (date)       { sql += ' AND a.date=?';            p.push(date); }
   if (start_date) { sql += ' AND a.date>=?';           p.push(start_date); }
   if (end_date)   { sql += ' AND a.date<=?';           p.push(end_date); }
-  // Se status explícito foi pedido, filtra por ele; senão esconde cancelados e faltas do calendário
+  // Se status explícito foi pedido, filtra por ele; senão:
+  // - view de dia (só `date`, sem start_date/end_date) no passado → mostra tudo (histórico)
+  // - semana/mês ou hoje/futuro → esconde cancelados e faltas (não polui o calendário)
   if (status) {
     sql += ' AND a.status=?'; p.push(status);
   } else {
-    sql += " AND a.status NOT IN ('cancelled','no_show')";
+    const today = new Date().toLocaleDateString('en-CA');
+    const isDayView = date && !start_date && !end_date;
+    const isPast = isDayView && date < today;
+    if (!isPast) sql += " AND a.status NOT IN ('cancelled','no_show')";
   }
   sql += ' ORDER BY a.date, a.start_time';
   res.json(prepare(sql).all(...p));
@@ -196,6 +201,11 @@ router.post('/', authenticateToken, (req, res) => {
 
   if (!client_id || !professional_id || !service_id || !date || !start_time)
     return res.status(400).json({ error: 'Cliente, profissional, serviço, data e horário são obrigatórios' });
+
+  // Não permite agendar em datas passadas
+  const today = new Date().toLocaleDateString('en-CA');
+  if (date < today)
+    return res.status(400).json({ error: 'Não é possível agendar em uma data que já passou' });
 
   // Uma atendente (com professional_id) só pode criar agendamento na PRÓPRIA agenda.
   // O master gerencia todas.

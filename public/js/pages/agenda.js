@@ -316,6 +316,8 @@ function handleWeekColClick(e, day) {
   if (e.target.closest('.appt-block') || e.target.closest('.blocked-block')) return;
   // Na agenda de outra profissional, clicar em horário vazio não faz nada
   if (!canCreateInCurrentAgenda()) return;
+  // Dia passado: não cria agendamento (mas agendamentos existentes ainda abrem detalhes)
+  if (day < getTodayStr()) return;
   openNewAppointment(day);
 }
 
@@ -371,11 +373,14 @@ function renderWeekView(container, range, appointments, blocked) {
       <!-- Day headers -->
       <div style="display:grid;grid-template-columns:56px repeat(${cols},1fr);border-bottom:1px solid var(--gray-200);background:var(--gray-50)">
         <div></div>
-        ${days.map(day => `
-          <div style="padding:10px 6px;text-align:center;border-left:1px solid var(--gray-200)">
+        ${days.map(day => {
+          const isPast = day < today;
+          return `
+          <div style="padding:10px 6px;text-align:center;border-left:1px solid var(--gray-200);${isPast ? 'opacity:0.45' : ''}">
             <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase">${new Date(day+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'short'})}</div>
             <div style="font-size:20px;font-weight:700;color:${day === today ? 'var(--primary)' : 'var(--dark)'}">${parseInt(day.split('-')[2])}</div>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
       </div>
       <!-- Time grid -->
       <div style="display:grid;grid-template-columns:56px repeat(${cols},1fr)">
@@ -388,11 +393,12 @@ function renderWeekView(container, range, appointments, blocked) {
         </div>
         <!-- Day cols -->
         ${days.map(day => {
+          const isPast = day < today;
           const dayAppts = appointments.filter(a => a.date === day);
           const dayBlocked = blocked.filter(b => b.date === day);
           const dayLayout = computeOverlapLayout(dayAppts);
           return `
-            <div style="position:relative;height:${totalH}px;border-left:1px solid var(--gray-200);cursor:pointer"
+            <div style="position:relative;height:${totalH}px;border-left:1px solid var(--gray-200);${isPast ? 'background:var(--gray-50);cursor:default;opacity:0.6' : 'cursor:pointer'}"
               onclick="handleWeekColClick(event, '${day}')">
               ${hours.map(() => `<div style="height:${SLOT_HEIGHT}px;border-bottom:1px solid var(--gray-100)"></div>`).join('')}
               ${dayAppts.map(a => `
@@ -456,9 +462,10 @@ function renderMonthView(container, year, month, appointments) {
           const cellAppts = apptMap[cell.date] || [];
           const shown = cellAppts.slice(0, 3);
           const more = cellAppts.length - 3;
+          const isPast = cell.date < today;
           return `
-            <div class="month-day ${cell.otherMonth ? 'other-month' : ''} ${cell.date === today ? 'today' : ''}"
-              onclick="goToDayView('${cell.date}')">
+            <div class="month-day ${cell.otherMonth ? 'other-month' : ''} ${cell.date === today ? 'today' : ''} ${isPast ? 'past-day' : ''}"
+              ${!isPast ? `onclick="goToDayView('${cell.date}')"` : ''}>
               <div class="day-num">${parseInt(cell.date.split('-')[2])}</div>
               ${shown.map(a => `
                 <div class="month-appt" style="background:${a.professional_color || '#e91e8c'};position:relative;padding-right:20px"

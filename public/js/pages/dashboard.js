@@ -346,7 +346,7 @@ function openPendingModal(pending) {
               <div>
                 <div class="pending-item-name">${esc(a.client_name)}</div>
                 <div class="pending-item-sub">
-                  <i class="fa fa-scissors" style="font-size:10px"></i> ${esc(a.service_name)}
+                  <i class="fa fa-hand-sparkles" style="font-size:10px"></i> ${esc(a.service_name)}
                   &nbsp;·&nbsp;
                   <i class="fa fa-clock" style="font-size:10px"></i> ${formatDate(a.date)} às ${a.start_time}
                   &nbsp;·&nbsp;

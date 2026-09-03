@@ -65,7 +65,7 @@ router.get('/:id/stats', authenticateToken, (req, res) => {
   const y = year || d.getFullYear();
 
   const stats = prepare(`
-    SELECT COUNT(*) as total_appointments,
+    SELECT COUNT(CASE WHEN status='completed' THEN 1 END) as total_appointments,
            COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END),0) as total_revenue,
            AVG(CASE WHEN status='completed' THEN price ELSE NULL END) as avg_ticket
     FROM appointments WHERE professional_id = ? AND date LIKE ?

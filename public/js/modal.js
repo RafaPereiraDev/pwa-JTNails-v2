@@ -397,6 +397,14 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       notes: document.getElementById('appt-notes').value || null
     };
 
+    // Não permite agendar em datas passadas
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    if (!isEdit && data.date < todayStr) {
+      errEl.textContent = 'Não é possível agendar em uma data que já passou.';
+      errEl.style.display = '';
+      return;
+    }
+
     try {
       if (isEdit) {
         await api.updateAppointment(appt.id, data);

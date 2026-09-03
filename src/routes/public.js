@@ -3,9 +3,9 @@ const router  = express.Router();
 const { prepare } = require('../database/db');
 
 // ── Configuração de horário de funcionamento (para cálculo de slots) ──────────
-const OPEN_HOUR  = 8;    // 08:00
-const CLOSE_HOUR = 20;   // 20:00 (último término possível)
-const SLOT_STEP  = 30;   // intervalo entre horários oferecidos, em minutos
+const OPEN_HOUR   = 8;     // 08:00
+const CLOSE_MINS  = 18 * 60 + 30; // 18:30 — último término possível
+const SLOT_STEP   = 30;   // intervalo entre horários oferecidos, em minutos
 
 // Helpers de tempo
 function toMinutes(hhmm) {
@@ -91,8 +91,7 @@ router.get('/available-slots', (req, res) => {
   }));
 
   const slots = [];
-  const dayEnd = CLOSE_HOUR * 60;
-  for (let start = OPEN_HOUR * 60; start + duration <= dayEnd; start += SLOT_STEP) {
+  for (let start = OPEN_HOUR * 60; start <= CLOSE_MINS; start += SLOT_STEP) {
     const end = start + duration;
 
     // Se for hoje, não oferecer horários que já passaram
@@ -131,7 +130,7 @@ router.post('/appointments', (req, res) => {
   const prof = prepare('SELECT id FROM professionals WHERE id = ? AND active = 1').get(professional_id);
   if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
-  // Não permitir agendar no passado
+  // Não permitir agendar no passado nem fora do horário de funcionamento (08:00–18:30)
   const startMin = toMinutes(start_time);
   const now = new Date();
   const todayStr = now.toLocaleDateString('en-CA');
@@ -140,6 +139,9 @@ router.post('/appointments', (req, res) => {
 
   const duration = svc.duration || 60;
   const endMin = startMin + duration;
+
+  if (startMin < OPEN_HOUR * 60 || startMin > CLOSE_MINS)
+    return res.status(400).json({ error: 'Horário fora do funcionamento. Agendamentos permitidos das 08:00 às 18:30.' });
   const end_time = toHHMM(endMin);
 
   // Revalida conflito no servidor (nunca confiar só no front)

@@ -126,7 +126,44 @@ app.use((err, req, res, next) => {
 
 // Init DB then start
 const { initDatabase } = require('./src/database/init');
+const { prepare: dbPrepare, exec: dbExec } = require('./src/database/db');
+
 initDatabase();
+
+// ── Limpeza automática de histórico antigo ────────────────────────────────
+// Apaga agendamentos (e suas transações de receita vinculadas) com mais de 2 meses.
+// Roda na inicialização e depois a cada 24h.
+function cleanOldHistory() {
+  try {
+    // Calcula a data-limite: primeiro dia do mês, 2 meses atrás
+    const now = new Date();
+    now.setDate(1);         // primeiro dia do mês atual
+    now.setMonth(now.getMonth() - 2); // recua 2 meses
+    const cutoff = now.toLocaleDateString('en-CA'); // formato YYYY-MM-DD
+
+    // Remove transações vinculadas a agendamentos antigos primeiro (FK)
+    const txDel = dbPrepare(`
+      DELETE FROM transactions
+      WHERE appointment_id IN (
+        SELECT id FROM appointments WHERE date < ?
+      )
+    `).run(cutoff);
+
+    // Remove os agendamentos antigos
+    const apptDel = dbPrepare(`
+      DELETE FROM appointments WHERE date < ?
+    `).run(cutoff);
+
+    if (apptDel.changes > 0) {
+      console.log(`[limpeza] ${apptDel.changes} agendamento(s) e ${txDel.changes} transação(ões) removidos (anteriores a ${cutoff})`);
+    }
+  } catch (e) {
+    console.error('[limpeza] Erro ao limpar histórico:', e.message);
+  }
+}
+
+cleanOldHistory(); // roda na inicialização
+setInterval(cleanOldHistory, 24 * 60 * 60 * 1000); // repete a cada 24h
 
 app.listen(PORT, () => {
   console.log('\n================================================');
