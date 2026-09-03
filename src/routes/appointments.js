@@ -76,6 +76,79 @@ const APPT_SELECT = `
   JOIN professionals p ON a.professional_id = p.id
 `;
 
+// GET /api/appointments/pending-confirmation
+// Retorna agendamentos cujo horário de fim já passou e ainda estão como
+// scheduled / confirmed / in_progress (precisam de confirmação manual).
+// Escopo: atendente vê só os próprios; master vê todos.
+router.get('/pending-confirmation', authenticateToken, (req, res) => {
+  const ehAtendente = req.user.professional_id && req.user.role !== 'master';
+  let sql = APPT_SELECT + `
+    WHERE a.status IN ('scheduled','confirmed','in_progress')
+      AND (a.date || ' ' || a.end_time) < datetime('now','localtime')
+  `;
+  const params = [];
+  if (ehAtendente) { sql += ' AND a.professional_id = ?'; params.push(req.user.professional_id); }
+  sql += ' ORDER BY a.date, a.start_time';
+  res.json(prepare(sql).all(...params));
+});
+
+// POST /api/appointments/bulk-confirm
+// Recebe [{ id, status, payment_method? }] e atualiza em lote dentro de uma transação.
+// Gera receita pra concluídos e remove receita pra no_show/cancelled (mesmo comportamento do PUT /:id).
+router.post('/bulk-confirm', authenticateToken, (req, res) => {
+  const updates = req.body;
+  if (!Array.isArray(updates) || updates.length === 0)
+    return res.status(400).json({ error: 'Envie um array com as confirmações' });
+
+  const ehAtendente = req.user.professional_id && req.user.role !== 'master';
+  const db = getDb();
+
+  try {
+    db.exec('BEGIN');
+
+    for (const { id, status, payment_method } of updates) {
+      if (!id || !['completed','no_show','cancelled'].includes(status)) continue;
+
+      const appt = prepare('SELECT * FROM appointments WHERE id = ?').get(id);
+      if (!appt) continue;
+
+      // Atendente só confirma os próprios
+      if (ehAtendente && appt.professional_id !== req.user.professional_id) continue;
+
+      prepare('UPDATE appointments SET status=?, payment_method=COALESCE(?,payment_method) WHERE id=?')
+        .run(status, payment_method || null, id);
+
+      // Gera receita se concluído
+      if (status === 'completed' && appt.status !== 'completed') {
+        const existing = prepare('SELECT id FROM transactions WHERE appointment_id=? AND type=?').get(id, 'income');
+        if (!existing) {
+          const cl = prepare('SELECT name FROM clients WHERE id = ?').get(appt.client_id);
+          const sv = prepare('SELECT name FROM services WHERE id = ?').get(appt.service_id);
+          prepare(`INSERT INTO transactions (type,appointment_id,professional_id,description,category,amount,payment_method,date)
+                   VALUES ('income',?,?,?,'Serviço',?,?,?)`)
+            .run(id, appt.professional_id, `${sv.name} - ${cl.name}`, appt.price,
+                 payment_method || appt.payment_method || null, appt.date);
+        }
+      }
+
+      // Remove receita se revertido para no_show / cancelled
+      if (['no_show','cancelled'].includes(status) && appt.status === 'completed') {
+        prepare("DELETE FROM transactions WHERE appointment_id=? AND type='income'").run(id);
+      }
+
+      // Recalcula confiabilidade da cliente
+      recalculateClientReliability(appt.client_id);
+    }
+
+    db.exec('COMMIT');
+    res.json({ message: 'Confirmações salvas com sucesso' });
+  } catch (err) {
+    db.exec('ROLLBACK');
+    console.error('bulk-confirm error', err);
+    res.status(500).json({ error: 'Erro ao salvar confirmações' });
+  }
+});
+
 router.get('/today', authenticateToken, (req, res) => {
   const today = new Date().toLocaleDateString('en-CA');
   let sql = APPT_SELECT + " WHERE a.date = ? AND a.status NOT IN ('cancelled','no_show')";

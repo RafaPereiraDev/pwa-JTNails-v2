@@ -77,6 +77,9 @@ const api = {
   updateAppointment: (id, data) => api.put(`/appointments/${id}`, data),
   deleteAppointment: (id) => api.delete(`/appointments/${id}`),
 
+  getPendingConfirmation: () => api.get('/appointments/pending-confirmation'),
+  bulkConfirmAppointments: (updates) => api.post('/appointments/bulk-confirm', updates),
+
   // Transactions
   getTransactions: (params = {}) => {
     const q = new URLSearchParams(params).toString();
