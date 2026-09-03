@@ -44,9 +44,9 @@ router.get('/dashboard', authenticateToken, (req, res) => {
     JOIN clients c ON a.client_id=c.id
     JOIN services s ON a.service_id=s.id
     JOIN professionals p ON a.professional_id=p.id
-    WHERE a.date>=? AND a.status IN ('scheduled','confirmed','in_progress')
+    WHERE a.date=? AND a.status IN ('scheduled','confirmed','in_progress')
     ${profWhere}
-    ORDER BY a.date, a.start_time LIMIT 10
+    ORDER BY a.start_time LIMIT 10
   `).all(today, ...pArg);
 
   // Faturamento por profissional é visão geral — só o master enxerga todas.
