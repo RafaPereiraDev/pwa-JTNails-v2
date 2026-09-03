@@ -49,8 +49,8 @@ router.get('/dashboard', authenticateToken, (req, res) => {
     ORDER BY a.start_time LIMIT 10
   `).all(today, ...pArg);
 
-  // Admin/profissional veem apenas a própria linha de faturamento.
-  // Master não precisa de detalhamento por profissional — usa month.expenses (total).
+  // Profissional e admin veem apenas o próprio faturamento.
+  // Master não precisa de detalhamento — usa month.expenses (total geral).
   let profStats;
   if (profId) {
     profStats = prepare(`
