@@ -117,7 +117,7 @@ async function loadDashboard() {
         <!-- Per professional — admin only -->
         <div class="card">
           <div class="card-header">
-            <div class="card-title">${currentUser.role === 'master' ? 'Faturamento por Profissional' : 'Meu Faturamento'}</div>
+            <div class="card-title">${currentUser.role === 'master' ? 'Faturamento por Profissional' : currentUser.role === 'admin' ? 'Despesas do mês por Profissional' : 'Meu Faturamento'}</div>
             <span class="text-sm text-muted">${new Date().toLocaleDateString('pt-BR', {month:'long', year:'numeric'})}</span>
           </div>
           <div class="card-body">
@@ -148,6 +148,31 @@ async function loadDashboard() {
                 <span class="font-semibold text-muted">Total geral</span>
                 <span class="font-bold" style="color:var(--primary)">${formatCurrency(professionals.reduce((s,p) => s + p.revenue, 0))}</span>
               </div>
+            ` : currentUser.role === 'admin' ? `
+              ${professionals.length === 0 ? '<div class="text-muted text-center">Sem despesas este mês</div>' : `
+              ${professionals.map(p => `
+                <div style="margin-bottom:16px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span class="color-dot" style="background:${p.color};width:14px;height:14px"></span>
+                      <span class="font-semibold">${esc(p.name)}</span>
+                    </div>
+                    <div class="font-bold" style="color:#dc2626">${formatCurrency(p.expenses || 0)}</div>
+                  </div>
+                  <div style="height:6px;background:var(--gray-100);border-radius:4px;overflow:hidden">
+                    <div style="height:100%;background:#dc2626;border-radius:4px;width:${
+                      professionals.reduce((max,pr) => Math.max(max, pr.expenses || 0), 0) > 0
+                        ? Math.round(((p.expenses || 0) / professionals.reduce((max,pr) => Math.max(max, pr.expenses || 0), 1)) * 100)
+                        : 0
+                    }%;transition:width 0.5s ease"></div>
+                  </div>
+                </div>
+              `).join('')}
+              <div class="divider"></div>
+              <div style="display:flex;justify-content:space-between">
+                <span class="font-semibold text-muted">Total despesas</span>
+                <span class="font-bold" style="color:#dc2626">${formatCurrency(professionals.reduce((s,p) => s + (p.expenses || 0), 0))}</span>
+              </div>`}
             ` : `
               ${(() => {
                 const myProf = professionals.find(p => p.id === currentUser.professional_id);
