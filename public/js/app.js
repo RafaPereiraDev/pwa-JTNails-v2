@@ -7,7 +7,7 @@ const pageConfig = {
   clients:       { title: 'Clientes',      load: loadClients },
   services:      { title: 'Serviços',      load: loadServices },
   professionals: { title: 'Profissionais', load: loadProfessionals, adminOnly: true },
-  financial:     { title: 'Financeiro',    load: loadFinancial,     hideNewAppt: true },
+  financial:     { title: 'Financeiro',    load: loadFinancial,     hideNewAppt: true, hideMaster: true },
   reports:       { title: 'Relatórios',    load: loadReports,       adminOnly: true, hideNewAppt: true },
   settings:      { title: 'Configurações', load: loadSettings,      hideNewAppt: true },
 };
@@ -24,6 +24,11 @@ function navigateTo(page) {
   // Check master-only pages
   if (pageConfig[page].masterOnly && currentUser.role !== 'master') {
     toast('Esta área é exclusiva para o administrador mestre', 'error');
+    return;
+  }
+  // Páginas escondidas do master (ex: Financeiro)
+  if (pageConfig[page].hideMaster && currentUser.role === 'master') {
+    toast('Esta área não está disponível para o administrador mestre', 'error');
     return;
   }
 

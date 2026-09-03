@@ -22,6 +22,14 @@ router.get('/dashboard', authenticateToken, (req, res) => {
     FROM appointments a WHERE date=? AND status NOT IN ('cancelled','no_show') ${profWhere}
   `).get(today, ...pArg);
 
+  // Despesas do mês (transações do tipo 'expense'). Mesmo escopo: master vê tudo,
+  // admin/profissional veem só as próprias.
+  const txProfWhere = profId ? ' AND professional_id = ?' : '';
+  const monthExpenses = prepare(`
+    SELECT COALESCE(SUM(amount),0) as expenses
+    FROM transactions WHERE type='expense' AND date LIKE ? ${txProfWhere}
+  `).get(`${month}%`, ...pArg);
+
   const monthStats = prepare(`
     SELECT COUNT(*) as total,
       COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END),0) as revenue,
@@ -68,7 +76,7 @@ router.get('/dashboard', authenticateToken, (req, res) => {
 
   res.json({
     today:             { ...todayStats, date: today },
-    month:             { ...monthStats, period: month },
+    month:             { ...monthStats, expenses: monthExpenses.expenses, period: month },
     next_appointments: nextAppointments,
     professionals:     profStats
   });

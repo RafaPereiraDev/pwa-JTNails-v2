@@ -59,11 +59,16 @@ async function renderProfessionalsList() {
                   ${p.email ? `<div class="text-sm text-muted"><i class="fa fa-envelope"></i> ${esc(p.email)}</div>` : ''}
                   ${p.bio ? `<div class="text-sm" style="margin-top:6px;color:var(--gray-600);font-style:italic">"${esc(p.bio)}"</div>` : ''}
                 </div>
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;flex:2;min-width:280px">
+                ${(() => {
+                  // Faturamento só aparece no card da própria profissional. Nos demais, só atendimentos.
+                  const ehDona = currentUser && currentUser.professional_id === p.id;
+                  return `
+                <div style="display:grid;grid-template-columns:repeat(${ehDona ? 3 : 1},1fr);gap:16px;flex:2;min-width:${ehDona ? 280 : 120}px">
                   <div class="text-center">
                     <div style="font-size:22px;font-weight:700;color:var(--primary)">${stats[i].total_appointments || 0}</div>
                     <div class="text-xs text-muted">Atendimentos<br>este mês</div>
                   </div>
+                  ${ehDona ? `
                   <div class="text-center">
                     <div style="font-size:22px;font-weight:700;color:var(--success)">${formatCurrency(stats[i].total_revenue)}</div>
                     <div class="text-xs text-muted">Faturamento<br>este mês</div>
@@ -71,8 +76,9 @@ async function renderProfessionalsList() {
                   <div class="text-center">
                     <div style="font-size:22px;font-weight:700;color:var(--secondary)">${formatCurrency(stats[i].avg_ticket)}</div>
                     <div class="text-xs text-muted">Ticket<br>médio</div>
-                  </div>
-                </div>
+                  </div>` : ''}
+                </div>`;
+                })()}
                 <div style="display:flex;gap:6px;flex-wrap:wrap">
                   <button class="btn btn-outline btn-sm" onclick="openAgendaProfessional(${p.id})">
                     <i class="fa fa-calendar"></i> Agenda

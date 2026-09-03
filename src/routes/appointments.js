@@ -124,6 +124,12 @@ router.post('/', authenticateToken, (req, res) => {
   if (!client_id || !professional_id || !service_id || !date || !start_time)
     return res.status(400).json({ error: 'Cliente, profissional, serviço, data e horário são obrigatórios' });
 
+  // Uma atendente (com professional_id) só pode criar agendamento na PRÓPRIA agenda.
+  // O master gerencia todas.
+  if (req.user.professional_id && req.user.role !== 'master' &&
+      Number(professional_id) !== Number(req.user.professional_id))
+    return res.status(403).json({ error: 'Você só pode criar agendamentos na sua própria agenda' });
+
   const svc = prepare('SELECT * FROM services WHERE id = ? AND active = 1').get(service_id);
   if (!svc) return res.status(404).json({ error: 'Serviço não encontrado ou inativo' });
 
@@ -145,11 +151,18 @@ router.post('/', authenticateToken, (req, res) => {
 router.put('/:id', authenticateToken, (req, res) => {
   const appt = prepare('SELECT * FROM appointments WHERE id = ?').get(req.params.id);
   if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
-  if (req.user.role === 'professional' && appt.professional_id !== req.user.professional_id)
-    return res.status(403).json({ error: 'Acesso negado' });
+
+  // Atendente (com professional_id, exceto master) só mexe em agendamento da própria agenda
+  const ehAtendente = req.user.professional_id && req.user.role !== 'master';
+  if (ehAtendente && appt.professional_id !== req.user.professional_id)
+    return res.status(403).json({ error: 'Você só pode alterar agendamentos da sua própria agenda' });
 
   const { client_id, professional_id, service_id, date, start_time,
           price, payment_method, notes, status } = req.body;
+
+  // E não pode transferir o agendamento para a agenda de outra profissional
+  if (ehAtendente && professional_id && Number(professional_id) !== Number(req.user.professional_id))
+    return res.status(403).json({ error: 'Você não pode transferir agendamentos para outra profissional' });
 
   const newProfId = professional_id || appt.professional_id;
   const newDate   = date       || appt.date;
@@ -196,6 +209,11 @@ router.put('/:id', authenticateToken, (req, res) => {
     }
   }
 
+  // Se o agendamento sair de 'completed' para cancelado/não compareceu, remove a receita gerada
+  if (appt.status === 'completed' && (status === 'cancelled' || status === 'no_show')) {
+    prepare("DELETE FROM transactions WHERE appointment_id = ? AND type = 'income'").run(req.params.id);
+  }
+
   // Recalculate client reliability whenever a terminal status is set
   const terminalStatuses = ['completed', 'no_show', 'cancelled'];
   const finalClientId = client_id || appt.client_id;
@@ -209,8 +227,13 @@ router.put('/:id', authenticateToken, (req, res) => {
 router.delete('/:id', authenticateToken, (req, res) => {
   const appt = prepare('SELECT * FROM appointments WHERE id = ?').get(req.params.id);
   if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
-  if (req.user.role === 'professional' && appt.professional_id !== req.user.professional_id)
-    return res.status(403).json({ error: 'Acesso negado' });
+  // Atendente (com professional_id, exceto master) só cancela agendamento da própria agenda
+  if (req.user.professional_id && req.user.role !== 'master' &&
+      appt.professional_id !== req.user.professional_id)
+    return res.status(403).json({ error: 'Você só pode cancelar agendamentos da sua própria agenda' });
+
+  // Remove a receita gerada por este agendamento (se houver), para não inflar o faturamento
+  prepare("DELETE FROM transactions WHERE appointment_id = ? AND type = 'income'").run(req.params.id);
 
   prepare("UPDATE appointments SET status='cancelled' WHERE id=?").run(req.params.id);
   res.json({ message: 'Agendamento cancelado com sucesso' });

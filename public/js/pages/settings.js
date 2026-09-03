@@ -233,6 +233,15 @@ async function loadUsersTable() {
                     <div style="display:flex;gap:6px">
                       <button class="btn btn-secondary btn-xs" onclick="openUserModal(${u.id})" title="Editar função"><i class="fa fa-user-gear"></i> Função</button>
                       ${isMaster() ? `<button class="btn btn-secondary btn-xs" onclick="openResetPassword(${u.id}, '${esc(u.name).replace(/'/g,'&#39;')}')" title="Redefinir senha"><i class="fa fa-key"></i></button>` : ''}
+                      ${(() => {
+                        // Não mostra excluir para si mesmo. Admin não exclui admin/master; só master pode.
+                        const isSelf = currentUser && u.id === currentUser.id;
+                        const alvoAdmin = u.role === 'admin' || u.role === 'master';
+                        const podeExcluir = !isSelf && (isMaster() || !alvoAdmin);
+                        return podeExcluir
+                          ? `<button class="btn btn-danger btn-xs" onclick="deleteUserConfirm(${u.id}, '${esc(u.name).replace(/'/g,'&#39;')}')" title="Excluir usuário"><i class="fa fa-trash"></i></button>`
+                          : '';
+                      })()}
                     </div>
                   </td>
                 </tr>
@@ -344,6 +353,21 @@ async function deactivateUser(id) {
     await api.deleteUser(id);
     toast('Usuário desativado', 'success');
     closeModal();
+    loadUsersTable();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function deleteUserConfirm(id, name) {
+  const ok = await confirmDialog(
+    `Tem certeza que deseja excluir o usuário <strong>${esc(name)}</strong>?<br>` +
+    `<small style="color:#9ca3af">Se houver histórico de agendamentos, ele será apenas desativado. O acesso ao sistema é removido.</small>`
+  );
+  if (!ok) return;
+  try {
+    const res = await api.deleteUser(id);
+    toast(res.message || 'Usuário excluído', 'success');
     loadUsersTable();
   } catch(e) {
     toast(e.message, 'error');

@@ -59,11 +59,17 @@ function renderAppointmentDetail(appt) {
     no_show:     '#6b7280'
   };
   const color = appt.professional_color || '#e91e8c';
-  const canAct = !['cancelled','no_show','completed'].includes(appt.status);
+
+  // Uma atendente (com professional_id, exceto master) só pode AGIR sobre agendamentos
+  // da própria agenda. Nos da colega, os detalhes aparecem apenas para leitura.
+  const ehAtendente = currentUser && currentUser.professional_id && currentUser.role !== 'master';
+  const isOwn = !ehAtendente || appt.professional_id === currentUser.professional_id;
+
+  const canAct = isOwn && !['cancelled','no_show','completed'].includes(appt.status);
 
   // Quick action buttons based on current status
   let actionButtons = '';
-  if (appt.status === 'scheduled' || appt.status === 'confirmed') {
+  if (isOwn && (appt.status === 'scheduled' || appt.status === 'confirmed')) {
     actionButtons = `
       <button class="appt-action-btn" style="background:#22c55e" onclick="quickStatus(${appt.id},'confirmed')">
         <i class="fa fa-check"></i> Confirmar
@@ -72,7 +78,7 @@ function renderAppointmentDetail(appt) {
         <i class="fa fa-paintbrush"></i> Iniciar
       </button>`;
   }
-  if (appt.status === 'in_progress') {
+  if (isOwn && appt.status === 'in_progress') {
     actionButtons = `
       <button class="appt-action-btn" style="background:#15803d" onclick="openCompleteModal(${appt.id})">
         <i class="fa fa-check-circle"></i> Concluir
@@ -131,11 +137,16 @@ function renderAppointmentDetail(appt) {
       <i class="fa fa-sticky-note"></i> ${esc(appt.notes)}
     </div>` : ''}
 
-    ${appt.client_phone ? `
+    ${isOwn && appt.client_phone ? `
     <div style="margin-bottom:16px">
       <button class="appt-action-btn" style="background:#25d366" onclick="sendReminderWpp('${esc(appt.client_phone)}','${esc(appt.client_name).replace(/'/g,'&#39;')}','${appt.date}','${appt.start_time}','${esc(appt.service_name).replace(/'/g,'&#39;')}')">
         <i class="fab fa-whatsapp"></i> Enviar lembrete no WhatsApp
       </button>
+    </div>` : ''}
+
+    ${!isOwn ? `
+    <div style="background:#f9fafb;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#9ca3af;text-align:center">
+      <i class="fa fa-lock"></i> Agendamento de outra profissional (somente leitura)
     </div>` : ''}
 
     <!-- Ações rápidas -->
@@ -148,9 +159,10 @@ function renderAppointmentDetail(appt) {
     <!-- Rodapé -->
     <div style="display:flex;gap:8px;margin-top:4px">
       <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Fechar</button>
+      ${isOwn ? `
       <button class="btn btn-outline" style="flex:1" onclick="openEditForm(${appt.id})">
         <i class="fa fa-edit"></i> Editar
-      </button>
+      </button>` : ''}
     </div>
   `;
 }
@@ -255,7 +267,14 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
   window._apptClients = clients;
   const preSelected = appt ? clients.find(c => c.id === appt.client_id) : null;
 
-  const profOptions = professionals.map(p =>
+  // Uma atendente (com professional_id, exceto master) só agenda na própria agenda:
+  // o select de profissional mostra apenas ela mesma. O master vê todas.
+  const ehAtendente = currentUser.professional_id && currentUser.role !== 'master';
+  const profList = ehAtendente
+    ? professionals.filter(p => p.id === currentUser.professional_id)
+    : professionals;
+
+  const profOptions = profList.map(p =>
     `<option value="${p.id}" ${
       (appt && appt.professional_id === p.id) ||
       (!appt && prefillProfId && parseInt(prefillProfId) === p.id) ||

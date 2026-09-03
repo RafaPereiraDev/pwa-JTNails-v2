@@ -23,6 +23,11 @@ function setCurrentUser(user) {
   document.querySelectorAll('.master-only').forEach(el => {
     el.style.display = user.role === 'master' ? '' : 'none';
   });
+
+  // Itens escondidos do master (ex: Financeiro — master não vê faturamento de ninguém)
+  document.querySelectorAll('.hide-master').forEach(el => {
+    el.style.display = user.role === 'master' ? 'none' : '';
+  });
 }
 
 // Mostra a foto de perfil no avatar da sidebar, ou as iniciais se não houver foto.

@@ -27,8 +27,8 @@ router.post('/', authenticateToken, (req, res) => {
   if (!professional_id || !date || !start_time || !end_time)
     return res.status(400).json({ error: 'Profissional, data, início e fim são obrigatórios' });
 
-  if (req.user.role === 'professional' && req.user.professional_id !== parseInt(professional_id))
-    return res.status(403).json({ error: 'Você só pode bloquear seu próprio horário' });
+  if (req.user.professional_id && req.user.role !== 'master' && req.user.professional_id !== parseInt(professional_id))
+    return res.status(403).json({ error: 'Você só pode bloquear o seu próprio horário' });
 
   const conflict = prepare(`
     SELECT id FROM appointments
@@ -48,8 +48,8 @@ router.post('/', authenticateToken, (req, res) => {
 router.delete('/:id', authenticateToken, (req, res) => {
   const b = prepare('SELECT * FROM blocked_times WHERE id = ?').get(req.params.id);
   if (!b) return res.status(404).json({ error: 'Bloqueio não encontrado' });
-  if (req.user.role === 'professional' && b.professional_id !== req.user.professional_id)
-    return res.status(403).json({ error: 'Acesso negado' });
+  if (req.user.professional_id && req.user.role !== 'master' && b.professional_id !== req.user.professional_id)
+    return res.status(403).json({ error: 'Você só pode remover os seus próprios bloqueios' });
 
   prepare('DELETE FROM blocked_times WHERE id = ?').run(req.params.id);
   res.json({ message: 'Bloqueio removido com sucesso' });

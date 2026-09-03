@@ -41,13 +41,6 @@ async function loadDashboard() {
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon green"><i class="fa fa-check-circle"></i></div>
-          <div class="stat-info">
-            <div class="stat-value">${today.completed}</div>
-            <div class="stat-label">Concluídos</div>
-          </div>
-        </div>
-        <div class="stat-card">
           <div class="stat-icon purple"><i class="fa fa-dollar-sign"></i></div>
           <div class="stat-info">
             <div class="stat-value">${formatCurrency(today.revenue)}</div>

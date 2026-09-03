@@ -224,9 +224,9 @@ function renderDayView(container, date, appointments, blocked) {
     return `
       <div class="appt-block" style="background:${color};position:absolute;top:${top}px;height:${height}px;${overlapStyle(dayLayout, a.id)}z-index:5"
         onclick="event.stopPropagation();openEditAppointment(${a.id})">
-        <button class="appt-delete-btn" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
+        ${canModifyAppt(a) ? `<button class="appt-delete-btn" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
           <i class="fa fa-trash"></i>
-        </button>
+        </button>` : ''}
         <div class="appt-block-title">${a.start_time} ${esc(a.client_name)}</div>
         <div class="appt-block-sub">${esc(a.service_name)} · ${formatCurrency(a.price)}</div>
         ${agendaProfFilter === 'all' ? `<div class="appt-block-sub">${esc(a.professional_name)}</div>` : ''}
@@ -239,7 +239,7 @@ function renderDayView(container, date, appointments, blocked) {
     const height = getHeight(b.start_time, b.end_time);
     return `
       <div class="blocked-block" style="position:absolute;top:${top}px;height:${height}px;left:4px;right:4px;z-index:4"
-        onclick="event.stopPropagation();deleteBlockedTime(${b.id})">
+        onclick="event.stopPropagation();${canModifyAppt(b) ? `deleteBlockedTime(${b.id})` : ''}">
         <div class="blocked-block-title"><i class="fa fa-ban"></i> ${esc(b.reason || 'Bloqueado')}</div>
         <div style="font-size:11px;color:var(--gray-500)">${b.start_time} - ${b.end_time} · ${esc(b.professional_name)}</div>
       </div>`;
@@ -269,20 +269,46 @@ function renderDayView(container, date, appointments, blocked) {
       </div>
     </div>
     <div style="margin-top:12px;font-size:12px;color:var(--gray-400)">
-      💡 Clique em um horário vazio para criar agendamento. Clique em um agendamento para editar.
+      ${canCreateInCurrentAgenda()
+        ? '💡 Clique em um horário vazio para criar agendamento. Clique em um agendamento para ver detalhes.'
+        : '👀 Você está vendo a agenda de outra profissional. Clique em um agendamento para ver os detalhes.'}
     </div>
   `;
+}
+
+// Decide se o usuário atual pode CRIAR agendamento na visão atual da agenda.
+// - Master: sempre pode.
+// - Atendente (tem professional_id): só quando o filtro está em "Todas" ou na própria agenda.
+//   Se está olhando a agenda de OUTRA profissional, clicar em horário vazio não faz nada.
+function canCreateInCurrentAgenda() {
+  if (!currentUser) return false;
+  if (currentUser.role === 'master' || !currentUser.professional_id) return true;
+  // é uma atendente: só pode se o filtro não estiver preso em outra profissional
+  if (agendaProfFilter === 'all') return true;
+  return String(agendaProfFilter) === String(currentUser.professional_id);
+}
+
+// Uma atendente (com professional_id, exceto master) só pode alterar/excluir agendamento
+// da própria agenda. Nos da colega, o botão de excluir não aparece.
+function canModifyAppt(appt) {
+  if (!currentUser) return false;
+  if (currentUser.role === 'master' || !currentUser.professional_id) return true;
+  return appt.professional_id === currentUser.professional_id;
 }
 
 function handleWeekColClick(e, day) {
   // só dispara se clicou direto na coluna (área vazia), não em bloco
   if (e.target.closest('.appt-block') || e.target.closest('.blocked-block')) return;
+  // Na agenda de outra profissional, clicar em horário vazio não faz nada
+  if (!canCreateInCurrentAgenda()) return;
   openNewAppointment(day);
 }
 
 function handleDayClick(e, date) {
   // Don't trigger if clicked on appt block
   if (e.target.closest('.appt-block') || e.target.closest('.blocked-block')) return;
+  // Na agenda de outra profissional, clicar em horário vazio não faz nada
+  if (!canCreateInCurrentAgenda()) return;
   const col = e.currentTarget;
   const rect = col.getBoundingClientRect();
   const y = e.clientY - rect.top;
@@ -358,16 +384,16 @@ function renderWeekView(container, range, appointments, blocked) {
                 <div class="appt-block"
                   style="background:${a.professional_color || '#e91e8c'};position:absolute;top:${getTop(a.start_time)}px;height:${getHeight(a.start_time,a.end_time)}px;${overlapStyle(dayLayout, a.id)}font-size:11px;z-index:5"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
-                  <button class="appt-delete-btn appt-delete-btn-sm" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
+                  ${canModifyAppt(a) ? `<button class="appt-delete-btn appt-delete-btn-sm" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
                     <i class="fa fa-trash"></i>
-                  </button>
+                  </button>` : ''}
                   <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:18px">${a.start_time} ${esc(a.client_name)}</div>
                   <div style="opacity:0.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.service_name)}</div>
                 </div>`).join('')}
               ${dayBlocked.map(b => `
                 <div class="blocked-block"
                   style="position:absolute;top:${getTop(b.start_time)}px;height:${getHeight(b.start_time,b.end_time)}px;left:2px;right:2px;font-size:11px;z-index:5"
-                  onclick="event.stopPropagation();deleteBlockedTime(${b.id})">
+                  onclick="event.stopPropagation();${canModifyAppt(b) ? `deleteBlockedTime(${b.id})` : ''}">
                   <div class="blocked-block-title"><i class="fa fa-ban"></i> ${esc(b.reason || 'Bloqueado')}</div>
                 </div>`).join('')}
             </div>`;
@@ -420,9 +446,9 @@ function renderMonthView(container, year, month, appointments) {
                 <div class="month-appt" style="background:${a.professional_color || '#e91e8c'};position:relative;padding-right:20px"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
                   ${a.start_time} ${esc(a.client_name)}
-                  <button class="appt-delete-btn appt-delete-btn-month" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
+                  ${canModifyAppt(a) ? `<button class="appt-delete-btn appt-delete-btn-month" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
                     <i class="fa fa-times"></i>
-                  </button>
+                  </button>` : ''}
                 </div>`).join('')}
               ${more > 0 ? `<div class="month-more">+${more} mais</div>` : ''}
             </div>`;

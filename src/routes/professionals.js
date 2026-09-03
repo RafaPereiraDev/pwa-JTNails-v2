@@ -71,6 +71,13 @@ router.get('/:id/stats', authenticateToken, (req, res) => {
     FROM appointments WHERE professional_id = ? AND date LIKE ?
   `).get(req.params.id, `${y}-${m}%`);
 
+  // Faturamento é privado: cada uma só vê o próprio. Uma admin não vê o de outra,
+  // e o master não vê o de ninguém. Para os demais, retorna só a contagem de atendimentos.
+  const ehDona = req.user.professional_id && String(req.user.professional_id) === String(req.params.id);
+  if (!ehDona) {
+    return res.json({ total_appointments: stats.total_appointments, total_revenue: null, avg_ticket: null });
+  }
+
   res.json(stats);
 });
 

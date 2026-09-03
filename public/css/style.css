@@ -401,6 +401,7 @@ select { appearance: none; cursor: pointer; }
 .stat-icon.green { background: #dcfce7; color: var(--success); }
 .stat-icon.orange { background: #fff7ed; color: var(--warning); }
 .stat-icon.blue { background: #eff6ff; color: var(--info); }
+.stat-icon.red { background: #fee2e2; color: #dc2626; }
 .stat-info { flex: 1; min-width: 0; }
 .stat-value {
   font-size: 22px;

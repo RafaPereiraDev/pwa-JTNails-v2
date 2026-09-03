@@ -3,6 +3,14 @@ const router  = express.Router();
 const { prepare }                         = require('../database/db');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
+// O administrador mestre não tem acesso ao financeiro (não vê faturamento de ninguém).
+// Aplica-se a todas as rotas de transações.
+router.use(authenticateToken, (req, res, next) => {
+  if (req.user.role === 'master')
+    return res.status(403).json({ error: 'O administrador mestre não tem acesso ao financeiro' });
+  next();
+});
+
 router.get('/summary', authenticateToken, (req, res) => {
   const { start_date, end_date, professional_id } = req.query;
 

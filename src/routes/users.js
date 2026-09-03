@@ -77,11 +77,28 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Não é possível excluir seu próprio usuário' });
   const target = prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!target) return res.status(404).json({ error: 'Usuário não encontrado' });
-  // Só o master pode desativar uma conta master
-  if (target.role === 'master' && req.user.role !== 'master')
-    return res.status(403).json({ error: 'Apenas o administrador mestre pode desativar a conta mestre' });
-  prepare('UPDATE users SET active = 0 WHERE id = ?').run(req.params.id);
-  res.json({ message: 'Usuário desativado com sucesso' });
+  // Uma admin não pode excluir outra admin nem o master. Só o master pode.
+  if ((target.role === 'admin' || target.role === 'master') && req.user.role !== 'master')
+    return res.status(403).json({ error: 'Apenas o administrador mestre pode excluir uma administradora' });
+
+  // Se o usuário está vinculado a uma profissional com histórico, não dá para apagar de vez
+  // (quebraria a integridade dos agendamentos). Nesse caso, desativa.
+  let hasHistory = 0;
+  if (target.professional_id) {
+    hasHistory = prepare('SELECT COUNT(*) as c FROM appointments WHERE professional_id = ?')
+      .get(target.professional_id).c;
+  }
+
+  if (hasHistory > 0) {
+    prepare('UPDATE users SET active = 0 WHERE id = ?').run(req.params.id);
+    prepare('UPDATE professionals SET active = 0 WHERE id = ?').run(target.professional_id);
+    return res.json({ message: 'Usuário desativado (possui histórico de agendamentos)' });
+  }
+
+  // Sem histórico: remove o usuário de vez (e a ficha de profissional vinculada, se houver)
+  prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  if (target.professional_id) prepare('DELETE FROM professionals WHERE id = ?').run(target.professional_id);
+  res.json({ message: 'Usuário excluído com sucesso' });
 });
 
 module.exports = router;
