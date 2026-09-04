@@ -4,6 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#e91e8c" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TainaraNails" />
+  <meta name="description" content="Agende seu horário no Salão Tainara Nails" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
   <title>Agendar — Tainara Nails</title>
   <link rel="stylesheet" href="css/agendar.css?v=3" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
@@ -132,5 +141,63 @@
   </div>
 
   <script src="js/agendar.js?v=3"></script>
+
+  <!-- Botão discreto de instalação do PWA (aparece só quando disponível) -->
+  <div id="pwa-install-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;
+    background:#fff;border-top:1px solid #f3e8f0;padding:12px 16px;
+    display:none;align-items:center;justify-content:space-between;gap:12px;
+    box-shadow:0 -2px 12px rgba(233,30,140,0.12)">
+    <div style="display:flex;align-items:center;gap:10px">
+      <img src="/icons/icon-192.png" width="36" height="36" style="border-radius:8px" alt="Ícone" />
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#1f2937">Instalar app do salão</div>
+        <div style="font-size:11px;color:#9ca3af">Acesso rápido na sua tela inicial</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-shrink:0">
+      <button onclick="dismissInstall()" style="padding:8px 12px;border-radius:8px;border:1px solid #e5e7eb;
+        background:#f9fafb;color:#6b7280;font-size:12px;cursor:pointer">Agora não</button>
+      <button onclick="installPWA()" style="padding:8px 16px;border-radius:8px;border:none;
+        background:#e91e8c;color:#fff;font-size:13px;font-weight:700;cursor:pointer">
+        <i class="fa fa-download"></i> Instalar
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // PWA Install prompt
+    let _deferredPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      _deferredPrompt = e;
+      // Só mostra se o usuário ainda não dispensou
+      if (!localStorage.getItem('pwa-install-dismissed')) {
+        const bar = document.getElementById('pwa-install-bar');
+        if (bar) bar.style.display = 'flex';
+      }
+    });
+
+    function installPWA() {
+      const bar = document.getElementById('pwa-install-bar');
+      if (bar) bar.style.display = 'none';
+      if (_deferredPrompt) {
+        _deferredPrompt.prompt();
+        _deferredPrompt.userChoice.then(() => { _deferredPrompt = null; });
+      }
+    }
+
+    function dismissInstall() {
+      const bar = document.getElementById('pwa-install-bar');
+      if (bar) bar.style.display = 'none';
+      localStorage.setItem('pwa-install-dismissed', '1');
+    }
+
+    // Esconde a barra se já está instalado
+    window.addEventListener('appinstalled', () => {
+      const bar = document.getElementById('pwa-install-bar');
+      if (bar) bar.style.display = 'none';
+    });
+  </script>
 </body>
 </html>

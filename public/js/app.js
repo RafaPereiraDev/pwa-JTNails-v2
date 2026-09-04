@@ -94,3 +94,11 @@ function sendAppointmentReminder(phone, name, date, time, service) {
   const msg = `Olá, ${name}! Seu atendimento está confirmado para ${formatDate(date)} às ${time}. Serviço: ${service}. Até lá!`;
   window.open(whatsappLink(phone, msg), '_blank');
 }
+
+// ===== SERVICE WORKER (PWA) =====
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .catch(err => console.warn('SW registro falhou:', err));
+  });
+}
