@@ -1,7 +1,7 @@
 const express = require('express');
 const router  = express.Router();
-const { prepare, getDb }       = require('../database/db');
-const { authenticateToken }    = require('../middleware/auth');
+const { query, getOne, getAll, withTransaction } = require('../database/db');
+const { authenticateToken }                      = require('../middleware/auth');
 
 function calcEndTime(start, mins) {
   const [h, m] = start.split(':').map(Number);
@@ -9,317 +9,334 @@ function calcEndTime(start, mins) {
   return `${String(Math.floor(t / 60) % 24).padStart(2,'0')}:${String(t % 60).padStart(2,'0')}`;
 }
 
-/**
- * Recalcula e persiste a confiabilidade de uma cliente com base no histórico completo.
- * Lógica:
- *   - Menos de 3 agendamentos finalizados/faltados → 'new'  (sem histórico suficiente)
- *   - 0 no_show                                    → 'good'
- *   - 1 no_show E taxa de comparecimento >= 60%    → 'irregular'
- *   - 2+ no_show OU taxa de comparecimento < 60%   → 'unreliable'
- */
-function recalculateClientReliability(client_id) {
-  const stats = prepare(`
+async function recalculateClientReliability(client_id) {
+  const stats = await getOne(`
     SELECT
-      COUNT(*) FILTER (WHERE status IN ('completed','no_show','cancelled')) as total_closed,
-      COUNT(*) FILTER (WHERE status = 'completed')  as completed,
-      COUNT(*) FILTER (WHERE status = 'no_show')    as no_shows
-    FROM appointments WHERE client_id = ?
-  `).get(client_id);
+      COUNT(*) FILTER (WHERE status IN ('completed','no_show','cancelled')) AS total_closed,
+      COUNT(*) FILTER (WHERE status = 'completed')  AS completed,
+      COUNT(*) FILTER (WHERE status = 'no_show')    AS no_shows
+    FROM appointments WHERE client_id = $1
+  `, [client_id]);
+
+  const closed    = parseInt(stats.total_closed) || 0;
+  const completed = parseInt(stats.completed)    || 0;
+  const noShows   = parseInt(stats.no_shows)     || 0;
 
   let reliability;
-  const closed    = stats.total_closed || 0;
-  const completed = stats.completed    || 0;
-  const noShows   = stats.no_shows     || 0;
+  if (closed < 3)                                           reliability = 'new';
+  else if (noShows === 0)                                   reliability = 'good';
+  else if (noShows >= 2 || (completed / closed) < 0.6)     reliability = 'unreliable';
+  else                                                      reliability = 'irregular';
 
-  if (closed < 3) {
-    reliability = 'new';
-  } else if (noShows === 0) {
-    reliability = 'good';
-  } else if (noShows >= 2 || (completed / closed) < 0.6) {
-    reliability = 'unreliable';
-  } else {
-    reliability = 'irregular';
-  }
-
-  prepare('UPDATE clients SET reliability = ? WHERE id = ?').run(reliability, client_id);
+  await query('UPDATE clients SET reliability = $1 WHERE id = $2', [reliability, client_id]);
 }
 
-function hasConflict(professional_id, date, start_time, end_time, exclude_id = null) {
-  // Check appointments
+async function hasConflict(professional_id, date, start_time, end_time, exclude_id = null) {
   let sql = `
     SELECT id FROM appointments
-    WHERE professional_id=? AND date=? AND status NOT IN ('cancelled','no_show')
-    AND ((start_time < ? AND end_time > ?) OR (start_time >= ? AND start_time < ?))
+    WHERE professional_id = $1 AND date = $2
+      AND status NOT IN ('cancelled','no_show')
+      AND ((start_time < $3 AND end_time > $4) OR (start_time >= $4 AND start_time < $3))
   `;
-  const args = [professional_id, date, end_time, start_time, start_time, end_time];
-  if (exclude_id) { sql += ' AND id != ?'; args.push(exclude_id); }
-  if (prepare(sql).get(...args)) return true;
+  const args = [professional_id, date, end_time, start_time];
+  if (exclude_id) { sql += ` AND id != $${args.length + 1}`; args.push(exclude_id); }
+  if (await getOne(sql, args)) return true;
 
-  // Check blocked times
-  const blocked = prepare(`
+  const blocked = await getOne(`
     SELECT id FROM blocked_times
-    WHERE professional_id=? AND date=?
-    AND ((start_time < ? AND end_time > ?) OR (start_time >= ? AND start_time < ?))
-  `).get(professional_id, date, end_time, start_time, start_time, end_time);
-
+    WHERE professional_id = $1 AND date = $2
+      AND ((start_time < $3 AND end_time > $4) OR (start_time >= $4 AND start_time < $3))
+  `, [professional_id, date, end_time, start_time]);
   return !!blocked;
 }
 
 const APPT_SELECT = `
   SELECT a.*,
-    c.name as client_name, c.phone as client_phone,
-    s.name as service_name, s.duration as service_duration,
-    p.name as professional_name, p.color as professional_color
+    c.name  as client_name,  c.phone as client_phone,
+    s.name  as service_name, s.duration as service_duration,
+    p.name  as professional_name, p.color as professional_color
   FROM appointments a
-  JOIN clients c ON a.client_id = c.id
-  JOIN services s ON a.service_id = s.id
+  JOIN clients      c ON a.client_id       = c.id
+  JOIN services     s ON a.service_id      = s.id
   JOIN professionals p ON a.professional_id = p.id
 `;
 
 // GET /api/appointments/pending-confirmation
-// Retorna agendamentos cujo horário de fim já passou e ainda estão como
-// scheduled / confirmed / in_progress (precisam de confirmação manual).
-// Escopo: atendente vê só os próprios; master vê todos.
-router.get('/pending-confirmation', authenticateToken, (req, res) => {
-  const ehAtendente = req.user.professional_id && req.user.role !== 'master';
-  let sql = APPT_SELECT + `
-    WHERE a.status IN ('scheduled','confirmed','in_progress')
-      AND (a.date || ' ' || a.end_time) < datetime('now','localtime')
-  `;
-  const params = [];
-  if (ehAtendente) { sql += ' AND a.professional_id = ?'; params.push(req.user.professional_id); }
-  sql += ' ORDER BY a.date, a.start_time';
-  res.json(prepare(sql).all(...params));
+router.get('/pending-confirmation', authenticateToken, async (req, res) => {
+  try {
+    const ehAtendente = req.user.professional_id && req.user.role !== 'master';
+    let sql = APPT_SELECT + `
+      WHERE a.status IN ('scheduled','confirmed','in_progress')
+        AND (a.date::text || ' ' || a.end_time::text)::timestamp < NOW()
+    `;
+    const params = [];
+    if (ehAtendente) {
+      sql += ` AND a.professional_id = $1`;
+      params.push(req.user.professional_id);
+    }
+    sql += ' ORDER BY a.date, a.start_time';
+    res.json(await getAll(sql, params));
+  } catch (e) {
+    console.error('[appointments pending-confirmation]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
 });
 
 // POST /api/appointments/bulk-confirm
-// Recebe [{ id, status, payment_method? }] e atualiza em lote dentro de uma transação.
-// Gera receita pra concluídos e remove receita pra no_show/cancelled (mesmo comportamento do PUT /:id).
-router.post('/bulk-confirm', authenticateToken, (req, res) => {
-  const updates = req.body;
-  if (!Array.isArray(updates) || updates.length === 0)
-    return res.status(400).json({ error: 'Envie um array com as confirmações' });
-
-  const ehAtendente = req.user.professional_id && req.user.role !== 'master';
-  const db = getDb();
-
+router.post('/bulk-confirm', authenticateToken, async (req, res) => {
   try {
-    db.exec('BEGIN');
+    const updates = req.body;
+    if (!Array.isArray(updates) || updates.length === 0)
+      return res.status(400).json({ error: 'Envie um array com as confirmações' });
 
-    for (const { id, status, payment_method } of updates) {
-      if (!id || !['completed','no_show','cancelled'].includes(status)) continue;
+    const ehAtendente = req.user.professional_id && req.user.role !== 'master';
 
-      const appt = prepare('SELECT * FROM appointments WHERE id = ?').get(id);
-      if (!appt) continue;
+    await withTransaction(async (client) => {
+      for (const { id, status, payment_method } of updates) {
+        if (!id || !['completed','no_show','cancelled'].includes(status)) continue;
 
-      // Atendente só confirma os próprios
-      if (ehAtendente && appt.professional_id !== req.user.professional_id) continue;
+        const appt = (await client.query('SELECT * FROM appointments WHERE id = $1', [id])).rows[0];
+        if (!appt) continue;
+        if (ehAtendente && appt.professional_id !== req.user.professional_id) continue;
 
-      prepare('UPDATE appointments SET status=?, payment_method=COALESCE(?,payment_method) WHERE id=?')
-        .run(status, payment_method || null, id);
+        await client.query(
+          'UPDATE appointments SET status=$1, payment_method=COALESCE($2, payment_method) WHERE id=$3',
+          [status, payment_method || null, id]
+        );
 
-      // Gera receita se concluído
-      if (status === 'completed' && appt.status !== 'completed') {
-        const existing = prepare('SELECT id FROM transactions WHERE appointment_id=? AND type=?').get(id, 'income');
-        if (!existing) {
-          const cl = prepare('SELECT name FROM clients WHERE id = ?').get(appt.client_id);
-          const sv = prepare('SELECT name FROM services WHERE id = ?').get(appt.service_id);
-          prepare(`INSERT INTO transactions (type,appointment_id,professional_id,description,category,amount,payment_method,date)
-                   VALUES ('income',?,?,?,'Serviço',?,?,?)`)
-            .run(id, appt.professional_id, `${sv.name} - ${cl.name}`, appt.price,
-                 payment_method || appt.payment_method || null, appt.date);
+        if (status === 'completed' && appt.status !== 'completed') {
+          const existing = (await client.query(
+            `SELECT id FROM transactions WHERE appointment_id=$1 AND type='income'`, [id]
+          )).rows[0];
+          if (!existing) {
+            const cl = (await client.query('SELECT name FROM clients WHERE id=$1', [appt.client_id])).rows[0];
+            const sv = (await client.query('SELECT name FROM services WHERE id=$1', [appt.service_id])).rows[0];
+            await client.query(
+              `INSERT INTO transactions
+                 (type,appointment_id,professional_id,description,category,amount,payment_method,date)
+               VALUES ('income',$1,$2,$3,'Serviço',$4,$5,$6)`,
+              [id, appt.professional_id, `${sv.name} - ${cl.name}`,
+               appt.price, payment_method || appt.payment_method || null, appt.date]
+            );
+          }
         }
+
+        if (['no_show','cancelled'].includes(status) && appt.status === 'completed') {
+          await client.query(
+            `DELETE FROM transactions WHERE appointment_id=$1 AND type='income'`, [id]
+          );
+        }
+
+        await recalculateClientReliability(appt.client_id);
       }
+    });
 
-      // Remove receita se revertido para no_show / cancelled
-      if (['no_show','cancelled'].includes(status) && appt.status === 'completed') {
-        prepare("DELETE FROM transactions WHERE appointment_id=? AND type='income'").run(id);
-      }
-
-      // Recalcula confiabilidade da cliente
-      recalculateClientReliability(appt.client_id);
-    }
-
-    db.exec('COMMIT');
     res.json({ message: 'Confirmações salvas com sucesso' });
-  } catch (err) {
-    db.exec('ROLLBACK');
-    console.error('bulk-confirm error', err);
+  } catch (e) {
+    console.error('[appointments bulk-confirm]', e.message);
     res.status(500).json({ error: 'Erro ao salvar confirmações' });
   }
 });
 
-router.get('/today', authenticateToken, (req, res) => {
-  const today = new Date().toLocaleDateString('en-CA');
-  let sql = APPT_SELECT + " WHERE a.date = ? AND a.status NOT IN ('cancelled','no_show')";
-  const params = [today];
-  if (req.user.role === 'professional' && req.user.professional_id) {
-    sql += ' AND a.professional_id = ?'; params.push(req.user.professional_id);
-  }
-  sql += ' ORDER BY a.start_time';
-  res.json(prepare(sql).all(...params));
-});
-
-router.get('/', authenticateToken, (req, res) => {
-  const { date, professional_id, status, start_date, end_date } = req.query;
-
-  let prof = professional_id;
-  if (req.user.role === 'professional' && req.user.professional_id) prof = req.user.professional_id;
-
-  let sql = APPT_SELECT + ' WHERE 1=1';
-  const p = [];
-  if (prof)       { sql += ' AND a.professional_id=?'; p.push(prof); }
-  if (date)       { sql += ' AND a.date=?';            p.push(date); }
-  if (start_date) { sql += ' AND a.date>=?';           p.push(start_date); }
-  if (end_date)   { sql += ' AND a.date<=?';           p.push(end_date); }
-  // Se status explícito foi pedido, filtra por ele; senão:
-  // - view de dia (só `date`, sem start_date/end_date) no passado → mostra tudo (histórico)
-  // - semana/mês ou hoje/futuro → esconde cancelados e faltas (não polui o calendário)
-  if (status) {
-    sql += ' AND a.status=?'; p.push(status);
-  } else {
+// GET /api/appointments/today
+router.get('/today', authenticateToken, async (req, res) => {
+  try {
     const today = new Date().toLocaleDateString('en-CA');
-    const isDayView = date && !start_date && !end_date;
-    const isPast = isDayView && date < today;
-    if (!isPast) sql += " AND a.status NOT IN ('cancelled','no_show')";
-  }
-  sql += ' ORDER BY a.date, a.start_time';
-  res.json(prepare(sql).all(...p));
-});
-
-router.get('/:id', authenticateToken, (req, res) => {
-  const a = prepare(APPT_SELECT + ' WHERE a.id = ?').get(req.params.id);
-  if (!a) return res.status(404).json({ error: 'Agendamento não encontrado' });
-  if (req.user.role === 'professional' && a.professional_id !== req.user.professional_id)
-    return res.status(403).json({ error: 'Acesso negado' });
-  res.json(a);
-});
-
-router.post('/', authenticateToken, (req, res) => {
-  const { client_id, professional_id, service_id, date, start_time,
-          price, payment_method, notes, status } = req.body;
-
-  if (!client_id || !professional_id || !service_id || !date || !start_time)
-    return res.status(400).json({ error: 'Cliente, profissional, serviço, data e horário são obrigatórios' });
-
-  // Não permite agendar em datas passadas
-  const today = new Date().toLocaleDateString('en-CA');
-  if (date < today)
-    return res.status(400).json({ error: 'Não é possível agendar em uma data que já passou' });
-
-  // Uma atendente (com professional_id) só pode criar agendamento na PRÓPRIA agenda.
-  // O master gerencia todas.
-  if (req.user.professional_id && req.user.role !== 'master' &&
-      Number(professional_id) !== Number(req.user.professional_id))
-    return res.status(403).json({ error: 'Você só pode criar agendamentos na sua própria agenda' });
-
-  const svc = prepare('SELECT * FROM services WHERE id = ? AND active = 1').get(service_id);
-  if (!svc) return res.status(404).json({ error: 'Serviço não encontrado ou inativo' });
-
-  const finalPrice = price !== undefined ? parseFloat(price) : svc.price;
-  const end_time   = calcEndTime(start_time, svc.duration);
-
-  if (hasConflict(professional_id, date, start_time, end_time))
-    return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
-
-  const result = prepare(`
-    INSERT INTO appointments (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes)
-    VALUES (?,?,?,?,?,?,?,?,?,?)
-  `).run(client_id, professional_id, service_id, date, start_time, end_time,
-         finalPrice, status || 'scheduled', payment_method || null, notes || null);
-
-  res.status(201).json(prepare(APPT_SELECT + ' WHERE a.id = ?').get(result.lastInsertRowid));
-});
-
-router.put('/:id', authenticateToken, (req, res) => {
-  const appt = prepare('SELECT * FROM appointments WHERE id = ?').get(req.params.id);
-  if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
-
-  // Atendente (com professional_id, exceto master) só mexe em agendamento da própria agenda
-  const ehAtendente = req.user.professional_id && req.user.role !== 'master';
-  if (ehAtendente && appt.professional_id !== req.user.professional_id)
-    return res.status(403).json({ error: 'Você só pode alterar agendamentos da sua própria agenda' });
-
-  const { client_id, professional_id, service_id, date, start_time,
-          price, payment_method, notes, status } = req.body;
-
-  // E não pode transferir o agendamento para a agenda de outra profissional
-  if (ehAtendente && professional_id && Number(professional_id) !== Number(req.user.professional_id))
-    return res.status(403).json({ error: 'Você não pode transferir agendamentos para outra profissional' });
-
-  const newProfId = professional_id || appt.professional_id;
-  const newDate   = date       || appt.date;
-  const newStart  = start_time || appt.start_time;
-  const newSvcId  = service_id || appt.service_id;
-
-  const svc      = prepare('SELECT * FROM services WHERE id = ?').get(newSvcId);
-  const newEnd   = calcEndTime(newStart, svc.duration);
-  const newPrice = price !== undefined ? parseFloat(price) : appt.price;
-
-  if (hasConflict(newProfId, newDate, newStart, newEnd, appt.id))
-    return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
-
-  prepare(`
-    UPDATE appointments SET
-      client_id=?,professional_id=?,service_id=?,date=?,start_time=?,end_time=?,
-      price=?,status=?,payment_method=?,notes=?
-    WHERE id=?
-  `).run(
-    client_id || appt.client_id,
-    newProfId, newSvcId, newDate, newStart, newEnd,
-    newPrice,
-    status || appt.status,
-    payment_method !== undefined ? payment_method : appt.payment_method,
-    notes      !== undefined ? notes      : appt.notes,
-    req.params.id
-  );
-
-  // Auto-create income transaction when completed
-  if (status === 'completed' && appt.status !== 'completed') {
-    const existing = prepare('SELECT id FROM transactions WHERE appointment_id=? AND type=?').get(req.params.id, 'income');
-    if (!existing) {
-      const updated = prepare('SELECT * FROM appointments WHERE id = ?').get(req.params.id);
-      const cl  = prepare('SELECT name FROM clients WHERE id = ?').get(updated.client_id);
-      const sv  = prepare('SELECT name FROM services WHERE id = ?').get(updated.service_id);
-      prepare(`INSERT INTO transactions (type,appointment_id,professional_id,description,category,amount,payment_method,date)
-               VALUES ('income',?,?,?,'Serviço',?,?,?)`).run(
-        req.params.id, updated.professional_id,
-        `${sv.name} - ${cl.name}`,
-        updated.price,
-        updated.payment_method || payment_method || null,
-        updated.date
-      );
+    let sql = APPT_SELECT + ` WHERE a.date = $1 AND a.status NOT IN ('cancelled','no_show')`;
+    const params = [today];
+    if (req.user.role === 'professional' && req.user.professional_id) {
+      sql += ` AND a.professional_id = $2`; params.push(req.user.professional_id);
     }
+    sql += ' ORDER BY a.start_time';
+    res.json(await getAll(sql, params));
+  } catch (e) {
+    console.error('[appointments today]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
   }
-
-  // Se o agendamento sair de 'completed' para cancelado/não compareceu, remove a receita gerada
-  if (appt.status === 'completed' && (status === 'cancelled' || status === 'no_show')) {
-    prepare("DELETE FROM transactions WHERE appointment_id = ? AND type = 'income'").run(req.params.id);
-  }
-
-  // Recalculate client reliability whenever a terminal status is set
-  const terminalStatuses = ['completed', 'no_show', 'cancelled'];
-  const finalClientId = client_id || appt.client_id;
-  if (status && terminalStatuses.includes(status) && status !== appt.status) {
-    recalculateClientReliability(finalClientId);
-  }
-
-  res.json({ message: 'Agendamento atualizado com sucesso' });
 });
 
-router.delete('/:id', authenticateToken, (req, res) => {
-  const appt = prepare('SELECT * FROM appointments WHERE id = ?').get(req.params.id);
-  if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
-  // Atendente (com professional_id, exceto master) só cancela agendamento da própria agenda
-  if (req.user.professional_id && req.user.role !== 'master' &&
-      appt.professional_id !== req.user.professional_id)
-    return res.status(403).json({ error: 'Você só pode cancelar agendamentos da sua própria agenda' });
+// GET /api/appointments
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const { date, professional_id, status, start_date, end_date } = req.query;
+    let prof = professional_id;
+    if (req.user.role === 'professional' && req.user.professional_id)
+      prof = req.user.professional_id;
 
-  // Remove a receita gerada por este agendamento (se houver), para não inflar o faturamento
-  prepare("DELETE FROM transactions WHERE appointment_id = ? AND type = 'income'").run(req.params.id);
+    let sql = APPT_SELECT + ' WHERE 1=1';
+    const p = [];
+    let i = 1;
+    if (prof)       { sql += ` AND a.professional_id = $${i++}`; p.push(prof); }
+    if (date)       { sql += ` AND a.date = $${i++}`;            p.push(date); }
+    if (start_date) { sql += ` AND a.date >= $${i++}`;           p.push(start_date); }
+    if (end_date)   { sql += ` AND a.date <= $${i++}`;           p.push(end_date); }
 
-  prepare("UPDATE appointments SET status='cancelled' WHERE id=?").run(req.params.id);
-  res.json({ message: 'Agendamento cancelado com sucesso' });
+    if (status) {
+      sql += ` AND a.status = $${i++}`; p.push(status);
+    } else {
+      const today = new Date().toLocaleDateString('en-CA');
+      const isDayView = date && !start_date && !end_date;
+      const isPast    = isDayView && date < today;
+      if (!isPast) sql += ` AND a.status NOT IN ('cancelled','no_show')`;
+    }
+    sql += ' ORDER BY a.date, a.start_time';
+    res.json(await getAll(sql, p));
+  } catch (e) {
+    console.error('[appointments GET /]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/appointments/:id
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const a = await getOne(APPT_SELECT + ' WHERE a.id = $1', [req.params.id]);
+    if (!a) return res.status(404).json({ error: 'Agendamento não encontrado' });
+    if (req.user.role === 'professional' && a.professional_id !== req.user.professional_id)
+      return res.status(403).json({ error: 'Acesso negado' });
+    res.json(a);
+  } catch (e) {
+    console.error('[appointments GET /:id]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/appointments
+router.post('/', authenticateToken, async (req, res) => {
+  try {
+    const { client_id, professional_id, service_id, date, start_time,
+            price, payment_method, notes, status } = req.body;
+
+    if (!client_id || !professional_id || !service_id || !date || !start_time)
+      return res.status(400).json({ error: 'Cliente, profissional, serviço, data e horário são obrigatórios' });
+
+    const today = new Date().toLocaleDateString('en-CA');
+    if (date < today)
+      return res.status(400).json({ error: 'Não é possível agendar em uma data que já passou' });
+
+    if (req.user.professional_id && req.user.role !== 'master' &&
+        Number(professional_id) !== Number(req.user.professional_id))
+      return res.status(403).json({ error: 'Você só pode criar agendamentos na sua própria agenda' });
+
+    const svc = await getOne('SELECT * FROM services WHERE id = $1 AND active = TRUE', [service_id]);
+    if (!svc) return res.status(404).json({ error: 'Serviço não encontrado ou inativo' });
+
+    const finalPrice = price !== undefined ? parseFloat(price) : parseFloat(svc.price);
+    const end_time   = calcEndTime(start_time, svc.duration);
+
+    if (await hasConflict(professional_id, date, start_time, end_time))
+      return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
+
+    const result = await getOne(`
+      INSERT INTO appointments
+        (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      RETURNING id
+    `, [client_id, professional_id, service_id, date, start_time, end_time,
+        finalPrice, status || 'scheduled', payment_method || null, notes || null]);
+
+    res.status(201).json(await getOne(APPT_SELECT + ' WHERE a.id = $1', [result.id]));
+  } catch (e) {
+    console.error('[appointments POST]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// PUT /api/appointments/:id
+router.put('/:id', authenticateToken, async (req, res) => {
+  try {
+    const appt = await getOne('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+    if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
+
+    const ehAtendente = req.user.professional_id && req.user.role !== 'master';
+    if (ehAtendente && appt.professional_id !== req.user.professional_id)
+      return res.status(403).json({ error: 'Você só pode alterar agendamentos da sua própria agenda' });
+
+    const { client_id, professional_id, service_id, date, start_time,
+            price, payment_method, notes, status } = req.body;
+
+    if (ehAtendente && professional_id && Number(professional_id) !== Number(req.user.professional_id))
+      return res.status(403).json({ error: 'Você não pode transferir agendamentos para outra profissional' });
+
+    const newProfId = professional_id || appt.professional_id;
+    const newDate   = date       || appt.date;
+    const newStart  = start_time || appt.start_time;
+    const newSvcId  = service_id || appt.service_id;
+    const svc       = await getOne('SELECT * FROM services WHERE id = $1', [newSvcId]);
+    const newEnd    = calcEndTime(String(newStart).slice(0,5), svc.duration);
+    const newPrice  = price !== undefined ? parseFloat(price) : parseFloat(appt.price);
+
+    if (await hasConflict(newProfId, newDate, newStart, newEnd, appt.id))
+      return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
+
+    await query(`
+      UPDATE appointments SET
+        client_id=$1, professional_id=$2, service_id=$3, date=$4,
+        start_time=$5, end_time=$6, price=$7, status=$8,
+        payment_method=$9, notes=$10
+      WHERE id=$11
+    `, [
+      client_id || appt.client_id,
+      newProfId, newSvcId, newDate, newStart, newEnd, newPrice,
+      status || appt.status,
+      payment_method !== undefined ? payment_method : appt.payment_method,
+      notes          !== undefined ? notes          : appt.notes,
+      req.params.id,
+    ]);
+
+    // Gera receita ao concluir
+    if (status === 'completed' && appt.status !== 'completed') {
+      const existing = await getOne(
+        `SELECT id FROM transactions WHERE appointment_id=$1 AND type='income'`, [req.params.id]
+      );
+      if (!existing) {
+        const updated = await getOne('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+        const cl = await getOne('SELECT name FROM clients  WHERE id = $1', [updated.client_id]);
+        const sv = await getOne('SELECT name FROM services WHERE id = $1', [updated.service_id]);
+        await query(`
+          INSERT INTO transactions
+            (type,appointment_id,professional_id,description,category,amount,payment_method,date)
+          VALUES ('income',$1,$2,$3,'Serviço',$4,$5,$6)
+        `, [req.params.id, updated.professional_id, `${sv.name} - ${cl.name}`,
+            updated.price, updated.payment_method || payment_method || null, updated.date]);
+      }
+    }
+
+    // Remove receita se revertido para cancelado/no_show
+    if (appt.status === 'completed' && (status === 'cancelled' || status === 'no_show')) {
+      await query(`DELETE FROM transactions WHERE appointment_id=$1 AND type='income'`, [req.params.id]);
+    }
+
+    // Recalcula confiabilidade da cliente
+    const terminalStatuses = ['completed','no_show','cancelled'];
+    if (status && terminalStatuses.includes(status) && status !== appt.status) {
+      await recalculateClientReliability(client_id || appt.client_id);
+    }
+
+    res.json({ message: 'Agendamento atualizado com sucesso' });
+  } catch (e) {
+    console.error('[appointments PUT]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// DELETE /api/appointments/:id
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const appt = await getOne('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+    if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
+
+    if (req.user.professional_id && req.user.role !== 'master' &&
+        appt.professional_id !== req.user.professional_id)
+      return res.status(403).json({ error: 'Você só pode cancelar agendamentos da sua própria agenda' });
+
+    await query(`DELETE FROM transactions WHERE appointment_id=$1 AND type='income'`, [req.params.id]);
+    await query(`UPDATE appointments SET status='cancelled' WHERE id=$1`, [req.params.id]);
+    res.json({ message: 'Agendamento cancelado com sucesso' });
+  } catch (e) {
+    console.error('[appointments DELETE]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
 });
 
 module.exports = router;

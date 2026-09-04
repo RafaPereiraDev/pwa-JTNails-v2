@@ -1,59 +1,67 @@
 /**
- * Database wrapper using Node.js built-in node:sqlite (Node 22+)
- * No native compilation needed — zero external dependencies for the DB layer.
+ * Database layer — PostgreSQL via node-postgres (pg)
+ * Conexão via DATABASE_URL (Render / Railway / local).
+ *
+ * Mantém os helpers query(), getOne(), getAll() com semântica similar
+ * ao wrapper SQLite anterior, mas totalmente async/await.
  */
-const { DatabaseSync } = require('node:sqlite');
-const path = require('path');
-const fs = require('fs');
+const { Pool } = require('pg');
 
-const DATA_DIR = path.join(__dirname, '../../data');
-const DB_PATH  = path.join(DATA_DIR, 'tainara_nails.db');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('localhost')
+    ? false
+    : { rejectUnauthorized: false },
+});
 
-let _db = null;
+pool.on('error', (err) => {
+  console.error('[DB] Erro inesperado no pool:', err.message);
+});
 
-function getDb() {
-  if (_db) return _db;
+/**
+ * Executa qualquer query.
+ * @param {string} sql  — SQL com $1,$2,… placeholders
+ * @param {Array}  params
+ * @returns {Promise<pg.QueryResult>}
+ */
+async function query(sql, params = []) {
+  const client = await pool.connect();
+  try {
+    return await client.query(sql, params);
+  } finally {
+    client.release();
+  }
+}
 
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+/** Retorna a primeira linha ou undefined */
+async function getOne(sql, params = []) {
+  const result = await query(sql, params);
+  return result.rows[0];
+}
 
-  _db = new DatabaseSync(DB_PATH);
-
-  // Performance & safety pragmas
-  _db.exec('PRAGMA journal_mode = WAL;');
-  _db.exec('PRAGMA foreign_keys = ON;');
-  _db.exec('PRAGMA synchronous = NORMAL;');
-
-  return _db;
+/** Retorna todas as linhas */
+async function getAll(sql, params = []) {
+  const result = await query(sql, params);
+  return result.rows;
 }
 
 /**
- * Thin helpers that mimic the better-sqlite3 API so the routes stay unchanged.
+ * Executa uma série de queries dentro de uma transação.
+ * @param {(client: pg.PoolClient) => Promise<any>} fn
  */
-function prepare(sql) {
-  const db = getDb();
-  const stmt = db.prepare(sql);
-
-  return {
-    /** Run INSERT / UPDATE / DELETE — returns { lastInsertRowid, changes } */
-    run(...args) {
-      const flat = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
-      return stmt.run(...flat);
-    },
-    /** Return first matching row or undefined */
-    get(...args) {
-      const flat = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
-      return stmt.get(...flat);
-    },
-    /** Return all matching rows */
-    all(...args) {
-      const flat = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
-      return stmt.all(...flat);
-    },
-  };
+async function withTransaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-function exec(sql) {
-  getDb().exec(sql);
-}
-
-module.exports = { getDb, prepare, exec };
+module.exports = { pool, query, getOne, getAll, withTransaction };

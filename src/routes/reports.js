@@ -1,109 +1,123 @@
 const express = require('express');
 const router  = express.Router();
-const { prepare }           = require('../database/db');
-const { authenticateToken } = require('../middleware/auth');
+const { getOne, getAll } = require('../database/db');
+const { authenticateToken }    = require('../middleware/auth');
 
-router.get('/dashboard', authenticateToken, (req, res) => {
-  const today = new Date().toLocaleDateString('en-CA');
-  const month = today.slice(0, 7);
+router.get('/dashboard', authenticateToken, async (req, res) => {
+  try {
+    const today = new Date().toLocaleDateString('en-CA');
+    const month = today.slice(0, 7); // YYYY-MM
 
-  // Só o master vê o dashboard geral. Admin e profissional veem só os próprios dados.
-  // profId vem do JWT (não de entrada direta), mas usamos placeholder por segurança.
-  let profWhere = '';
-  const profId  = req.user.role === 'master' ? null : req.user.professional_id;
-  if (profId) profWhere = ' AND a.professional_id = ?';
-  // Argumentos extras de profId para cada query que usa profWhere
-  const pArg = profId ? [profId] : [];
+    const profId = req.user.role === 'master' ? null : req.user.professional_id;
+    // Monta sufixo de filtro por profissional para queries de appointments
+    const profWhere = profId ? ' AND a.professional_id = $2' : '';
+    const pArg      = profId ? [profId] : [];
 
-  const todayStats = prepare(`
-    SELECT COUNT(*) as total,
-      COUNT(CASE WHEN status='completed' THEN 1 END) as completed,
-      COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END),0) as revenue
-    FROM appointments a WHERE date=? AND status NOT IN ('cancelled','no_show') ${profWhere}
-  `).get(today, ...pArg);
+    // Stats de hoje
+    const todayStats = await getOne(`
+      SELECT COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE status='completed') AS completed,
+        COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END),0) AS revenue
+      FROM appointments a
+      WHERE date = $1 AND status NOT IN ('cancelled','no_show') ${profWhere}
+    `, [today, ...pArg]);
 
-  // Despesas do mês (transações do tipo 'expense'). Mesmo escopo: master vê tudo,
-  // admin/profissional veem só as próprias.
-  const txProfWhere = profId ? ' AND professional_id = ?' : '';
-  const monthExpenses = prepare(`
-    SELECT COALESCE(SUM(amount),0) as expenses
-    FROM transactions WHERE type='expense' AND date LIKE ? ${txProfWhere}
-  `).get(`${month}%`, ...pArg);
+    // Despesas do mês (escopo por profissional ou tudo para master)
+    const txProfWhere = profId ? ' AND professional_id = $2' : '';
+    const monthExpenses = await getOne(`
+      SELECT COALESCE(SUM(amount),0) AS expenses
+      FROM transactions
+      WHERE type = 'expense' AND TO_CHAR(date,'YYYY-MM') = $1 ${txProfWhere}
+    `, [month, ...pArg]);
 
-  const monthStats = prepare(`
-    SELECT COUNT(*) as total,
-      COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END),0) as revenue,
-      COALESCE(AVG(CASE WHEN status='completed' THEN price ELSE NULL END),0) as avg_ticket
-    FROM appointments a WHERE date LIKE ? AND status NOT IN ('cancelled','no_show') ${profWhere}
-  `).get(`${month}%`, ...pArg);
+    // Stats do mês
+    const monthStats = await getOne(`
+      SELECT COUNT(*) AS total,
+        COALESCE(SUM(CASE WHEN status='completed' THEN price ELSE 0 END),0) AS revenue,
+        COALESCE(AVG(CASE WHEN status='completed' THEN price ELSE NULL END),0) AS avg_ticket
+      FROM appointments a
+      WHERE TO_CHAR(date,'YYYY-MM') = $1
+        AND status NOT IN ('cancelled','no_show') ${profWhere}
+    `, [month, ...pArg]);
 
-  const nextAppointments = prepare(`
-    SELECT a.*, c.name as client_name, c.phone as client_phone,
-      s.name as service_name, p.name as professional_name, p.color as professional_color
-    FROM appointments a
-    JOIN clients c ON a.client_id=c.id
-    JOIN services s ON a.service_id=s.id
-    JOIN professionals p ON a.professional_id=p.id
-    WHERE a.date=? AND a.status IN ('scheduled','confirmed','in_progress')
-    ${profWhere}
-    ORDER BY a.start_time LIMIT 10
-  `).all(today, ...pArg);
+    // Próximos atendimentos do dia
+    const nextAppointments = await getAll(`
+      SELECT a.*, c.name AS client_name, c.phone AS client_phone,
+        s.name AS service_name, p.name AS professional_name, p.color AS professional_color
+      FROM appointments a
+      JOIN clients      c ON a.client_id       = c.id
+      JOIN services     s ON a.service_id      = s.id
+      JOIN professionals p ON a.professional_id = p.id
+      WHERE a.date = $1 AND a.status IN ('scheduled','confirmed','in_progress')
+      ${profWhere}
+      ORDER BY a.start_time LIMIT 10
+    `, [today, ...pArg]);
 
-  // Profissional e admin veem apenas o próprio faturamento.
-  // Master não precisa de detalhamento — usa month.expenses (total geral).
-  let profStats;
-  if (profId) {
-    profStats = prepare(`
-      SELECT p.id, p.name, p.color,
-        COUNT(a.id) as total,
-        COALESCE(SUM(CASE WHEN a.status='completed' THEN a.price ELSE 0 END),0) as revenue
-      FROM professionals p
-      LEFT JOIN appointments a ON a.professional_id=p.id AND a.date LIKE ?
-      WHERE p.id = ? GROUP BY p.id
-    `).all(`${month}%`, profId);
-  } else {
-    profStats = [];
+    // Faturamento individual (admin/professional) ou vazio (master)
+    let profStats = [];
+    if (profId) {
+      profStats = await getAll(`
+        SELECT p.id, p.name, p.color,
+          COUNT(a.id) AS total,
+          COALESCE(SUM(CASE WHEN a.status='completed' THEN a.price ELSE 0 END),0) AS revenue
+        FROM professionals p
+        LEFT JOIN appointments a
+          ON a.professional_id = p.id AND TO_CHAR(a.date,'YYYY-MM') = $1
+        WHERE p.id = $2
+        GROUP BY p.id
+      `, [month, profId]);
+    }
+
+    res.json({
+      today:             { ...todayStats, date: today },
+      month:             { ...monthStats, expenses: monthExpenses.expenses, period: month },
+      next_appointments: nextAppointments,
+      professionals:     profStats,
+    });
+  } catch (e) {
+    console.error('[reports/dashboard]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
   }
-
-  res.json({
-    today:             { ...todayStats, date: today },
-    month:             { ...monthStats, expenses: monthExpenses.expenses, period: month },
-    next_appointments: nextAppointments,
-    professionals:     profStats
-  });
 });
 
-router.get('/appointments', authenticateToken, (req, res) => {
-  const { start_date, end_date, professional_id, service_id, status } = req.query;
-  // Só o master vê o relatório geral; admin/profissional só os próprios atendimentos
-  let prof = professional_id;
-  if (req.user.role !== 'master' && req.user.professional_id) prof = req.user.professional_id;
+router.get('/appointments', authenticateToken, async (req, res) => {
+  try {
+    const { start_date, end_date, professional_id, service_id, status } = req.query;
+    let prof = professional_id;
+    if (req.user.role !== 'master' && req.user.professional_id)
+      prof = req.user.professional_id;
 
-  let sql = `
-    SELECT a.*, c.name as client_name, c.phone as client_phone,
-      s.name as service_name, p.name as professional_name
-    FROM appointments a
-    JOIN clients c ON a.client_id=c.id
-    JOIN services s ON a.service_id=s.id
-    JOIN professionals p ON a.professional_id=p.id
-    WHERE 1=1
-  `;
-  const params = [];
-  if (prof)       { sql += ' AND a.professional_id=?'; params.push(prof); }
-  if (service_id) { sql += ' AND a.service_id=?';      params.push(service_id); }
-  if (status)     { sql += ' AND a.status=?';          params.push(status); }
-  if (start_date) { sql += ' AND a.date>=?';           params.push(start_date); }
-  if (end_date)   { sql += ' AND a.date<=?';           params.push(end_date); }
-  sql += ' ORDER BY a.date DESC, a.start_time';
+    let sql = `
+      SELECT a.*, c.name AS client_name, c.phone AS client_phone,
+        s.name AS service_name, p.name AS professional_name
+      FROM appointments a
+      JOIN clients      c ON a.client_id       = c.id
+      JOIN services     s ON a.service_id      = s.id
+      JOIN professionals p ON a.professional_id = p.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let i = 1;
+    if (prof)       { sql += ` AND a.professional_id = $${i++}`; params.push(prof); }
+    if (service_id) { sql += ` AND a.service_id = $${i++}`;      params.push(service_id); }
+    if (status)     { sql += ` AND a.status = $${i++}`;          params.push(status); }
+    if (start_date) { sql += ` AND a.date >= $${i++}`;           params.push(start_date); }
+    if (end_date)   { sql += ` AND a.date <= $${i++}`;           params.push(end_date); }
+    sql += ' ORDER BY a.date DESC, a.start_time';
 
-  const appointments = prepare(sql).all(...params);
-  const summary = {
-    total:         appointments.length,
-    completed:     appointments.filter(a => a.status === 'completed').length,
-    cancelled:     appointments.filter(a => a.status === 'cancelled').length,
-    total_revenue: appointments.filter(a => a.status === 'completed').reduce((s, a) => s + a.price, 0)
-  };
-  res.json({ appointments, summary });
+    const appointments = await getAll(sql, params);
+    const summary = {
+      total:         appointments.length,
+      completed:     appointments.filter(a => a.status === 'completed').length,
+      cancelled:     appointments.filter(a => a.status === 'cancelled').length,
+      total_revenue: appointments.filter(a => a.status === 'completed')
+                                 .reduce((s, a) => s + parseFloat(a.price), 0),
+    };
+    res.json({ appointments, summary });
+  } catch (e) {
+    console.error('[reports/appointments]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
 });
 
 module.exports = router;

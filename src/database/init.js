@@ -1,37 +1,39 @@
-const bcrypt   = require('bcryptjs');
-const { exec, prepare, getDb } = require('./db');
+/**
+ * Inicialização do banco PostgreSQL.
+ * Cria as tabelas se não existirem e popula os dados iniciais (seed).
+ * Chamado uma vez na inicialização do servidor.
+ */
+const bcrypt = require('bcryptjs');
+const { query, getOne, withTransaction } = require('./db');
 
-function initDatabase() {
-  getDb(); // ensure DB file + pragmas are set
-
-  // ── Schema ────────────────────────────────────────────────────────────────
-  exec(`
+async function initDatabase() {
+  // ── Schema ──────────────────────────────────────────────────────────────────
+  await query(`
     CREATE TABLE IF NOT EXISTS professionals (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      id         SERIAL PRIMARY KEY,
       name       TEXT    NOT NULL,
       phone      TEXT,
       email      TEXT,
-      active     INTEGER DEFAULT 1,
+      active     BOOLEAN DEFAULT TRUE,
       color      TEXT    DEFAULT '#e91e8c',
       photo      TEXT,
       bio        TEXT,
-      created_at TEXT    DEFAULT (datetime('now','localtime'))
+      created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS users (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      id              SERIAL PRIMARY KEY,
       name            TEXT    NOT NULL,
       email           TEXT    UNIQUE NOT NULL,
       password        TEXT    NOT NULL,
       role            TEXT    NOT NULL CHECK(role IN ('master','admin','professional')),
-      professional_id INTEGER,
-      active          INTEGER DEFAULT 1,
-      created_at      TEXT    DEFAULT (datetime('now','localtime')),
-      FOREIGN KEY (professional_id) REFERENCES professionals(id)
+      professional_id INTEGER REFERENCES professionals(id),
+      active          BOOLEAN DEFAULT TRUE,
+      created_at      TIMESTAMPTZ DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS clients (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      id          SERIAL PRIMARY KEY,
       name        TEXT NOT NULL,
       phone       TEXT NOT NULL,
       email       TEXT,
@@ -39,169 +41,116 @@ function initDatabase() {
       notes       TEXT,
       reliability TEXT DEFAULT 'new'
                   CHECK(reliability IN ('new','good','irregular','unreliable')),
-      created_at  TEXT DEFAULT (datetime('now','localtime'))
+      created_at  TIMESTAMPTZ DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS services (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      id          SERIAL PRIMARY KEY,
       name        TEXT    NOT NULL,
       description TEXT,
-      price       REAL    NOT NULL,
+      price       NUMERIC(10,2) NOT NULL,
       duration    INTEGER DEFAULT 60,
-      active      INTEGER DEFAULT 1,
-      created_at  TEXT    DEFAULT (datetime('now','localtime'))
+      active      BOOLEAN DEFAULT TRUE,
+      created_at  TIMESTAMPTZ DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS appointments (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id       INTEGER NOT NULL,
-      professional_id INTEGER NOT NULL,
-      service_id      INTEGER NOT NULL,
-      date            TEXT    NOT NULL,
-      start_time      TEXT    NOT NULL,
-      end_time        TEXT    NOT NULL,
-      price           REAL    NOT NULL,
-      status          TEXT    DEFAULT 'scheduled'
+      id              SERIAL PRIMARY KEY,
+      client_id       INTEGER NOT NULL REFERENCES clients(id),
+      professional_id INTEGER NOT NULL REFERENCES professionals(id),
+      service_id      INTEGER NOT NULL REFERENCES services(id),
+      date            DATE    NOT NULL,
+      start_time      TIME    NOT NULL,
+      end_time        TIME    NOT NULL,
+      price           NUMERIC(10,2) NOT NULL,
+      status          TEXT DEFAULT 'scheduled'
                       CHECK(status IN ('scheduled','confirmed','in_progress','completed','cancelled','no_show')),
       payment_method  TEXT,
       notes           TEXT,
-      created_at      TEXT DEFAULT (datetime('now','localtime')),
-      FOREIGN KEY (client_id)       REFERENCES clients(id),
-      FOREIGN KEY (professional_id) REFERENCES professionals(id),
-      FOREIGN KEY (service_id)      REFERENCES services(id)
+      created_at      TIMESTAMPTZ DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS transactions (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      id              SERIAL PRIMARY KEY,
       type            TEXT NOT NULL CHECK(type IN ('income','expense')),
-      appointment_id  INTEGER,
-      professional_id INTEGER,
+      appointment_id  INTEGER REFERENCES appointments(id),
+      professional_id INTEGER REFERENCES professionals(id),
       description     TEXT NOT NULL,
       category        TEXT,
-      amount          REAL NOT NULL,
+      amount          NUMERIC(10,2) NOT NULL,
       payment_method  TEXT,
-      date            TEXT NOT NULL,
+      date            DATE NOT NULL,
       notes           TEXT,
-      created_at      TEXT DEFAULT (datetime('now','localtime')),
-      FOREIGN KEY (appointment_id)  REFERENCES appointments(id),
-      FOREIGN KEY (professional_id) REFERENCES professionals(id)
+      created_at      TIMESTAMPTZ DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS blocked_times (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      professional_id INTEGER NOT NULL,
-      date            TEXT NOT NULL,
-      start_time      TEXT NOT NULL,
-      end_time        TEXT NOT NULL,
+      id              SERIAL PRIMARY KEY,
+      professional_id INTEGER NOT NULL REFERENCES professionals(id),
+      date            DATE NOT NULL,
+      start_time      TIME NOT NULL,
+      end_time        TIME NOT NULL,
       reason          TEXT,
-      created_at      TEXT DEFAULT (datetime('now','localtime')),
-      FOREIGN KEY (professional_id) REFERENCES professionals(id)
+      created_at      TIMESTAMPTZ DEFAULT NOW()
     );
   `);
 
-  // ── Migration: add reliability column if not exists ──────────────────────
-  try {
-    exec(`ALTER TABLE clients ADD COLUMN reliability TEXT DEFAULT 'new'`);
-    console.log('Migration: coluna reliability adicionada em clients');
-  } catch(e) {
-    // Column already exists — safe to ignore
+  // ── Seed (só se o banco estiver vazio) ──────────────────────────────────────
+  const { count } = await getOne('SELECT COUNT(*) as count FROM users');
+  if (parseInt(count) > 0) {
+    console.log('Banco de dados PostgreSQL pronto (dados existentes mantidos).');
+    return;
   }
 
-  // ── Migration: add photo/bio columns to professionals if not exist ────────
-  try {
-    exec(`ALTER TABLE professionals ADD COLUMN photo TEXT`);
-    console.log('Migration: coluna photo adicionada em professionals');
-  } catch(e) { /* já existe */ }
-  try {
-    exec(`ALTER TABLE professionals ADD COLUMN bio TEXT`);
-    console.log('Migration: coluna bio adicionada em professionals');
-  } catch(e) { /* já existe */ }
+  const isProd = process.env.NODE_ENV === 'production';
 
-  // ── Migration: permitir role 'master' na tabela users ─────────────────────
-  // SQLite não altera CHECK constraint com ALTER; recriamos a tabela se o
-  // constraint antigo (sem 'master') ainda estiver presente.
-  try {
-    const usersSql = prepare(
-      "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
-    ).get();
-    if (usersSql && usersSql.sql && !usersSql.sql.includes("'master'")) {
-      exec('PRAGMA foreign_keys = OFF;');
-      exec('BEGIN TRANSACTION;');
-      exec(`
-        CREATE TABLE users_new (
-          id              INTEGER PRIMARY KEY AUTOINCREMENT,
-          name            TEXT    NOT NULL,
-          email           TEXT    UNIQUE NOT NULL,
-          password        TEXT    NOT NULL,
-          role            TEXT    NOT NULL CHECK(role IN ('master','admin','professional')),
-          professional_id INTEGER,
-          active          INTEGER DEFAULT 1,
-          created_at      TEXT    DEFAULT (datetime('now','localtime')),
-          FOREIGN KEY (professional_id) REFERENCES professionals(id)
-        );
-      `);
-      exec(`INSERT INTO users_new (id,name,email,password,role,professional_id,active,created_at)
-            SELECT id,name,email,password,role,professional_id,active,created_at FROM users;`);
-      exec('DROP TABLE users;');
-      exec('ALTER TABLE users_new RENAME TO users;');
-      exec('COMMIT;');
-      exec('PRAGMA foreign_keys = ON;');
-      console.log("Migration: role 'master' habilitado na tabela users");
-    }
-  } catch(e) {
-    try { exec('ROLLBACK;'); } catch(_) {}
-    console.error('Migration users role falhou:', e.message);
+  const adminPass   = process.env.SEED_ADMIN_PASSWORD;
+  const tainaraPass = process.env.SEED_TAINARA_PASSWORD;
+  const prof2Pass   = process.env.SEED_PROF2_PASSWORD;
+
+  if (isProd && (!adminPass || !tainaraPass || !prof2Pass)) {
+    console.error('\n[ERRO FATAL] NODE_ENV=production mas as senhas iniciais não estão definidas.');
+    console.error('Defina SEED_ADMIN_PASSWORD, SEED_TAINARA_PASSWORD e SEED_PROF2_PASSWORD no ambiente.\n');
+    process.exit(1);
   }
 
-  // ── Seed (only if DB is empty) ────────────────────────────────────────────
-  const userCount = prepare('SELECT COUNT(*) as count FROM users').get();
-  if (userCount.count === 0) {
-    const isProd = process.env.NODE_ENV === 'production';
+  const crypto  = require('crypto');
+  const genPass = () => crypto.randomBytes(9).toString('base64url');
+  const finalAdminPass   = adminPass   || genPass();
+  const finalTainaraPass = tainaraPass || genPass();
+  const finalProf2Pass   = prof2Pass   || genPass();
 
-    // Senhas iniciais vêm do .env. Em produção são obrigatórias — sem fallback.
-    const adminPass   = process.env.SEED_ADMIN_PASSWORD;
-    const tainaraPass = process.env.SEED_TAINARA_PASSWORD;
-    const prof2Pass   = process.env.SEED_PROF2_PASSWORD;
-
-    if (isProd && (!adminPass || !tainaraPass || !prof2Pass)) {
-      console.error('\n[ERRO FATAL] NODE_ENV=production mas as senhas iniciais não estão definidas.');
-      console.error('Defina SEED_ADMIN_PASSWORD, SEED_TAINARA_PASSWORD e SEED_PROF2_PASSWORD no ambiente.\n');
-      process.exit(1);
-    }
-
-    // Em desenvolvimento, gera senhas aleatórias se não forem fornecidas (nunca hardcoded)
-    const crypto = require('crypto');
-    const genPass = () => crypto.randomBytes(9).toString('base64url');
-    const finalAdminPass   = adminPass   || genPass();
-    const finalTainaraPass = tainaraPass || genPass();
-    const finalProf2Pass   = prof2Pass   || genPass();
-
+  await withTransaction(async (client) => {
     // Professionals
-    const p1 = prepare(
-      'INSERT INTO professionals (name, phone, email, color) VALUES (?,?,?,?)'
-    ).run('Tainara', '(11) 99999-0001', 'tainara@nails.com', '#e91e8c');
+    const p1 = await client.query(
+      'INSERT INTO professionals (name, phone, email, color) VALUES ($1,$2,$3,$4) RETURNING id',
+      ['Tainara', '(11) 99999-0001', 'tainara@nails.com', '#e91e8c']
+    );
+    const p2 = await client.query(
+      'INSERT INTO professionals (name, phone, email, color) VALUES ($1,$2,$3,$4) RETURNING id',
+      ['Profissional 2', '(11) 99999-0002', 'prof2@nails.com', '#9c27b0']
+    );
+    const profId1 = p1.rows[0].id;
+    const profId2 = p2.rows[0].id;
 
-    const p2 = prepare(
-      'INSERT INTO professionals (name, phone, email, color) VALUES (?,?,?,?)'
-    ).run('Profissional 2', '(11) 99999-0002', 'prof2@nails.com', '#9c27b0');
+    // Master user (sem professional_id)
+    await client.query(
+      'INSERT INTO users (name, email, password, role) VALUES ($1,$2,$3,$4)',
+      ['Administrador', 'admin@nails.com', bcrypt.hashSync(finalAdminPass, 10), 'master']
+    );
 
-    // Admin
-    prepare(
-      'INSERT INTO users (name, email, password, role) VALUES (?,?,?,?)'
-    ).run('Administrador', 'admin@nails.com', bcrypt.hashSync(finalAdminPass, 10), 'admin');
+    // Admin users vinculados às profissionais
+    await client.query(
+      'INSERT INTO users (name, email, password, role, professional_id) VALUES ($1,$2,$3,$4,$5)',
+      ['Tainara', 'tainara@nails.com', bcrypt.hashSync(finalTainaraPass, 10), 'admin', profId1]
+    );
+    await client.query(
+      'INSERT INTO users (name, email, password, role, professional_id) VALUES ($1,$2,$3,$4,$5)',
+      ['Profissional 2', 'prof2@nails.com', bcrypt.hashSync(finalProf2Pass, 10), 'admin', profId2]
+    );
 
-    // Professional users
-    prepare(
-      'INSERT INTO users (name, email, password, role, professional_id) VALUES (?,?,?,?,?)'
-    ).run('Tainara', 'tainara@nails.com', bcrypt.hashSync(finalTainaraPass, 10), 'professional', p1.lastInsertRowid);
-
-    prepare(
-      'INSERT INTO users (name, email, password, role, professional_id) VALUES (?,?,?,?,?)'
-    ).run('Profissional 2', 'prof2@nails.com', bcrypt.hashSync(finalProf2Pass, 10), 'professional', p2.lastInsertRowid);
-
-    // Default services
-    const ins = prepare('INSERT INTO services (name, description, price, duration) VALUES (?,?,?,?)');
-    [
+    // Serviços padrão
+    const services = [
       ['Manicure',           'Esmaltação nas mãos',              35,  45],
       ['Pedicure',           'Esmaltação nos pés',               45,  60],
       ['Mão + Pé',           'Manicure e pedicure completo',     75, 100],
@@ -209,23 +158,28 @@ function initDatabase() {
       ['Manutenção de Gel',  'Manutenção das unhas em gel',     120,  90],
       ['Nail Art',           'Arte nas unhas',                   60,  60],
       ['Esmaltação em Gel',  'Esmalte em gel de longa duração',  80,  60],
-    ].forEach(s => ins.run(...s));
-
-    // Só exibe as credenciais no console em ambiente de desenvolvimento
-    if (!isProd) {
-      console.log('\n================ CREDENCIAIS INICIAIS (DEV) ================');
-      console.log('  ANOTE AGORA — estas senhas não serão exibidas novamente.');
-      console.log('  Admin        -> admin@nails.com     / ' + finalAdminPass);
-      console.log('  Tainara      -> tainara@nails.com   / ' + finalTainaraPass);
-      console.log('  Profissional -> prof2@nails.com     / ' + finalProf2Pass);
-      console.log('  Troque essas senhas no primeiro acesso.');
-      console.log('============================================================\n');
-    } else {
-      console.log('\nDados iniciais criados. Use as senhas definidas nas variáveis SEED_*.\n');
+    ];
+    for (const [name, description, price, duration] of services) {
+      await client.query(
+        'INSERT INTO services (name, description, price, duration) VALUES ($1,$2,$3,$4)',
+        [name, description, price, duration]
+      );
     }
+  });
+
+  if (!isProd) {
+    console.log('\n================ CREDENCIAIS INICIAIS (DEV) ================');
+    console.log('  ANOTE AGORA — estas senhas não serão exibidas novamente.');
+    console.log('  Master       -> admin@nails.com     / ' + finalAdminPass);
+    console.log('  Tainara      -> tainara@nails.com   / ' + finalTainaraPass);
+    console.log('  Profissional -> prof2@nails.com     / ' + finalProf2Pass);
+    console.log('  Troque essas senhas no primeiro acesso.');
+    console.log('============================================================\n');
+  } else {
+    console.log('\nDados iniciais criados. Use as senhas definidas nas variáveis SEED_*.\n');
   }
 
-  console.log('Banco de dados SQLite pronto ->', require('path').join(__dirname, '../../data/tainara_nails.db'));
+  console.log('Banco de dados PostgreSQL pronto e inicializado.');
 }
 
 module.exports = { initDatabase };
