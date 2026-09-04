@@ -102,3 +102,64 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.warn('SW registro falhou:', err));
   });
 }
+
+// ===== PULL TO REFRESH =====
+(function initPullToRefresh() {
+  // Cria o indicador visual
+  const indicator = document.createElement('div');
+  indicator.id = 'ptr-indicator';
+  indicator.innerHTML = '<i class="fa fa-arrow-down ptr-icon"></i><span class="ptr-label">Solte para atualizar</span>';
+  document.body.appendChild(indicator);
+
+  const THRESHOLD = 70; // px necessários para disparar o refresh
+  let startY = 0;
+  let pulling = false;
+  let triggered = false;
+
+  document.addEventListener('touchstart', (e) => {
+    // Só ativa se estiver no topo da página
+    if (window.scrollY === 0) {
+      startY = e.touches[0].clientY;
+      pulling = true;
+      triggered = false;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!pulling) return;
+    const delta = e.touches[0].clientY - startY;
+    if (delta <= 0) { pulling = false; return; }
+
+    indicator.classList.toggle('ptr-ready', delta >= THRESHOLD);
+    indicator.querySelector('.ptr-label').textContent =
+      delta >= THRESHOLD ? 'Solte para atualizar' : 'Puxe para atualizar';
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    if (!pulling) return;
+    pulling = false;
+
+    if (indicator.classList.contains('ptr-ready') && !triggered) {
+      triggered = true;
+      indicator.classList.remove('ptr-ready');
+      indicator.classList.add('ptr-loading');
+      indicator.querySelector('.ptr-label').textContent = 'Atualizando...';
+      indicator.querySelector('.ptr-icon').className = 'fa fa-spinner ptr-icon';
+      indicator.style.height = '56px';
+
+      // Recarrega a página atual
+      setTimeout(() => {
+        refreshCurrentPage();
+        setTimeout(() => {
+          indicator.classList.remove('ptr-loading');
+          indicator.style.height = '';
+          indicator.querySelector('.ptr-icon').className = 'fa fa-arrow-down ptr-icon';
+          indicator.querySelector('.ptr-label').textContent = 'Solte para atualizar';
+        }, 800);
+      }, 300);
+    } else {
+      indicator.classList.remove('ptr-ready');
+      indicator.style.height = '';
+    }
+  });
+})();

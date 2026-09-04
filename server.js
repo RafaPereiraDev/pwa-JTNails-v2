@@ -165,7 +165,7 @@ function cleanOldHistory() {
 cleanOldHistory(); // roda na inicialização
 setInterval(cleanOldHistory, 24 * 60 * 60 * 1000); // repete a cada 24h
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log('\n================================================');
   console.log('   Tainara Nails - Sistema de Gestao');
   console.log(`   http://localhost:${PORT}`);

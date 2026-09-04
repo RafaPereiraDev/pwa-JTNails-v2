@@ -416,3 +416,65 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.warn('SW registro falhou:', err));
   });
 }
+
+// ===== PULL TO REFRESH =====
+(function initPullToRefresh() {
+  const indicator = document.createElement('div');
+  indicator.id = 'ptr-indicator';
+  indicator.innerHTML = '<i class="fa fa-arrow-down ptr-icon"></i><span class="ptr-label">Puxe para atualizar</span>';
+  document.body.appendChild(indicator);
+
+  const THRESHOLD = 70;
+  let startY = 0;
+  let pulling = false;
+  let triggered = false;
+
+  document.addEventListener('touchstart', (e) => {
+    if (window.scrollY === 0) {
+      startY = e.touches[0].clientY;
+      pulling = true;
+      triggered = false;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!pulling) return;
+    const delta = e.touches[0].clientY - startY;
+    if (delta <= 0) { pulling = false; return; }
+    indicator.classList.toggle('ptr-ready', delta >= THRESHOLD);
+    indicator.querySelector('.ptr-label').textContent =
+      delta >= THRESHOLD ? 'Solte para atualizar' : 'Puxe para atualizar';
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    if (!pulling) return;
+    pulling = false;
+
+    if (indicator.classList.contains('ptr-ready') && !triggered) {
+      triggered = true;
+      indicator.classList.remove('ptr-ready');
+      indicator.classList.add('ptr-loading');
+      indicator.querySelector('.ptr-label').textContent = 'Atualizando...';
+      indicator.querySelector('.ptr-icon').className = 'fa fa-spinner ptr-icon';
+      indicator.style.height = '56px';
+
+      setTimeout(() => {
+        // Recarrega de acordo com o passo atual
+        if (state.step === 3 && state.date) {
+          selectDate(state.date); // recarrega os slots do dia selecionado
+        } else if (state.step === 1) {
+          loadProfessionals();    // recarrega a lista de profissionais
+        }
+        setTimeout(() => {
+          indicator.classList.remove('ptr-loading');
+          indicator.style.height = '';
+          indicator.querySelector('.ptr-icon').className = 'fa fa-arrow-down ptr-icon';
+          indicator.querySelector('.ptr-label').textContent = 'Puxe para atualizar';
+        }, 800);
+      }, 300);
+    } else {
+      indicator.classList.remove('ptr-ready');
+      indicator.style.height = '';
+    }
+  });
+})();

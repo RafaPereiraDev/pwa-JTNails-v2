@@ -325,3 +325,30 @@ img { max-width: 100%; display: block; }
   .pub-modal-overlay { align-items: center; padding: 20px; }
   .pub-cal-day { min-height: 48px; }
 }
+
+/* ===== PULL TO REFRESH ===== */
+#ptr-indicator {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 0;
+  overflow: hidden;
+  background: #e91e8c;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  transition: height 0.15s ease;
+  pointer-events: none;
+}
+#ptr-indicator.ptr-ready  { height: 56px; }
+#ptr-indicator .ptr-icon  { font-size: 18px; transition: transform 0.3s; }
+#ptr-indicator.ptr-ready .ptr-icon { transform: rotate(180deg); }
+#ptr-indicator.ptr-loading .ptr-icon { animation: ptr-spin 0.7s linear infinite; }
+@keyframes ptr-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
