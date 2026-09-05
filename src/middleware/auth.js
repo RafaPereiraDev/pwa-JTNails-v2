@@ -49,4 +49,24 @@ function requireAdminOrSelf(req, res, next) {
   return res.status(403).json({ error: 'Acesso negado.' });
 }
 
-module.exports = { authenticateToken, requireAdmin, requireMaster, requireAdminOrSelf, JWT_SECRET };
+// Autenticação de CLIENTE (área pública). Usa o mesmo JWT_SECRET, mas exige
+// payload com type='client' — assim um token de admin não passa como cliente
+// e vice-versa. Coloca os dados da cliente em req.client.
+function authenticateClient(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Você precisa entrar para acessar esta área' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, payload) => {
+    if (err || !payload || payload.type !== 'client') {
+      return res.status(403).json({ error: 'Sua sessão expirou. Entre novamente.' });
+    }
+    req.client = { id: payload.id, name: payload.name, phone: payload.phone };
+    next();
+  });
+}
+
+module.exports = { authenticateToken, requireAdmin, requireMaster, requireAdminOrSelf, authenticateClient, JWT_SECRET };

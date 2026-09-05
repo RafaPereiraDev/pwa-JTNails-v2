@@ -8,11 +8,27 @@ const state = {
   service: null,
   date: null,       // YYYY-MM-DD
   time: null,       // HH:MM
-  client: { name: '', phone: '', notes: '' },
+  client: { name: '', phone: '', notes: '', birth_date: null },
 };
 
 let allProfessionals = [];
 let calView = new Date(); // mês exibido no calendário
+
+// ---------- Sessão da cliente (JWT em localStorage) ----------
+const CLIENT_TOKEN_KEY = 'client_token';
+function getClientToken() { try { return localStorage.getItem(CLIENT_TOKEN_KEY); } catch (_) { return null; } }
+function setClientSession(token, client) {
+  try {
+    localStorage.setItem(CLIENT_TOKEN_KEY, token);
+    if (client) localStorage.setItem('client_info', JSON.stringify(client));
+  } catch (_) {}
+}
+function clearClientSession() {
+  try { localStorage.removeItem(CLIENT_TOKEN_KEY); localStorage.removeItem('client_info'); } catch (_) {}
+}
+function getClientInfo() {
+  try { return JSON.parse(localStorage.getItem('client_info') || 'null'); } catch (_) { return null; }
+}
 
 // ---------- Utilitários ----------
 function esc(v) {
@@ -49,8 +65,12 @@ function maskPhone(v) {
 }
 function toDateStr(dateObj) { return dateObj.toLocaleDateString('en-CA'); }
 
+function authHeaders() {
+  const t = getClientToken();
+  return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
 async function apiGet(path) {
-  const r = await fetch(API + path);
+  const r = await fetch(API + path, { headers: { ...authHeaders() } });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || 'Erro ao carregar');
   return j;
@@ -62,7 +82,7 @@ async function apiPost(path, data) {
   try {
     const r = await fetch(API + path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(data),
       signal: controller.signal
     });
@@ -93,6 +113,10 @@ function goStep(n) {
     dot.classList.toggle('active', s === n);
     dot.classList.toggle('done', s < n);
   });
+
+  // Passo 4 decide entre autenticada / login / cadastro
+  if (n === 4) initStep4();
+
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -293,27 +317,148 @@ function selectTime(t, el) {
   setTimeout(() => goStep(4), 250);
 }
 
-// ---------- PASSO 4: Dados do cliente ----------
+// ---------- PASSO 4: Identificação (cadastro / login) ----------
+
+// Mostra apenas um dos blocos do passo 4
+function showAuthBlock(which) {
+  ['auth-block', 'phone-form', 'login-form', 'register-form'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.hidden = (id !== which);
+  });
+}
+
+// Chamado ao entrar no passo 4 — decide o que mostrar
+function initStep4() {
+  const sub = document.getElementById('step4-subtitle');
+  if (getClientToken()) {
+    // Já autenticada: saudação + observações
+    const info = getClientInfo();
+    document.getElementById('auth-hello').textContent =
+      info && info.name ? `Olá, ${info.name.split(' ')[0]}!` : 'Você está identificada';
+    if (sub) sub.textContent = 'Falta pouco! Confirme e revise seu agendamento.';
+    showAuthBlock('auth-block');
+  } else {
+    if (sub) sub.textContent = 'Falta pouco! Vamos identificar seu acesso.';
+    document.getElementById('cli-phone').value = '';
+    document.getElementById('phone-error').hidden = true;
+    showAuthBlock('phone-form');
+  }
+}
+
+function backToPhone() {
+  document.getElementById('login-error').hidden = true;
+  document.getElementById('register-error').hidden = true;
+  document.getElementById('phone-error').hidden = true;
+  showAuthBlock('phone-form');
+}
+
+// Máscara no telefone
 document.getElementById('cli-phone').addEventListener('input', (e) => {
   e.target.value = maskPhone(e.target.value);
 });
 
-document.getElementById('client-form').addEventListener('submit', (e) => {
+// Passo 4.1 — informar telefone e checar se já tem conta
+document.getElementById('phone-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const err = document.getElementById('form-error');
+  const err = document.getElementById('phone-error');
   err.hidden = true;
-  const name = document.getElementById('cli-name').value.trim();
-  const phone = document.getElementById('cli-phone').value.trim();
-  const notes = document.getElementById('cli-notes').value.trim();
-  const digits = phone.replace(/\D/g, '');
+  const digits = document.getElementById('cli-phone').value.replace(/\D/g, '');
+  if (digits.length < 10 || digits.length > 11) {
+    err.textContent = 'Informe um WhatsApp/telefone válido com DDD.'; err.hidden = false; return;
+  }
+  state.client.phone = digits;
+
+  const btn = document.getElementById('phone-next-btn');
+  btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Verificando...';
+  try {
+    const info = await apiGet('/client/check?phone=' + encodeURIComponent(digits));
+    if (info.exists && info.has_password) {
+      // Tem conta com senha → login
+      document.getElementById('login-name').textContent = info.name ? `, ${info.name.split(' ')[0]}` : '';
+      document.getElementById('login-password').value = '';
+      showAuthBlock('login-form');
+    } else {
+      // Novo cliente ou cliente antiga sem senha → cadastro
+      document.getElementById('reg-name').value = info.name || '';
+      document.getElementById('reg-birth').value = info.birth_date || '';
+      document.getElementById('reg-password').value = '';
+      document.getElementById('register-help').textContent = info.exists
+        ? 'Encontramos seu cadastro! Crie uma senha para proteger seus agendamentos.'
+        : 'Crie sua conta para agendar e gerenciar seus horários com segurança.';
+      showAuthBlock('register-form');
+    }
+  } catch (e2) {
+    err.textContent = e2.message; err.hidden = false;
+  } finally {
+    btn.disabled = false; btn.innerHTML = 'Continuar <i class="fa fa-arrow-right"></i>';
+  }
+});
+
+// Passo 4.2a — login
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = document.getElementById('login-error');
+  err.hidden = true;
+  const password = document.getElementById('login-password').value;
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Entrando...';
+  try {
+    const res = await apiPost('/client/login', { phone: state.client.phone, password });
+    setClientSession(res.token, res.client);
+    state.client.name = res.client.name;
+    goStep(4); // reinicia o passo 4 já autenticada
+  } catch (e2) {
+    err.textContent = e2.message; err.hidden = false;
+  } finally {
+    btn.disabled = false; btn.innerHTML = '<i class="fa fa-right-to-bracket"></i> Entrar';
+  }
+});
+
+// Passo 4.2b — cadastro
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = document.getElementById('register-error');
+  err.hidden = true;
+  const name = document.getElementById('reg-name').value.trim();
+  const birth = document.getElementById('reg-birth').value || null;
+  const password = document.getElementById('reg-password').value;
 
   if (name.length < 2) { err.textContent = 'Por favor, informe seu nome completo.'; err.hidden = false; return; }
-  if (digits.length < 10 || digits.length > 11) { err.textContent = 'Informe um WhatsApp/telefone válido com DDD.'; err.hidden = false; return; }
+  if (password.length < 6) { err.textContent = 'A senha deve ter pelo menos 6 caracteres.'; err.hidden = false; return; }
 
-  state.client = { name, phone: digits, notes };
+  const btn = document.getElementById('register-btn');
+  btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Criando...';
+  try {
+    const res = await apiPost('/client/register', {
+      name, birth_date: birth, phone: state.client.phone, password
+    });
+    setClientSession(res.token, res.client);
+    state.client.name = res.client.name;
+    state.client.birth_date = birth;
+    goStep(4); // reinicia o passo 4 já autenticada
+  } catch (e2) {
+    err.textContent = e2.message; err.hidden = false;
+  } finally {
+    btn.disabled = false; btn.innerHTML = '<i class="fa fa-user-plus"></i> Criar conta e continuar';
+  }
+});
+
+// Sair da conta (no bloco autenticado)
+document.getElementById('auth-logout').addEventListener('click', (e) => {
+  e.preventDefault();
+  clearClientSession();
+  state.client = { name: '', phone: '', notes: '', birth_date: null };
+  initStep4();
+});
+
+// Cliente autenticada avança para o resumo
+function proceedAuthed() {
+  const info = getClientInfo();
+  state.client.name  = (info && info.name) || state.client.name;
+  state.client.notes = document.getElementById('cli-notes-authed').value.trim();
   renderSummary();
   goStep(5);
-});
+}
 
 // ---------- PASSO 5: Resumo e confirmação ----------
 function renderSummary() {
@@ -365,6 +510,7 @@ async function submitBooking() {
       start_time: state.time,
       client_name: state.client.name,
       client_phone: state.client.phone,
+      client_birth_date: state.client.birth_date || null,
       notes: state.client.notes || null
     });
     renderDone(res);
@@ -440,8 +586,10 @@ function copyCancelLink() {
 function restart() {
   state.professional = null; state.service = null;
   state.date = null; state.time = null;
-  state.client = { name: '', phone: '', notes: '' };
-  document.getElementById('client-form').reset();
+  // Mantém a sessão da cliente (não precisa logar de novo); só limpa observações
+  state.client = { name: state.client.name, phone: state.client.phone, notes: '', birth_date: null };
+  const notesAuthed = document.getElementById('cli-notes-authed');
+  if (notesAuthed) notesAuthed.value = '';
   // Reseta o botão de confirmar ao estado inicial (evita ficar preso em "Confirmando...")
   const btn = document.getElementById('confirm-btn');
   if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa fa-check"></i> Confirmar agendamento'; }

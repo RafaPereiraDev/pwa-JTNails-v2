@@ -119,6 +119,9 @@ async function initDatabase() {
     ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancel_token TEXT;
     ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancelled_by TEXT;
     CREATE INDEX IF NOT EXISTS idx_appointments_cancel_token ON appointments(cancel_token);
+
+    -- Senha da cliente (bcrypt) para login na área pública de agendamento/consulta
+    ALTER TABLE clients ADD COLUMN IF NOT EXISTS password TEXT;
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)

@@ -126,7 +126,11 @@ async function openClientDetail(id) {
             ${client.email ? ` · <i class="fa fa-envelope"></i> ${esc(client.email)}` : ''}
           </div>
           ${reliabilityBadge(client.reliability || 'new')}
-          ${client.birth_date ? `<div class="text-sm text-muted" style="margin-top:4px"><i class="fa fa-birthday-cake"></i> ${formatDate(client.birth_date)}</div>` : ''}
+          ${client.birth_date ? `<div class="text-sm text-muted" style="margin-top:4px"><i class="fa fa-birthday-cake"></i> ${formatDate(client.birth_date)}${clientAge(client.birth_date) !== null ? ` (${clientAge(client.birth_date)} anos)` : ''}</div>` : ''}
+          <div class="text-xs text-muted" style="margin-top:4px">
+            <i class="fa fa-lock"></i> Acesso online:
+            ${client.has_password ? 'senha cadastrada' : 'sem senha ainda'}
+          </div>
         </div>
         <div style="margin-left:auto;text-align:right">
           <button class="btn btn-primary btn-sm" onclick="openNewAppointment(null,null,${client.id})">
@@ -187,6 +191,10 @@ async function openClientDetail(id) {
         <button class="btn btn-outline" onclick="closeModal();openClientModal(${client.id})">
           <i class="fa fa-edit"></i> Editar
         </button>
+        ${isAdminLevel() ? `
+        <button class="btn btn-outline btn-sm" onclick="resetClientPasswordPrompt(${client.id}, '${esc(client.name).replace(/'/g,'&#39;')}')" title="Redefinir senha de acesso online">
+          <i class="fa fa-key"></i> Redefinir senha
+        </button>` : ''}
         <button class="btn whatsapp-btn btn-sm" onclick="sendWhatsApp('${esc(client.phone)}','${esc(client.name).replace(/'/g,'&#39;')}')">
           <i class="fab fa-whatsapp"></i> WhatsApp
         </button>
@@ -256,6 +264,56 @@ async function openClientModal(id = null) {
       closeModal();
       loadClients();
     } catch(err) {
+      errEl.textContent = err.message;
+      errEl.style.display = '';
+    }
+  });
+}
+
+// Calcula a idade a partir de birth_date (YYYY-MM-DD). Retorna null se inválida.
+function clientAge(birth) {
+  if (!birth) return null;
+  const m = String(birth).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const bd = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (isNaN(bd)) return null;
+  const today = new Date();
+  let age = today.getFullYear() - bd.getFullYear();
+  const md = today.getMonth() - bd.getMonth();
+  if (md < 0 || (md === 0 && today.getDate() < bd.getDate())) age--;
+  return age >= 0 && age < 130 ? age : null;
+}
+
+// Modal para a profissional redefinir a senha de acesso online da cliente
+function resetClientPasswordPrompt(id, name) {
+  openModal('Redefinir senha de acesso', `
+    <p style="color:var(--gray-600);margin-bottom:14px">
+      Defina uma nova senha de acesso online para <strong>${esc(name)}</strong>.
+      Combine essa senha com a cliente para que ela possa consultar e cancelar agendamentos.
+    </p>
+    <form id="reset-pass-form">
+      <div class="form-group">
+        <label>Nova senha (mínimo 6 caracteres)</label>
+        <input type="text" id="rp-password" placeholder="Ex.: unhas2026" minlength="6" required />
+      </div>
+      <div id="rp-error" class="alert alert-error" style="display:none"></div>
+      <div class="modal-footer" style="padding:0;margin-top:16px">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="fa fa-key"></i> Redefinir senha</button>
+      </div>
+    </form>
+  `, 'modal-sm');
+
+  document.getElementById('reset-pass-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('rp-error');
+    errEl.style.display = 'none';
+    const pwd = document.getElementById('rp-password').value;
+    try {
+      await api.resetClientPassword(id, pwd);
+      toast('Senha da cliente redefinida!', 'success');
+      closeModal();
+    } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
     }

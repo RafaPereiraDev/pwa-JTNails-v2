@@ -1,5 +1,6 @@
 const express = require('express');
 const router  = express.Router();
+const bcrypt  = require('bcryptjs');
 const { query, getOne, getAll }           = require('../database/db');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
@@ -10,6 +11,7 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
     const { search } = req.query;
     let sql = `
       SELECT c.id, c.name, c.phone, c.email, c.birth_date, c.notes, c.reliability, c.created_at,
+        (c.password IS NOT NULL) as has_password,
         (SELECT COUNT(*) FROM appointments WHERE client_id = c.id) as total_appointments,
         (SELECT COALESCE(SUM(price),0) FROM appointments WHERE client_id = c.id AND status = 'completed') as total_spent,
         (SELECT MAX(date)::text FROM appointments WHERE client_id = c.id) as last_appointment
@@ -87,6 +89,7 @@ router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const client = await getOne(`
       SELECT c.id, c.name, c.phone, c.email, c.birth_date, c.notes, c.reliability, c.created_at,
+        (c.password IS NOT NULL) as has_password,
         (SELECT COUNT(*) FROM appointments WHERE client_id = c.id) as total_appointments,
         (SELECT COALESCE(SUM(price),0) FROM appointments WHERE client_id = c.id AND status = 'completed') as total_spent,
         (SELECT MAX(date)::text FROM appointments WHERE client_id = c.id) as last_appointment
@@ -154,6 +157,26 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     res.json({ message: 'Cliente atualizada com sucesso' });
   } catch (e) {
     console.error('[clients PUT]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/clients/:id/reset-password — admin redefine a senha de acesso da cliente
+// Body: { new_password }
+router.post('/:id/reset-password', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const newPassword = String(req.body.new_password || '');
+    if (newPassword.length < 6)
+      return res.status(400).json({ error: 'A nova senha deve ter pelo menos 6 caracteres' });
+
+    const c = await getOne('SELECT id FROM clients WHERE id = $1', [req.params.id]);
+    if (!c) return res.status(404).json({ error: 'Cliente não encontrada' });
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await query('UPDATE clients SET password = $1 WHERE id = $2', [hash, req.params.id]);
+    res.json({ message: 'Senha da cliente redefinida com sucesso' });
+  } catch (e) {
+    console.error('[clients reset-password]', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

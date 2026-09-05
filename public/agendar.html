@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/icon-512x512.png" />
   <link rel="apple-touch-icon" href="/icon-192x192.png" />
   <title>Agendar — Juliana &amp; Tainara Atelier Nails</title>
-  <link rel="stylesheet" href="css/agendar.css?v=4" />
+  <link rel="stylesheet" href="css/agendar.css?v=5" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 </head>
 <body>
@@ -87,23 +87,77 @@
     <section class="pub-step" id="step-4" hidden>
       <button class="pub-back" onclick="goStep(3)"><i class="fa fa-arrow-left"></i> Voltar</button>
       <h1 class="pub-title">Seus dados</h1>
-      <p class="pub-subtitle">Falta pouco! Precisamos apenas do seu contato.</p>
-      <form id="client-form" class="pub-form" novalidate>
-        <div class="pub-field">
-          <label for="cli-name">Nome completo</label>
-          <input type="text" id="cli-name" autocomplete="name" placeholder="Como podemos te chamar?" required />
+      <p class="pub-subtitle" id="step4-subtitle">Falta pouco! Vamos identificar seu acesso.</p>
+
+      <!-- Bloco: cliente já autenticada -->
+      <div id="auth-block" class="pub-form" hidden>
+        <div class="pub-cancel-box" style="margin-top:0">
+          <div class="pub-cancel-title"><i class="fa fa-circle-check"></i> <span id="auth-hello">Você está identificada</span></div>
+          <p class="pub-cancel-help">Se não for você, <a href="#" id="auth-logout" style="color:var(--primary);font-weight:700">sair desta conta</a>.</p>
         </div>
+        <div class="pub-field">
+          <label for="cli-notes-authed">Observações <span class="pub-optional">(opcional)</span></label>
+          <textarea id="cli-notes-authed" rows="2" placeholder="Alguma preferência ou observação?"></textarea>
+        </div>
+        <button type="button" class="pub-btn pub-btn-primary pub-btn-block" onclick="proceedAuthed()">
+          Revisar agendamento <i class="fa fa-arrow-right"></i>
+        </button>
+      </div>
+
+      <!-- Bloco: passo 1 — informar telefone -->
+      <form id="phone-form" class="pub-form" novalidate>
         <div class="pub-field">
           <label for="cli-phone">WhatsApp / Telefone</label>
           <input type="tel" id="cli-phone" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-9999" required />
         </div>
-        <div class="pub-field">
-          <label for="cli-notes">Observações <span class="pub-optional">(opcional)</span></label>
-          <textarea id="cli-notes" rows="2" placeholder="Alguma preferência ou observação?"></textarea>
+        <div id="phone-error" class="pub-error" hidden></div>
+        <button type="submit" class="pub-btn pub-btn-primary pub-btn-block" id="phone-next-btn">
+          Continuar <i class="fa fa-arrow-right"></i>
+        </button>
+      </form>
+
+      <!-- Bloco: passo 2a — login (telefone já tem senha) -->
+      <form id="login-form" class="pub-form" novalidate hidden>
+        <div class="pub-cancel-box" style="margin-top:0">
+          <p class="pub-cancel-help" style="margin:0">Bem-vinda de volta<span id="login-name"></span>! Entre com sua senha.</p>
         </div>
-        <div id="form-error" class="pub-error" hidden></div>
-        <button type="submit" class="pub-btn pub-btn-primary pub-btn-block">
-          Revisar agendamento <i class="fa fa-arrow-right"></i>
+        <div class="pub-field">
+          <label for="login-password">Senha</label>
+          <input type="password" id="login-password" autocomplete="current-password" placeholder="Sua senha" required />
+        </div>
+        <p class="pub-cancel-help">Esqueceu a senha? Solicite a redefinição à profissional.</p>
+        <div id="login-error" class="pub-error" hidden></div>
+        <button type="submit" class="pub-btn pub-btn-primary pub-btn-block" id="login-btn">
+          <i class="fa fa-right-to-bracket"></i> Entrar
+        </button>
+        <button type="button" class="pub-btn pub-btn-ghost pub-btn-block" style="margin-top:8px" onclick="backToPhone()">
+          Usar outro número
+        </button>
+      </form>
+
+      <!-- Bloco: passo 2b — cadastro (novo ou cliente antiga sem senha) -->
+      <form id="register-form" class="pub-form" novalidate hidden>
+        <div class="pub-cancel-box" style="margin-top:0">
+          <p class="pub-cancel-help" style="margin:0" id="register-help">Crie sua conta para agendar e gerenciar seus horários com segurança.</p>
+        </div>
+        <div class="pub-field">
+          <label for="reg-name">Nome completo</label>
+          <input type="text" id="reg-name" autocomplete="name" placeholder="Como podemos te chamar?" required />
+        </div>
+        <div class="pub-field">
+          <label for="reg-birth">Data de nascimento</label>
+          <input type="date" id="reg-birth" autocomplete="bday" />
+        </div>
+        <div class="pub-field">
+          <label for="reg-password">Crie uma senha <span class="pub-optional">(mínimo 6 caracteres)</span></label>
+          <input type="password" id="reg-password" autocomplete="new-password" placeholder="Escolha uma senha" required />
+        </div>
+        <div id="register-error" class="pub-error" hidden></div>
+        <button type="submit" class="pub-btn pub-btn-primary pub-btn-block" id="register-btn">
+          <i class="fa fa-user-plus"></i> Criar conta e continuar
+        </button>
+        <button type="button" class="pub-btn pub-btn-ghost pub-btn-block" style="margin-top:8px" onclick="backToPhone()">
+          Usar outro número
         </button>
       </form>
     </section>
@@ -159,7 +213,7 @@
     </div>
   </div>
 
-  <script src="js/agendar.js?v=4"></script>
+  <script src="js/agendar.js?v=5"></script>
 
   <!-- Botão discreto de instalação do PWA (aparece só quando disponível) -->
   <div id="pwa-install-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;

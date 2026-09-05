@@ -1,7 +1,23 @@
 const express = require('express');
 const router  = express.Router();
+const bcrypt  = require('bcryptjs');
+const jwt     = require('jsonwebtoken');
 const { pool, query, getOne, getAll } = require('../database/db');
 const { notifyUser, getUserIdByProfessional } = require('../push');
+const { JWT_SECRET, authenticateClient } = require('../middleware/auth');
+
+// Gera o JWT de sessão da cliente (payload marcado com type:'client')
+function signClientToken(c) {
+  return jwt.sign(
+    { type: 'client', id: c.id, name: c.name, phone: c.phone },
+    JWT_SECRET,
+    { expiresIn: process.env.CLIENT_JWT_EXPIRES_IN || '30d' }
+  );
+}
+
+// Normaliza telefone para só dígitos (10-11)
+function onlyDigits(v) { return String(v || '').replace(/\D/g, ''); }
+function validPhone(d) { return d.length >= 10 && d.length <= 11; }
 
 // Formata YYYY-MM-DD para DD/MM
 function formatDateBR(iso) {
@@ -103,7 +119,22 @@ router.get('/available-slots', async (req, res) => {
 // para eliminar a race condition de double-booking.
 router.post('/appointments', async (req, res) => {
   try {
-    let { professional_id, service_id, date, start_time, client_name, client_phone, notes } = req.body;
+    let { professional_id, service_id, date, start_time, client_name, client_phone, client_birth_date, notes } = req.body;
+
+    // Se a cliente estiver autenticada, usamos os dados da conta dela
+    let authedClient = null;
+    const authHeader = req.headers['authorization'];
+    const jwtToken = authHeader && authHeader.split(' ')[1];
+    if (jwtToken) {
+      try {
+        const payload = jwt.verify(jwtToken, JWT_SECRET);
+        if (payload && payload.type === 'client') authedClient = payload;
+      } catch (_) { /* ignora token inválido */ }
+    }
+    if (authedClient) {
+      client_name  = authedClient.name;
+      client_phone = authedClient.phone;
+    }
 
     if (!professional_id || !service_id || !date || !start_time || !client_name || !client_phone)
       return res.status(400).json({ error: 'Preencha todos os campos obrigatórios' });
@@ -171,21 +202,41 @@ router.post('/appointments', async (req, res) => {
         return res.status(409).json({ error: 'Este horário acabou de ser ocupado. Escolha outro, por favor.' });
       }
 
-      // Reaproveita ou cria cliente pelo telefone
-      let clientRow = (await client.query(
-        `SELECT id FROM clients WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = $1`,
-        [phoneDigits]
-      )).rows[0];
-
+      // Vincula ao cliente: se autenticada, usa a conta dela; senão, upsert por telefone
       let clientId;
-      if (clientRow) {
-        clientId = clientRow.id;
+      const birthDate = (client_birth_date && /^\d{4}-\d{2}-\d{2}$/.test(client_birth_date))
+        ? client_birth_date : null;
+
+      if (authedClient) {
+        clientId = authedClient.id;
+        // Preenche a data de nascimento se ainda não houver
+        if (birthDate) {
+          await client.query(
+            `UPDATE clients SET birth_date = COALESCE(birth_date, $1) WHERE id = $2`,
+            [birthDate, clientId]
+          );
+        }
       } else {
-        const r = (await client.query(
-          'INSERT INTO clients (name, phone) VALUES ($1,$2) RETURNING id',
-          [client_name, phoneDigits]
+        let clientRow = (await client.query(
+          `SELECT id FROM clients WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = $1`,
+          [phoneDigits]
         )).rows[0];
-        clientId = r.id;
+
+        if (clientRow) {
+          clientId = clientRow.id;
+          if (birthDate) {
+            await client.query(
+              `UPDATE clients SET birth_date = COALESCE(birth_date, $1) WHERE id = $2`,
+              [birthDate, clientId]
+            );
+          }
+        } else {
+          const r = (await client.query(
+            'INSERT INTO clients (name, phone, birth_date) VALUES ($1,$2,$3) RETURNING id',
+            [client_name, phoneDigits, birthDate]
+          )).rows[0];
+          clientId = r.id;
+        }
       }
 
       // Token seguro (UUID) para a cliente cancelar o próprio agendamento
@@ -232,19 +283,11 @@ router.post('/appointments', async (req, res) => {
   }
 });
 
-// ── GET /api/public/my-appointments?phone=... ─────────────────────────────────
-// Consulta os agendamentos da cliente pelo telefone. Retorna ativos e histórico.
-// Só expõe o cancel_token dos agendamentos ainda ativos (futuros e não cancelados).
-router.get('/my-appointments', async (req, res) => {
+// ── GET /api/public/my-appointments ───────────────────────────────────────────
+// Consulta os agendamentos da CLIENTE AUTENTICADA (via JWT). Retorna ativos e histórico.
+router.get('/my-appointments', authenticateClient, async (req, res) => {
   try {
-    const phoneDigits = String(req.query.phone || '').replace(/\D/g, '');
-    if (phoneDigits.length < 10 || phoneDigits.length > 11)
-      return res.status(400).json({ error: 'Informe um telefone válido com DDD' });
-
-    const client = await getOne(
-      `SELECT id, name FROM clients WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = $1`,
-      [phoneDigits]
-    );
+    const client = await getOne(`SELECT id, name FROM clients WHERE id = $1`, [req.client.id]);
     if (!client) return res.json({ client_name: null, appointments: [] });
 
     const nowRow = await getOne(`SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo') AS now_local`);
@@ -266,8 +309,6 @@ router.get('/my-appointments', async (req, res) => {
       LIMIT 50
     `, [client.id]);
 
-    // Marca cada agendamento como ativo (futuro e não cancelado/faltou) ou não.
-    // Só devolve o token dos ativos — evita expor token de agendamentos passados.
     const appointments = rows.map(a => {
       const dt = new Date(`${a.date}T${a.start_time}`);
       const isActive = dt > now && !['cancelled', 'no_show', 'completed'].includes(a.status);
@@ -294,25 +335,56 @@ router.get('/my-appointments', async (req, res) => {
 });
 
 // ── POST /api/public/cancel-appointment ───────────────────────────────────────
-// Cancela um agendamento usando o token seguro. Só quem tem o token consegue.
+// Cancela um agendamento. Aceita dois modos, ambos seguros:
+//  1) Cliente autenticada (JWT) enviando { appointment_id } — valida a posse.
+//  2) Link seguro com { token } (cancel_token UUID) — para quem não fez login.
 router.post('/cancel-appointment', async (req, res) => {
   try {
-    const { token } = req.body;
-    if (!token) return res.status(400).json({ error: 'Token de cancelamento ausente' });
+    const { token, appointment_id } = req.body;
 
-    // Busca o agendamento pelo token
-    const appt = await getOne(`
-      SELECT a.id, a.status, a.professional_id,
-        a.date::text AS date, a.start_time::text AS start_time,
-        c.name AS client_name,
-        s.name AS service_name
-      FROM appointments a
-      JOIN clients c  ON a.client_id = c.id
-      JOIN services s ON a.service_id = s.id
-      WHERE a.cancel_token = $1
-    `, [token]);
+    // Se veio autenticada, resolve o cliente pelo header (sem falhar se não houver token)
+    let authedClientId = null;
+    const authHeader = req.headers['authorization'];
+    const jwtToken = authHeader && authHeader.split(' ')[1];
+    if (jwtToken) {
+      try {
+        const payload = jwt.verify(jwtToken, JWT_SECRET);
+        if (payload && payload.type === 'client') authedClientId = payload.id;
+      } catch (_) { /* token inválido é ignorado; cai no fluxo por UUID */ }
+    }
 
-    if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado ou token inválido' });
+    if (!token && !appointment_id)
+      return res.status(400).json({ error: 'Informe o agendamento a cancelar' });
+
+    // Monta a busca conforme o modo
+    let appt;
+    if (appointment_id && authedClientId) {
+      // Modo autenticado: só cancela se o agendamento for da própria cliente logada
+      appt = await getOne(`
+        SELECT a.id, a.status, a.professional_id,
+          a.date::text AS date, a.start_time::text AS start_time,
+          c.name AS client_name, s.name AS service_name
+        FROM appointments a
+        JOIN clients c  ON a.client_id = c.id
+        JOIN services s ON a.service_id = s.id
+        WHERE a.id = $1 AND a.client_id = $2
+      `, [appointment_id, authedClientId]);
+      if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
+    } else if (token) {
+      // Modo link seguro: valida a posse do token UUID
+      appt = await getOne(`
+        SELECT a.id, a.status, a.professional_id,
+          a.date::text AS date, a.start_time::text AS start_time,
+          c.name AS client_name, s.name AS service_name
+        FROM appointments a
+        JOIN clients c  ON a.client_id = c.id
+        JOIN services s ON a.service_id = s.id
+        WHERE a.cancel_token = $1
+      `, [token]);
+      if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado ou token inválido' });
+    } else {
+      return res.status(401).json({ error: 'Você precisa entrar para cancelar este agendamento' });
+    }
 
     if (['cancelled', 'no_show'].includes(appt.status))
       return res.status(409).json({ error: 'Este agendamento já foi cancelado' });
@@ -348,6 +420,125 @@ router.post('/cancel-appointment', async (req, res) => {
     });
   } catch (e) {
     console.error('[public/cancel-appointment]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ── AUTENTICAÇÃO DE CLIENTE ───────────────────────────────────────────────────
+
+// POST /api/public/client/register — cria conta OU define senha de cliente já existente
+// Body: { name, birth_date, phone, password }
+router.post('/client/register', async (req, res) => {
+  try {
+    let { name, birth_date, phone, password } = req.body;
+    name = String(name || '').trim();
+    const phoneDigits = onlyDigits(phone);
+    password = String(password || '');
+
+    if (name.length < 2)       return res.status(400).json({ error: 'Informe seu nome completo' });
+    if (!validPhone(phoneDigits)) return res.status(400).json({ error: 'WhatsApp/telefone inválido' });
+    if (password.length < 6)   return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' });
+    if (birth_date && !/^\d{4}-\d{2}-\d{2}$/.test(birth_date))
+      return res.status(400).json({ error: 'Data de nascimento inválida' });
+
+    const hash = await bcrypt.hash(password, 10);
+
+    // Já existe cliente com esse telefone?
+    const existing = await getOne(
+      `SELECT id, name, password FROM clients WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = $1`,
+      [phoneDigits]
+    );
+
+    let clientRow;
+    if (existing) {
+      // Cliente antiga sem senha → define a senha agora (primeiro acesso).
+      // Se já tiver senha, bloqueia (deve usar login, não registrar de novo).
+      if (existing.password)
+        return res.status(409).json({ error: 'Já existe uma conta com este WhatsApp. Faça login com sua senha.' });
+
+      await query(
+        `UPDATE clients SET password = $1, name = $2,
+           birth_date = COALESCE($3, birth_date) WHERE id = $4`,
+        [hash, name, birth_date || null, existing.id]
+      );
+      clientRow = { id: existing.id, name, phone: phoneDigits };
+    } else {
+      const r = await getOne(
+        `INSERT INTO clients (name, phone, birth_date, password) VALUES ($1,$2,$3,$4) RETURNING id`,
+        [name, phoneDigits, birth_date || null, hash]
+      );
+      clientRow = { id: r.id, name, phone: phoneDigits };
+    }
+
+    const token = signClientToken(clientRow);
+    res.status(201).json({ token, client: clientRow });
+  } catch (e) {
+    console.error('[public/client/register]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/public/client/check?phone=... — informa se o telefone já tem conta/senha
+// Ajuda o frontend a decidir entre "entrar" e "criar conta / definir senha".
+router.get('/client/check', async (req, res) => {
+  try {
+    const phoneDigits = onlyDigits(req.query.phone);
+    if (!validPhone(phoneDigits)) return res.status(400).json({ error: 'Telefone inválido' });
+
+    const c = await getOne(
+      `SELECT id, name, password, birth_date FROM clients
+       WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = $1`,
+      [phoneDigits]
+    );
+    res.json({
+      exists: !!c,
+      has_password: !!(c && c.password),
+      name: c ? c.name : null,
+      birth_date: c ? c.birth_date : null,
+    });
+  } catch (e) {
+    console.error('[public/client/check]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/public/client/login — Body: { phone, password }
+router.post('/client/login', async (req, res) => {
+  try {
+    const phoneDigits = onlyDigits(req.body.phone);
+    const password = String(req.body.password || '');
+    if (!validPhone(phoneDigits) || !password)
+      return res.status(400).json({ error: 'Informe WhatsApp e senha' });
+
+    const c = await getOne(
+      `SELECT id, name, phone, password FROM clients
+       WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = $1`,
+      [phoneDigits]
+    );
+
+    if (!c || !c.password || !bcrypt.compareSync(password, c.password))
+      return res.status(401).json({ error: 'WhatsApp ou senha incorretos' });
+
+    const clientRow = { id: c.id, name: c.name, phone: phoneDigits };
+    const token = signClientToken(clientRow);
+    res.json({ token, client: clientRow });
+  } catch (e) {
+    console.error('[public/client/login]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/public/client/me — dados da cliente logada
+router.get('/client/me', authenticateClient, async (req, res) => {
+  try {
+    const c = await getOne(
+      `SELECT id, name, phone, birth_date FROM clients WHERE id = $1`,
+      [req.client.id]
+    );
+    if (!c) return res.status(404).json({ error: 'Conta não encontrada' });
+    res.json(c);
+  } catch (e) {
+    console.error('[public/client/me]', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

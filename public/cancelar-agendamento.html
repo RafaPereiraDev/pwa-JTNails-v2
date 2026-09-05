@@ -8,7 +8,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png" />
   <link rel="apple-touch-icon" href="/icon-192x192.png" />
   <title>Meus Agendamentos — Juliana &amp; Tainara Atelier Nails</title>
-  <link rel="stylesheet" href="css/agendar.css?v=4" />
+  <link rel="stylesheet" href="css/agendar.css?v=5" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <style>
     .pub-appt-card {
@@ -46,19 +46,30 @@
     <section class="pub-step">
       <a class="pub-back" href="/agendar"><i class="fa fa-arrow-left"></i> Voltar para agendamento</a>
       <h1 class="pub-title">Meus Agendamentos</h1>
-      <p class="pub-subtitle">Consulte seus horários ou cancele um agendamento.</p>
+      <p class="pub-subtitle">Entre com seu acesso para consultar ou cancelar.</p>
 
-      <!-- Busca por telefone -->
-      <form id="lookup-form" class="pub-form" autocomplete="off">
+      <!-- Login: WhatsApp + senha -->
+      <form id="login-form" class="pub-form" autocomplete="off">
         <div class="pub-field">
-          <label for="lookup-phone">Seu WhatsApp / telefone</label>
-          <input type="tel" id="lookup-phone" placeholder="(00) 00000-0000" inputmode="numeric" />
+          <label for="login-phone">Seu WhatsApp / telefone</label>
+          <input type="tel" id="login-phone" placeholder="(00) 00000-0000" inputmode="numeric" autocomplete="tel" />
         </div>
-        <div id="lookup-error" class="pub-error" hidden></div>
-        <button type="submit" class="pub-btn pub-btn-primary pub-btn-block" id="lookup-btn">
-          <i class="fa fa-magnifying-glass"></i> Consultar meus agendamentos
+        <div class="pub-field">
+          <label for="login-password">Senha</label>
+          <input type="password" id="login-password" placeholder="Sua senha" autocomplete="current-password" />
+        </div>
+        <p class="pub-cancel-help">Esqueceu a senha? Solicite a redefinição à profissional.</p>
+        <div id="login-error" class="pub-error" hidden></div>
+        <button type="submit" class="pub-btn pub-btn-primary pub-btn-block" id="login-btn">
+          <i class="fa fa-right-to-bracket"></i> Entrar
         </button>
       </form>
+
+      <!-- Barra de sessão (quando logada) -->
+      <div id="session-bar" class="pub-cancel-box" hidden style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <span class="pub-cancel-title" style="margin:0"><i class="fa fa-circle-user"></i> <span id="session-name">Você</span></span>
+        <a href="#" id="logout-link" style="color:var(--primary);font-weight:700;font-size:13px">Sair</a>
+      </div>
 
       <!-- Resultado -->
       <div id="result-area" hidden></div>
@@ -81,6 +92,6 @@
     </div>
   </div>
 
-  <script src="js/cancelar.js?v=4"></script>
+  <script src="js/cancelar.js?v=5"></script>
 </body>
 </html>

@@ -59,6 +59,7 @@ const api = {
   createClient: (data) => api.post('/clients', data),
   updateClient: (id, data) => api.put(`/clients/${id}`, data),
   deleteClient: (id) => api.delete(`/clients/${id}`),
+  resetClientPassword: (id, new_password) => api.post(`/clients/${id}/reset-password`, { new_password }),
 
   // Services
   getServices: (activeOnly = false) =>
