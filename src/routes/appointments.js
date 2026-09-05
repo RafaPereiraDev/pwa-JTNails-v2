@@ -101,7 +101,11 @@ router.post('/bulk-confirm', authenticateToken, async (req, res) => {
       for (const { id, status, payment_method } of updates) {
         if (!id || !['completed','no_show','cancelled'].includes(status)) continue;
 
-        const appt = (await client.query('SELECT * FROM appointments WHERE id = $1', [id])).rows[0];
+        const appt = (await client.query(
+          `SELECT *, date::text AS date, start_time::text AS start_time, end_time::text AS end_time
+           FROM appointments WHERE id = $1`,
+          [id]
+        )).rows[0];
         if (!appt) continue;
         if (ehAtendente && appt.professional_id !== req.user.professional_id) continue;
 
@@ -256,7 +260,11 @@ router.post('/', authenticateToken, async (req, res) => {
 // PUT /api/appointments/:id
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const appt = await getOne('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+    const appt = await getOne(
+      `SELECT *, date::text AS date, start_time::text AS start_time, end_time::text AS end_time
+       FROM appointments WHERE id = $1`,
+      [req.params.id]
+    );
     if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
 
     const ehAtendente = req.user.professional_id && req.user.role !== 'master';
@@ -270,7 +278,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Você não pode transferir agendamentos para outra profissional' });
 
     const newProfId = professional_id || appt.professional_id;
-    const newDate   = date       || (appt.date instanceof Date ? appt.date.toLocaleDateString('en-CA') : String(appt.date));
+    const newDate   = date       || appt.date;
     const newStart  = start_time || String(appt.start_time).slice(0, 5);
     const newSvcId  = service_id || appt.service_id;
     const svc       = await getOne('SELECT * FROM services WHERE id = $1', [newSvcId]);
@@ -301,7 +309,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
         `SELECT id FROM transactions WHERE appointment_id=$1 AND type='income'`, [req.params.id]
       );
       if (!existing) {
-        const updated = await getOne('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+        const updated = await getOne(
+          `SELECT *, date::text AS date FROM appointments WHERE id = $1`,
+          [req.params.id]
+        );
         const cl = await getOne('SELECT name FROM clients  WHERE id = $1', [updated.client_id]);
         const sv = await getOne('SELECT name FROM services WHERE id = $1', [updated.service_id]);
         await query(`
@@ -334,7 +345,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
 // DELETE /api/appointments/:id
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const appt = await getOne('SELECT * FROM appointments WHERE id = $1', [req.params.id]);
+    const appt = await getOne(
+      `SELECT id, professional_id FROM appointments WHERE id = $1`,
+      [req.params.id]
+    );
     if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
 
     if (req.user.professional_id && req.user.role !== 'master' &&

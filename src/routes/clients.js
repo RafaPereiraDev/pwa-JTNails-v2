@@ -7,10 +7,10 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const { search } = req.query;
     let sql = `
-      SELECT c.*,
+      SELECT c.id, c.name, c.phone, c.email, c.birth_date, c.notes, c.reliability, c.created_at,
         (SELECT COUNT(*) FROM appointments WHERE client_id = c.id) as total_appointments,
         (SELECT COALESCE(SUM(price),0) FROM appointments WHERE client_id = c.id AND status = 'completed') as total_spent,
-        (SELECT MAX(date) FROM appointments WHERE client_id = c.id) as last_appointment
+        (SELECT MAX(date)::text FROM appointments WHERE client_id = c.id) as last_appointment
       FROM clients c
     `;
     const params = [];
@@ -29,17 +29,20 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const client = await getOne(`
-      SELECT c.*,
+      SELECT c.id, c.name, c.phone, c.email, c.birth_date, c.notes, c.reliability, c.created_at,
         (SELECT COUNT(*) FROM appointments WHERE client_id = c.id) as total_appointments,
         (SELECT COALESCE(SUM(price),0) FROM appointments WHERE client_id = c.id AND status = 'completed') as total_spent,
-        (SELECT MAX(date) FROM appointments WHERE client_id = c.id) as last_appointment
+        (SELECT MAX(date)::text FROM appointments WHERE client_id = c.id) as last_appointment
       FROM clients c WHERE c.id = $1
     `, [req.params.id]);
 
     if (!client) return res.status(404).json({ error: 'Cliente não encontrada' });
 
     client.history = await getAll(`
-      SELECT a.*, s.name as service_name, p.name as professional_name
+      SELECT a.id, a.client_id, a.professional_id, a.service_id,
+        a.date::text AS date, a.start_time::text AS start_time, a.end_time::text AS end_time,
+        a.price, a.status, a.payment_method, a.notes,
+        s.name as service_name, p.name as professional_name
       FROM appointments a
       JOIN services s ON a.service_id = s.id
       JOIN professionals p ON a.professional_id = p.id

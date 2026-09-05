@@ -65,8 +65,10 @@ router.get('/', authenticateToken, async (req, res) => {
     const prof     = isMaster ? professional_id : req.user.professional_id;
 
     let sql = `
-      SELECT t.*, p.name AS professional_name,
-             c.name AS client_name, s.name AS service_name
+      SELECT t.id, t.type, t.appointment_id, t.professional_id,
+        t.description, t.category, t.amount, t.payment_method,
+        t.date::text AS date, t.notes, t.created_at,
+        p.name AS professional_name, c.name AS client_name, s.name AS service_name
       FROM transactions t
       LEFT JOIN professionals p ON t.professional_id = p.id
       LEFT JOIN appointments  a ON t.appointment_id  = a.id
@@ -120,7 +122,10 @@ router.post('/', authenticateToken, async (req, res) => {
       [txType, profId, description.trim(), category || 'Outros',
        parseFloat(amount), payment_method || null, date, notes || null]
     );
-    res.status(201).json(await getOne('SELECT * FROM transactions WHERE id = $1', [result.id]));
+    res.status(201).json(await getOne(
+      'SELECT *, date::text AS date FROM transactions WHERE id = $1',
+      [result.id]
+    ));
   } catch (e) {
     console.error('[transactions POST]', e.message);
     res.status(500).json({ error: 'Erro interno' });

@@ -71,9 +71,11 @@ router.put('/me/profile', authenticateToken, async (req, res) => {
 router.get('/:id/stats', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
-    const d = new Date();
-    const m = String(month || d.getMonth() + 1).padStart(2, '0');
-    const y = year || d.getFullYear();
+    // Usa fuso de Brasília para não retornar stats do mês errado em virada de mês no servidor UTC
+    const tzRow = await getOne(`SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo')::date::text AS today`);
+    const [yDefault, mDefault] = tzRow.today.split('-');
+    const m = String(month || parseInt(mDefault)).padStart(2, '0');
+    const y = year || yDefault;
 
     const stats = await getOne(`
       SELECT COUNT(CASE WHEN status='completed' THEN 1 END) AS total_appointments,

@@ -118,7 +118,7 @@ async function loadDashboard() {
         <div class="card">
           <div class="card-header">
             <div class="card-title">${currentUser.role === 'master' ? 'Despesas do mês' : 'Meu Faturamento'}</div>
-            <span class="text-sm text-muted">${new Date().toLocaleDateString('pt-BR', {month:'long', year:'numeric'})}</span>
+            <span class="text-sm text-muted">${new Date(today.date + 'T12:00:00').toLocaleDateString('pt-BR', {month:'long', year:'numeric'})}</span>
           </div>
           <div class="card-body">
             ${currentUser.role === 'master' ? `
