@@ -3,7 +3,13 @@ async function loadDashboard() {
   loading(container);
 
   try {
-    const data = await api.getDashboard();
+    // Carrega dashboard e aniversários em paralelo
+    const [data, birthdays] = await Promise.all([
+      api.getDashboard(),
+      (currentUser.role !== 'professional' || currentUser.professional_id)
+        ? api.getClientBirthdays().catch(() => [])
+        : Promise.resolve([])
+    ]);
     const { today, month, next_appointments, professionals } = data;
 
     container.innerHTML = `
@@ -142,74 +148,47 @@ async function loadDashboard() {
           </div>
         </div>
       </div>
+
+      ${birthdays && birthdays.length > 0 ? `
+      <div class="card mt-4" style="border-left:4px solid #e91e8c">
+        <div class="card-header" style="background:linear-gradient(135deg,#fff0f6,#fff)">
+          <div class="card-title" style="color:#e91e8c">
+            <i class="fa fa-cake-candles"></i> Aniversários nos próximos 7 dias
+          </div>
+          <span class="badge" style="background:#fce4f3;color:#e91e8c">${birthdays.length} cliente${birthdays.length > 1 ? 's' : ''}</span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr><th>Cliente</th><th>Data</th><th>Quando</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${birthdays.map(b => {
+                const parts = (b.birth_date || '').split('-');
+                const dataFmt = parts.length >= 3 ? `${parts[2]}/${parts[1]}` : '-';
+                const label = b.days_until === 0 ? '🎂 Hoje!' : `em ${b.days_until} dia${b.days_until > 1 ? 's' : ''}`;
+                const phone = String(b.phone || '').replace(/\D/g, '');
+                const msg   = encodeURIComponent(`🎂 Feliz aniversário, ${b.name}! O Salão Tainara Nails deseja um dia maravilhoso pra você! 💅🌸`);
+                const wpp   = `https://wa.me/55${phone}?text=${msg}`;
+                return `
+                  <tr>
+                    <td class="font-semibold">${esc(b.name)}</td>
+                    <td>${dataFmt}</td>
+                    <td><span class="badge" style="background:${b.days_until === 0 ? '#fce7f3' : '#f0fdf4'};color:${b.days_until === 0 ? '#e91e8c' : '#15803d'}">${label}</span></td>
+                    <td>${phone ? `<a href="${wpp}" target="_blank" class="btn btn-xs" style="background:#25d366;color:#fff;border:none"><i class="fab fa-whatsapp"></i> Parabenizar</a>` : ''}</td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
     `;
   } catch (e) {
     container.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
   }
 
-  // Verifica pendências e aniversários após renderizar (não bloqueia)
+  // Verifica pendências após renderizar (não bloqueia)
   checkPendingConfirmations();
-  loadBirthdayCard();
-}
-
-// ===== CARD DE ANIVERSÁRIOS =====
-async function loadBirthdayCard() {
-  // Só admins e master veem (tem acesso à rota)
-  if (currentUser.role === 'professional' && !currentUser.professional_id) return;
-
-  try {
-    const birthdays = await api.getClientBirthdays();
-    if (!birthdays || birthdays.length === 0) return;
-
-    // Injeta o card no grid do dashboard logo após os próximos atendimentos
-    const grid = document.querySelector('#page-dashboard .grid-2');
-    if (!grid) return;
-
-    const card = document.createElement('div');
-    card.className = 'card mt-4';
-    card.style.gridColumn = '1 / -1'; // ocupa toda a largura
-    card.innerHTML = `
-      <div class="card-header" style="background:linear-gradient(135deg,#fff0f6,#fff)">
-        <div class="card-title" style="color:#e91e8c">
-          <i class="fa fa-cake-candles"></i> Aniversários nos próximos 7 dias
-        </div>
-        <span class="badge" style="background:#fce4f3;color:#e91e8c">${birthdays.length} cliente${birthdays.length > 1 ? 's' : ''}</span>
-      </div>
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr><th>Cliente</th><th>Data</th><th>Dias</th><th>WhatsApp</th></tr>
-          </thead>
-          <tbody>
-            ${birthdays.map(b => {
-              const [, mm, dd] = (b.birth_date || '').split('-');
-              const dataFmt = mm && dd ? `${dd}/${mm}` : '-';
-              const label   = b.days_until === 0 ? '🎂 Hoje!' : `em ${b.days_until} dia${b.days_until > 1 ? 's' : ''}`;
-              const msg     = encodeURIComponent(`🎂 Feliz aniversário, ${b.name}! O Salão Tainara Nails deseja um dia maravilhoso pra você! 💅🌸`);
-              const phone   = String(b.phone).replace(/\D/g, '');
-              const wpp     = `https://wa.me/55${phone}?text=${msg}`;
-              return `
-                <tr>
-                  <td class="font-semibold">${esc(b.name)}</td>
-                  <td>${dataFmt}</td>
-                  <td><span class="badge" style="background:${b.days_until === 0 ? '#fce7f3' : '#f0fdf4'};color:${b.days_until === 0 ? '#e91e8c' : '#15803d'}">${label}</span></td>
-                  <td>
-                    <a href="${wpp}" target="_blank" class="btn btn-success btn-xs" style="background:#25d366;color:#fff;border:none">
-                      <i class="fab fa-whatsapp"></i> Parabenizar
-                    </a>
-                  </td>
-                </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    `;
-
-    grid.after(card);
-  } catch(e) {
-    // falha silenciosa — não interrompe o dashboard
-    console.warn('birthdays:', e.message);
-  }
 }
 
 function openNewClientModal() {
