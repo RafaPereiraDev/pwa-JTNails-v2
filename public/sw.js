@@ -1,11 +1,13 @@
 // ===== SERVICE WORKER — Tainara Nails =====
-const CACHE_NAME = 'tainara-nails-v2';
+const CACHE_NAME = 'tainara-nails-v3';
 
 // Assets estáticos que serão cacheados na instalação
 const STATIC_ASSETS = [
   '/',
   '/index.html',
+  '/agendar',
   '/agendar.html',
+  '/manifest-agendar.json',
   '/css/style.css',
   '/css/agendar.css',
   '/js/api.js',
