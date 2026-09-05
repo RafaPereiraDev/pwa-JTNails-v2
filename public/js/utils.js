@@ -6,8 +6,14 @@ function formatCurrency(value) {
 
 function formatDate(dateStr) {
   if (!dateStr) return '-';
-  const [y, m, d] = dateStr.split('-');
+  const [y, m, d] = String(dateStr).split('-');
   return `${d}/${m}/${y}`;
+}
+
+// Garante exibição HH:MM — remove segundos que o PostgreSQL inclui no cast ::text de TIME
+function formatTime(t) {
+  if (!t) return '';
+  return String(t).slice(0, 5);
 }
 
 function formatDateTime(dateStr, timeStr) {

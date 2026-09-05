@@ -112,7 +112,7 @@ function renderAppointmentDetail(appt) {
       <div style="font-size:18px;font-weight:700;margin-bottom:4px">${esc(appt.client_name)}</div>
       <div style="opacity:0.9;font-size:14px">${esc(appt.service_name)} · ${formatCurrency(appt.price)}</div>
       <div style="opacity:0.85;font-size:13px;margin-top:6px">
-        <i class="fa fa-calendar"></i> ${formatDate(appt.date)} às ${appt.start_time}–${appt.end_time}
+        <i class="fa fa-calendar"></i> ${formatDate(appt.date)} às ${formatTime(appt.start_time)}–${formatTime(appt.end_time)}
         &nbsp;·&nbsp;
         <i class="fa fa-user"></i> ${esc(appt.professional_name)}
       </div>
@@ -139,7 +139,7 @@ function renderAppointmentDetail(appt) {
 
     ${isOwn && appt.client_phone ? `
     <div style="margin-bottom:16px">
-      <button class="appt-action-btn" style="background:#25d366" onclick="sendReminderWpp('${esc(appt.client_phone)}','${esc(appt.client_name).replace(/'/g,'&#39;')}','${appt.date}','${appt.start_time}','${esc(appt.service_name).replace(/'/g,'&#39;')}')">
+      <button class="appt-action-btn" style="background:#25d366" onclick="sendReminderWpp('${esc(appt.client_phone)}','${esc(appt.client_name).replace(/'/g,'&#39;')}','${appt.date}','${formatTime(appt.start_time)}','${esc(appt.service_name).replace(/'/g,'&#39;')}')">
         <i class="fab fa-whatsapp"></i> Enviar lembrete no WhatsApp
       </button>
     </div>` : ''}

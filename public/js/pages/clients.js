@@ -171,7 +171,7 @@ async function openClientDetail(id) {
           <tbody>
             ${client.history.map(h => `
               <tr>
-                <td>${formatDate(h.date)}<br><span class="text-xs text-muted">${h.start_time}</span></td>
+                <td>${formatDate(h.date)}<br><span class="text-xs text-muted">${formatTime(h.start_time)}</span></td>
                 <td>${esc(h.service_name)}</td>
                 <td>${esc(h.professional_name)}</td>
                 <td class="font-semibold">${formatCurrency(h.price)}</td>

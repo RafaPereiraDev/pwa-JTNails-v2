@@ -97,7 +97,7 @@ async function loadDashboard() {
               <tbody>
                 ${next_appointments.slice(0, 8).map(a => `
                   <tr style="cursor:pointer" onclick="openEditAppointment(${a.id})">
-                    <td><span class="font-semibold">${formatDate(a.date)}</span><br><span class="text-sm text-muted">${a.start_time}</span></td>
+                    <td><span class="font-semibold">${formatDate(a.date)}</span><br><span class="text-sm text-muted">${formatTime(a.start_time)}</span></td>
                     <td>${esc(a.client_name)}</td>
                     <td class="text-sm">${esc(a.service_name)}</td>
                     <td>
@@ -327,7 +327,7 @@ function openPendingModal(pending) {
                 <div class="pending-item-sub">
                   <i class="fa fa-hand-sparkles" style="font-size:10px"></i> ${esc(a.service_name)}
                   &nbsp;·&nbsp;
-                  <i class="fa fa-clock" style="font-size:10px"></i> ${formatDate(a.date)} às ${a.start_time}
+                  <i class="fa fa-clock" style="font-size:10px"></i> ${formatDate(a.date)} às ${formatTime(a.start_time)}
                   &nbsp;·&nbsp;
                   <i class="fa fa-user" style="font-size:10px"></i> ${esc(a.professional_name)}
                 </div>

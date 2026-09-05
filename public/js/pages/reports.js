@@ -159,7 +159,7 @@ async function runAppointmentsReport() {
             <tbody>
               ${appointments.map(a => `
                 <tr>
-                  <td>${formatDate(a.date)}<br><span class="text-xs text-muted">${a.start_time}</span></td>
+                  <td>${formatDate(a.date)}<br><span class="text-xs text-muted">${formatTime(a.start_time)}</span></td>
                   <td>${esc(a.client_name)}</td>
                   <td>${esc(a.service_name)}</td>
                   <td>${esc(a.professional_name)}</td>
