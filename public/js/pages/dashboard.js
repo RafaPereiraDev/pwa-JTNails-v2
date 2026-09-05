@@ -155,7 +155,7 @@ async function loadDashboard() {
       <div class="card mt-4" style="border-left:4px solid #e91e8c">
         <div class="card-header" style="background:linear-gradient(135deg,#fff0f6,#fff)">
           <div class="card-title" style="color:#e91e8c">
-            <i class="fa fa-cake-candles"></i> Aniversários nos próximos 7 dias
+            <i class="fa fa-cake-candles"></i> Aniversariantes de hoje
           </div>
           <span class="badge" style="background:#fce4f3;color:#e91e8c">${birthdays.length} cliente${birthdays.length > 1 ? 's' : ''}</span>
         </div>

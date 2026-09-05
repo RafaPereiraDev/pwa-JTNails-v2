@@ -28,34 +28,25 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/clients/birthdays — aniversariantes dos próximos 7 dias (MM-DD, ignora o ano).
+// GET /api/clients/birthdays — aniversariantes de HOJE (compara MM-DD, ignora o ano).
 // IMPORTANTE: precisa vir ANTES de GET /:id, senão o Express casa "birthdays" como :id.
 router.get('/birthdays', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const tzRow = await getOne(`SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo')::date::text AS today`);
-    const today = new Date(tzRow.today + 'T12:00:00');
+    const [, mm, dd] = tzRow.today.split('-');
+    const todayMMDD = `${mm}-${dd}`;
 
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      days.push(`${mm}-${dd}`);
-    }
-
-    const placeholders = days.map((_, i) => `$${i + 1}`).join(', ');
     const rows = await getAll(`
       SELECT c.id, c.name, c.phone, c.birth_date::text AS birth_date,
-        TO_CHAR(c.birth_date::date, 'MM-DD') AS birth_mmdd,
         (SELECT MAX(date)::text FROM appointments WHERE client_id = c.id) AS last_appointment
       FROM clients c
       WHERE c.birth_date IS NOT NULL
-        AND TO_CHAR(c.birth_date::date, 'MM-DD') IN (${placeholders})
-      ORDER BY TO_CHAR(c.birth_date::date, 'MM-DD')
-    `, days);
+        AND TO_CHAR(c.birth_date::date, 'MM-DD') = $1
+      ORDER BY c.name
+    `, [todayMMDD]);
 
-    const result = rows.map(r => ({ ...r, days_until: days.indexOf(r.birth_mmdd) }));
+    // Todos são de hoje → days_until = 0
+    const result = rows.map(r => ({ ...r, days_until: 0 }));
     res.json(result);
   } catch (e) {
     console.error('[clients/birthdays]', e.message);
