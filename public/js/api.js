@@ -54,6 +54,8 @@ const api = {
   getClients: (search = '') =>
     api.get(`/clients${search ? '?search=' + encodeURIComponent(search) : ''}`),
   getClient: (id) => api.get(`/clients/${id}`),
+  getClientBirthdays: () => api.get('/clients/birthdays'),
+  getClientsInactive: (days = 30) => api.get(`/clients/inactive?days=${days}`),
   createClient: (data) => api.post('/clients', data),
   updateClient: (id, data) => api.put(`/clients/${id}`, data),
   deleteClient: (id) => api.delete(`/clients/${id}`),

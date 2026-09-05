@@ -12,6 +12,7 @@ async function loadReports() {
     <div class="tabs mb-6">
       <button class="tab-btn active" onclick="switchReportTab('appointments', this)">Atendimentos</button>
       <button class="tab-btn" onclick="switchReportTab('financial', this)">Financeiro</button>
+      <button class="tab-btn" onclick="switchReportTab('inactive', this)">Clientes Inativas</button>
     </div>
 
     <!-- Appointments Report -->
@@ -80,6 +81,32 @@ async function loadReports() {
       </div>
       <div id="rf-results"></div>
     </div>
+
+    <!-- Inactive Clients Report -->
+    <div id="report-inactive" class="tab-panel">
+      <div class="card mb-4">
+        <div class="card-body">
+          <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+            <div class="form-group" style="margin:0">
+              <label>Inativas há mais de</label>
+              <div style="display:flex;align-items:center;gap:8px">
+                <select id="ri-days" style="width:120px">
+                  <option value="30">30 dias</option>
+                  <option value="60">60 dias</option>
+                  <option value="90" selected>90 dias</option>
+                  <option value="180">6 meses</option>
+                  <option value="365">1 ano</option>
+                </select>
+                <button class="btn btn-primary" onclick="runInactiveReport()">
+                  <i class="fa fa-search"></i> Buscar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="ri-results"></div>
+    </div>
   `;
 
   // Populate professional dropdowns
@@ -110,6 +137,8 @@ function switchReportTab(tab, btn) {
   btn.classList.add('active');
   document.getElementById('report-appointments').classList.toggle('active', tab === 'appointments');
   document.getElementById('report-financial').classList.toggle('active', tab === 'financial');
+  document.getElementById('report-inactive').classList.toggle('active', tab === 'inactive');
+  if (tab === 'inactive') runInactiveReport();
 }
 
 async function runAppointmentsReport() {
@@ -234,6 +263,93 @@ async function runFinancialReport() {
           </table>
         </div>
       </div>`}
+    `;
+  } catch(e) {
+    container.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  }
+}
+
+async function runInactiveReport() {
+  const container = document.getElementById('ri-results');
+  if (!container) return;
+  loading(container);
+
+  const days = document.getElementById('ri-days')?.value || 90;
+
+  try {
+    const clients = await api.getClientsInactive(days);
+
+    if (clients.length === 0) {
+      container.innerHTML = `
+        <div class="card">
+          <div class="card-body">${emptyState(`Nenhuma cliente inativa há mais de ${days} dias`, 'fa-users')}</div>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="card mb-3" style="background:linear-gradient(135deg,#fff7ed,#fff);border-left:4px solid #f59e0b">
+        <div class="card-body" style="padding:14px 16px">
+          <div style="font-size:14px;color:#92400e">
+            <i class="fa fa-triangle-exclamation" style="color:#f59e0b"></i>
+            <strong>${clients.length} cliente${clients.length > 1 ? 's' : ''}</strong>
+            não ${clients.length > 1 ? 'voltaram' : 'voltou'} há mais de <strong>${days} dias</strong>.
+            Use o botão de WhatsApp para reconquistar.
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Último atendimento</th>
+                <th>Último serviço</th>
+                <th>Total visitas</th>
+                <th>Inativa há</th>
+                <th>WhatsApp</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${clients.map(c => {
+                const phone = String(c.phone || '').replace(/\D/g, '');
+                const msg   = encodeURIComponent(
+                  `Olá, ${c.name}! 💅 Faz um tempinho que não te vemos por aqui no Salão Tainara Nails. Que tal agendar um horário? Temos novidades esperando por você! 🌸`
+                );
+                const wpp = `https://wa.me/55${phone}?text=${msg}`;
+                const daysSince = parseInt(c.days_since) || 0;
+                const badgeColor = daysSince >= 180 ? '#fee2e2' : daysSince >= 90 ? '#fff7ed' : '#fef9c3';
+                const badgeText  = daysSince >= 180 ? '#dc2626' : daysSince >= 90 ? '#d97706' : '#ca8a04';
+                return `
+                  <tr>
+                    <td>
+                      <div class="font-semibold">${esc(c.name)}</div>
+                      <div class="text-xs text-muted">${esc(c.phone || '-')}</div>
+                    </td>
+                    <td>${c.last_appointment ? formatDate(c.last_appointment) : '-'}</td>
+                    <td class="text-sm">${esc(c.last_service || '-')}</td>
+                    <td style="text-align:center">${c.total_appointments || 0}</td>
+                    <td>
+                      <span style="background:${badgeColor};color:${badgeText};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">
+                        ${daysSince} dias
+                      </span>
+                    </td>
+                    <td>
+                      ${phone ? `
+                        <a href="${wpp}" target="_blank"
+                          class="btn btn-xs"
+                          style="background:#25d366;color:#fff;border:none;display:inline-flex;align-items:center;gap:4px">
+                          <i class="fab fa-whatsapp"></i> Chamar
+                        </a>` : '<span class="text-muted text-xs">Sem telefone</span>'}
+                    </td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
     `;
   } catch(e) {
     container.innerHTML = `<div class="alert alert-error">${e.message}</div>`;

@@ -130,4 +130,76 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/clients/birthdays
+// Retorna clientes que fazem aniversário nos próximos 7 dias (considera MM-DD, ignora o ano).
+// Usa fuso de Brasília para calcular "hoje" corretamente no servidor UTC.
+router.get('/birthdays', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const tzRow = await getOne(`SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo')::date AS today`);
+    const today = new Date(tzRow.today);
+
+    // Monta array com os 7 próximos MM-DD incluindo hoje
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      days.push(`${mm}-${dd}`);
+    }
+
+    // PostgreSQL: extrai MM-DD da birth_date para comparar sem o ano
+    const placeholders = days.map((_, i) => `$${i + 1}`).join(', ');
+    const rows = await getAll(`
+      SELECT c.id, c.name, c.phone, c.birth_date,
+        TO_CHAR(c.birth_date::date, 'MM-DD') AS birth_mmdd,
+        (SELECT MAX(date)::text FROM appointments WHERE client_id = c.id) AS last_appointment
+      FROM clients c
+      WHERE c.birth_date IS NOT NULL
+        AND TO_CHAR(c.birth_date::date, 'MM-DD') IN (${placeholders})
+      ORDER BY TO_CHAR(c.birth_date::date, 'MM-DD')
+    `, days);
+
+    // Calcula dias até o aniversário para cada cliente
+    const result = rows.map(r => {
+      const idx = days.indexOf(r.birth_mmdd);
+      return { ...r, days_until: idx };
+    });
+
+    res.json(result);
+  } catch (e) {
+    console.error('[clients/birthdays]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/clients/inactive?days=30
+// Retorna clientes que não comparecem há pelo menos X dias (padrão: 30).
+router.get('/inactive', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const days = Math.max(1, parseInt(req.query.days) || 30);
+
+    const rows = await getAll(`
+      SELECT c.id, c.name, c.phone, c.reliability,
+        MAX(a.date)::text                                         AS last_appointment,
+        COUNT(a.id)                                               AS total_appointments,
+        (NOW() AT TIME ZONE 'America/Sao_Paulo')::date - MAX(a.date) AS days_since,
+        (SELECT s.name FROM appointments sa
+         JOIN services s ON sa.service_id = s.id
+         WHERE sa.client_id = c.id AND sa.status = 'completed'
+         ORDER BY sa.date DESC LIMIT 1)                          AS last_service
+      FROM clients c
+      JOIN appointments a ON a.client_id = c.id AND a.status = 'completed'
+      GROUP BY c.id
+      HAVING (NOW() AT TIME ZONE 'America/Sao_Paulo')::date - MAX(a.date) >= $1
+      ORDER BY MAX(a.date) ASC
+    `, [days]);
+
+    res.json(rows);
+  } catch (e) {
+    console.error('[clients/inactive]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 module.exports = router;
