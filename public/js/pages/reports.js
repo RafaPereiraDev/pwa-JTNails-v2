@@ -316,7 +316,7 @@ async function runInactiveReport() {
               ${clients.map(c => {
                 const phone = String(c.phone || '').replace(/\D/g, '');
                 const msg   = encodeURIComponent(
-                  `Olá, ${c.name}! 💅 Faz um tempinho que não te vemos por aqui no Salão Tainara Nails. Que tal agendar um horário? Temos novidades esperando por você! 🌸`
+                  `Olá, ${c.name}! 💅 Faz um tempinho que não te vemos por aqui no Juliana & Tainara Atelier Nails. Que tal agendar um horário? Temos novidades esperando por você! 🌸`
                 );
                 const wpp = `https://wa.me/55${phone}?text=${msg}`;
                 const daysSince = parseInt(c.days_since) || 0;

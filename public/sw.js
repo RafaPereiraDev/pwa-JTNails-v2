@@ -1,5 +1,5 @@
-// ===== SERVICE WORKER — Tainara Nails =====
-const CACHE_NAME = 'tainara-nails-v4';
+// ===== SERVICE WORKER — Juliana & Tainara Atelier Nails =====
+const CACHE_NAME = 'atelier-nails-v5';
 
 // Assets estáticos que serão cacheados na instalação
 const STATIC_ASSETS = [
@@ -90,10 +90,10 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch (e) {
-    data = { title: 'Tainara Nails', body: event.data ? event.data.text() : '' };
+    data = { title: 'Atelier Nails', body: event.data ? event.data.text() : '' };
   }
 
-  const title = data.title || 'Tainara Nails';
+  const title = data.title || 'Atelier Nails';
   const options = {
     body: data.body || '',
     icon: '/icon-192x192.png',

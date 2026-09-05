@@ -1,4 +1,4 @@
-// ===== AGENDAMENTO PÚBLICO — TAINARA NAILS =====
+// ===== AGENDAMENTO PÚBLICO — JULIANA & TAINARA ATELIER NAILS =====
 const API = '/api/public';
 
 // Estado do fluxo

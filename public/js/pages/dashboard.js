@@ -12,7 +12,7 @@ async function loadDashboard() {
     ]);
     const { today, month, next_appointments, professionals } = data;
     const birthdayMsgTemplate = bMsgResp.message ||
-      'Parabéns, {nome}! 🎉🎂 O Salão Tainara Nails deseja a você um dia maravilhoso, repleto de alegria e momentos especiais! ✨💖';
+      'Parabéns, {nome}! 🎉🎂 O Juliana & Tainara Atelier Nails deseja a você um dia maravilhoso, repleto de alegria e momentos especiais! ✨💖';
 
     container.innerHTML = `
       <div class="page-header">

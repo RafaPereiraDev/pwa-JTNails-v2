@@ -1,7 +1,7 @@
 {
-  "name": "Tainara Nails",
-  "short_name": "TainaraNails",
-  "description": "Sistema de agendamento do Salão Tainara Nails",
+  "name": "Juliana & Tainara Atelier Nails",
+  "short_name": "Atelier Nails",
+  "description": "Sistema de gestão do Juliana & Tainara Atelier Nails",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
