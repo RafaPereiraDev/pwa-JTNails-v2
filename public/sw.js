@@ -1,5 +1,5 @@
 // ===== SERVICE WORKER — Tainara Nails =====
-const CACHE_NAME = 'tainara-nails-v3';
+const CACHE_NAME = 'tainara-nails-v4';
 
 // Assets estáticos que serão cacheados na instalação
 const STATIC_ASSETS = [
@@ -25,8 +25,8 @@ const STATIC_ASSETS = [
   '/js/pages/reports.js',
   '/js/pages/settings.js',
   '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
 ];
 
 // ── INSTALL: faz cache dos assets estáticos ──────────────────────────────────
@@ -96,8 +96,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'Tainara Nails';
   const options = {
     body: data.body || '',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    icon: '/icon-192x192.png',
+    badge: '/icon-192x192.png',
     // vibrate vem do servidor: [200,100,200] se ativado, [] se desativado
     vibrate: Array.isArray(data.vibrate) ? data.vibrate : [200, 100, 200],
     data: { url: data.url || '/' },
