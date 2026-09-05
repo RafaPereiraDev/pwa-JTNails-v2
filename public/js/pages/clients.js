@@ -293,8 +293,8 @@ function resetClientPasswordPrompt(id, name) {
     </p>
     <form id="reset-pass-form">
       <div class="form-group">
-        <label>Nova senha (mínimo 6 caracteres)</label>
-        <input type="text" id="rp-password" placeholder="Ex.: unhas2026" minlength="6" required />
+        <label>Nova senha (mínimo 8 caracteres, sem sequências óbvias)</label>
+        <input type="text" id="rp-password" placeholder="Ex.: atelier azul 27" minlength="8" required />
       </div>
       <div id="rp-error" class="alert alert-error" style="display:none"></div>
       <div class="modal-footer" style="padding:0;margin-top:16px">

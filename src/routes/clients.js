@@ -3,6 +3,7 @@ const router  = express.Router();
 const bcrypt  = require('bcryptjs');
 const { query, getOne, getAll }           = require('../database/db');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { validatePassword }                = require('../utils/passwordPolicy');
 
 // Leitura e escrita de clientes: apenas admin e master
 // Profissionais sem papel admin não devem ver toda a base de clientes do salão
@@ -166,11 +167,12 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
 router.post('/:id/reset-password', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const newPassword = String(req.body.new_password || '');
-    if (newPassword.length < 6)
-      return res.status(400).json({ error: 'A nova senha deve ter pelo menos 6 caracteres' });
 
-    const c = await getOne('SELECT id FROM clients WHERE id = $1', [req.params.id]);
+    const c = await getOne('SELECT id, name, phone FROM clients WHERE id = $1', [req.params.id]);
     if (!c) return res.status(404).json({ error: 'Cliente não encontrada' });
+
+    const pwCheck = validatePassword(newPassword, [c.name, c.phone]);
+    if (!pwCheck.valid) return res.status(400).json({ error: pwCheck.error });
 
     const hash = await bcrypt.hash(newPassword, 10);
     await query('UPDATE clients SET password = $1 WHERE id = $2', [hash, req.params.id]);

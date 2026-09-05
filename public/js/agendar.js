@@ -424,7 +424,13 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
   const password = document.getElementById('reg-password').value;
 
   if (name.length < 2) { err.textContent = 'Por favor, informe seu nome completo.'; err.hidden = false; return; }
-  if (password.length < 6) { err.textContent = 'A senha deve ter pelo menos 6 caracteres.'; err.hidden = false; return; }
+  // Política de senha (feedback imediato; o backend revalida)
+  if (window.PasswordPolicy) {
+    const pw = window.PasswordPolicy.validatePassword(password);
+    if (!pw.valid) { err.textContent = pw.error; err.hidden = false; return; }
+  } else if (password.length < 8) {
+    err.textContent = 'A senha deve ter pelo menos 8 caracteres.'; err.hidden = false; return;
+  }
 
   const btn = document.getElementById('register-btn');
   btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Criando...';
@@ -442,6 +448,33 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     btn.disabled = false; btn.innerHTML = '<i class="fa fa-user-plus"></i> Criar conta e continuar';
   }
 });
+
+// Feedback ao vivo da força da senha no cadastro
+(function () {
+  const input = document.getElementById('reg-password');
+  const bar = document.getElementById('reg-pass-bar');
+  const hint = document.getElementById('reg-pass-hint');
+  if (!input || !bar || !hint || !window.PasswordPolicy) return;
+  const LABELS = ['Muito fraca', 'Fraca', 'Razoável', 'Boa', 'Forte'];
+  const COLORS = ['#dc2626', '#f97316', '#eab308', '#84cc16', '#16a34a'];
+  input.addEventListener('input', () => {
+    const val = input.value;
+    if (!val) { bar.hidden = true; hint.hidden = true; return; }
+    const check = window.PasswordPolicy.validatePassword(val);
+    const score = window.PasswordPolicy.estimateStrength(val);
+    bar.hidden = false; hint.hidden = false;
+    const fill = bar.querySelector('span');
+    fill.style.width = `${((score + 1) / 5) * 100}%`;
+    fill.style.background = COLORS[score];
+    if (!check.valid) {
+      hint.textContent = check.error;
+      hint.style.color = '#dc2626';
+    } else {
+      hint.textContent = `Força da senha: ${LABELS[score]}`;
+      hint.style.color = 'var(--gray-500)';
+    }
+  });
+})();
 
 // Sair da conta (no bloco autenticado)
 document.getElementById('auth-logout').addEventListener('click', (e) => {

@@ -5,6 +5,7 @@ const jwt     = require('jsonwebtoken');
 const { pool, query, getOne, getAll } = require('../database/db');
 const { notifyUser, getUserIdByProfessional } = require('../push');
 const { JWT_SECRET, authenticateClient } = require('../middleware/auth');
+const { validatePassword } = require('../utils/passwordPolicy');
 
 // Gera o JWT de sessão da cliente (payload marcado com type:'client')
 function signClientToken(c) {
@@ -437,9 +438,12 @@ router.post('/client/register', async (req, res) => {
 
     if (name.length < 2)       return res.status(400).json({ error: 'Informe seu nome completo' });
     if (!validPhone(phoneDigits)) return res.status(400).json({ error: 'WhatsApp/telefone inválido' });
-    if (password.length < 6)   return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' });
     if (birth_date && !/^\d{4}-\d{2}-\d{2}$/.test(birth_date))
       return res.status(400).json({ error: 'Data de nascimento inválida' });
+
+    // Política de senha (comprimento, sequências, repetições, teclado, comuns)
+    const pwCheck = validatePassword(password, [name, phoneDigits]);
+    if (!pwCheck.valid) return res.status(400).json({ error: pwCheck.error });
 
     const hash = await bcrypt.hash(password, 10);
 

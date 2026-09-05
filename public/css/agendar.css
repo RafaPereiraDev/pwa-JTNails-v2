@@ -269,6 +269,17 @@ img { max-width: 100%; display: block; }
 }
 .pub-cancel-box .pub-btn-ghost { flex-shrink: 0; }
 
+/* ===== FORÇA DA SENHA ===== */
+.pub-pass-bar {
+  height: 6px; border-radius: 4px; background: var(--gray-200);
+  overflow: hidden; margin-top: 8px;
+}
+.pub-pass-bar span {
+  display: block; height: 100%; width: 0;
+  border-radius: 4px; transition: width .25s, background .25s;
+}
+.pub-pass-hint { font-size: 12px; margin-top: 6px; }
+
 /* ===== MODAL BIO ===== */
 .pub-modal-overlay {
   position: fixed; inset: 0; z-index: 50;

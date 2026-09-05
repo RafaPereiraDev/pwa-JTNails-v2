@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/icon-512x512.png" />
   <link rel="apple-touch-icon" href="/icon-192x192.png" />
   <title>Agendar — Juliana &amp; Tainara Atelier Nails</title>
-  <link rel="stylesheet" href="css/agendar.css?v=5" />
+  <link rel="stylesheet" href="css/agendar.css?v=6" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 </head>
 <body>
@@ -149,8 +149,10 @@
           <input type="date" id="reg-birth" autocomplete="bday" />
         </div>
         <div class="pub-field">
-          <label for="reg-password">Crie uma senha <span class="pub-optional">(mínimo 6 caracteres)</span></label>
+          <label for="reg-password">Crie uma senha <span class="pub-optional">(mínimo 8 caracteres)</span></label>
           <input type="password" id="reg-password" autocomplete="new-password" placeholder="Escolha uma senha" required />
+          <div id="reg-pass-bar" class="pub-pass-bar" hidden><span></span></div>
+          <div id="reg-pass-hint" class="pub-pass-hint" hidden></div>
         </div>
         <div id="register-error" class="pub-error" hidden></div>
         <button type="submit" class="pub-btn pub-btn-primary pub-btn-block" id="register-btn">
@@ -213,7 +215,8 @@
     </div>
   </div>
 
-  <script src="js/agendar.js?v=5"></script>
+  <script src="js/password-policy.js?v=1"></script>
+  <script src="js/agendar.js?v=6"></script>
 
   <!-- Botão discreto de instalação do PWA (aparece só quando disponível) -->
   <div id="pwa-install-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;
