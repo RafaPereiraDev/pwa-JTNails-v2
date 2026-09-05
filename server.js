@@ -74,6 +74,7 @@ app.use('/api/appointments',  require('./src/routes/appointments'));
 app.use('/api/transactions',  require('./src/routes/transactions'));
 app.use('/api/reports',       require('./src/routes/reports'));
 app.use('/api/blocked-times', require('./src/routes/blockedTimes'));
+app.use('/api/settings',      require('./src/routes/settings'));
 
 app.get(['/agendar', '/agendar/'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'agendar.html'));

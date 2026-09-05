@@ -93,7 +93,21 @@ async function initDatabase() {
       reason          TEXT,
       created_at      TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- Configurações gerais do sistema (chave/valor)
+    CREATE TABLE IF NOT EXISTS settings (
+      key        TEXT PRIMARY KEY,
+      value      TEXT,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
+
+  // Mensagem de aniversário padrão (só insere se ainda não existir)
+  await query(`
+    INSERT INTO settings (key, value)
+    VALUES ('birthday_message', $1)
+    ON CONFLICT (key) DO NOTHING
+  `, ['Parabéns, {nome}! 🎉🎂 O Salão Tainara Nails deseja a você um dia maravilhoso, repleto de alegria e momentos especiais! ✨💖']);
 
   // ── Seed (só se o banco estiver vazio) ──────────────────────────────────────
   const { count } = await getOne('SELECT COUNT(*) as count FROM users');

@@ -20,6 +20,7 @@ async function loadSettings() {
     <div class="tabs mb-6">
       <button class="tab-btn active" onclick="switchSettingsTab('account', this)">Minha Conta</button>
       ${currentUser.professional_id ? `<button class="tab-btn" onclick="switchSettingsTab('profile', this)">Meu Perfil</button>` : ''}
+      ${isAdminLevel() ? `<button class="tab-btn" onclick="switchSettingsTab('messages', this)">Mensagens</button>` : ''}
       ${isAdminLevel() ? `<button class="tab-btn" onclick="switchSettingsTab('users', this)">Usuários</button>` : ''}
     </div>
 
@@ -75,6 +76,36 @@ async function loadSettings() {
       </div>
     </div>` : ''}
 
+    <!-- Mensagens (admin e master) -->
+    ${isAdminLevel() ? `
+    <div id="settings-messages" class="tab-panel">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fa fa-cake-candles" style="color:#e91e8c"></i> Mensagem de Aniversário</div>
+        </div>
+        <div class="card-body" style="max-width:560px">
+          <p class="text-sm text-muted mb-4">
+            Esta é a mensagem enviada pelo WhatsApp quando você clica em "Parabenizar" no card de aniversários do Dashboard.
+            Use a tag <strong style="color:#e91e8c">{nome}</strong> onde quiser que apareça o primeiro nome da aniversariante.
+          </p>
+          <form id="birthday-msg-form">
+            <div class="form-group">
+              <label>Mensagem</label>
+              <textarea id="birthday-msg" rows="4" maxlength="500"
+                placeholder="Digite a mensagem de aniversário..."></textarea>
+              <div class="text-xs text-muted" style="text-align:right;margin-top:4px"><span id="bmsg-count">0</span>/500</div>
+            </div>
+            <div id="bmsg-preview" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:12px;font-size:14px;color:#166534;display:none">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;color:#15803d">Prévia (exemplo: Maria)</div>
+              <span id="bmsg-preview-text"></span>
+            </div>
+            <div id="bmsg-error" class="alert alert-error" style="display:none"></div>
+            <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar Mensagem</button>
+          </form>
+        </div>
+      </div>
+    </div>` : ''}
+
     <!-- Users (admin e master) -->
     ${isAdminLevel() ? `
     <div id="settings-users" class="tab-panel">
@@ -122,11 +153,62 @@ function switchSettingsTab(tab, btn) {
     if (tab === 'profile') loadMyProfileForm();
   }
 
+  const messagesPanel = document.getElementById('settings-messages');
+  if (messagesPanel) {
+    messagesPanel.classList.toggle('active', tab === 'messages');
+    if (tab === 'messages') loadBirthdayMessageForm();
+  }
+
   const usersPanel = document.getElementById('settings-users');
   if (usersPanel) {
     usersPanel.classList.toggle('active', tab === 'users');
     if (tab === 'users') loadUsersTable();
   }
+}
+
+// ===== MENSAGEM DE ANIVERSÁRIO =====
+async function loadBirthdayMessageForm() {
+  const textarea = document.getElementById('birthday-msg');
+  if (!textarea) return;
+
+  const countEl   = document.getElementById('bmsg-count');
+  const previewEl = document.getElementById('bmsg-preview');
+  const previewTx = document.getElementById('bmsg-preview-text');
+
+  function updatePreview() {
+    const val = textarea.value;
+    countEl.textContent = val.length;
+    if (val.trim()) {
+      previewTx.textContent = val.replace(/\{nome\}/g, 'Maria');
+      previewEl.style.display = '';
+    } else {
+      previewEl.style.display = 'none';
+    }
+  }
+
+  // Carrega a mensagem salva
+  try {
+    const { message } = await api.getBirthdayMessage();
+    textarea.value = message || '';
+  } catch (e) {
+    textarea.value = '';
+  }
+  updatePreview();
+
+  textarea.oninput = updatePreview;
+
+  document.getElementById('birthday-msg-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('bmsg-error');
+    errEl.style.display = 'none';
+    try {
+      await api.updateBirthdayMessage(textarea.value);
+      toast('Mensagem de aniversário salva!', 'success');
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = '';
+    }
+  };
 }
 
 // ===== MEU PERFIL (foto + bio) =====

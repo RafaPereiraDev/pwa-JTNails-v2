@@ -3,14 +3,16 @@ async function loadDashboard() {
   loading(container);
 
   try {
-    // Carrega dashboard e aniversários em paralelo
-    const [data, birthdays] = await Promise.all([
+    // Carrega dashboard, aniversários e mensagem de aniversário em paralelo
+    const podeVerAniversarios = (currentUser.role !== 'professional' || currentUser.professional_id);
+    const [data, birthdays, bMsgResp] = await Promise.all([
       api.getDashboard(),
-      (currentUser.role !== 'professional' || currentUser.professional_id)
-        ? api.getClientBirthdays().catch(() => [])
-        : Promise.resolve([])
+      podeVerAniversarios ? api.getClientBirthdays().catch(() => [])          : Promise.resolve([]),
+      podeVerAniversarios ? api.getBirthdayMessage().catch(() => ({}))        : Promise.resolve({}),
     ]);
     const { today, month, next_appointments, professionals } = data;
+    const birthdayMsgTemplate = bMsgResp.message ||
+      'Parabéns, {nome}! 🎉🎂 O Salão Tainara Nails deseja a você um dia maravilhoso, repleto de alegria e momentos especiais! ✨💖';
 
     container.innerHTML = `
       <div class="page-header">
@@ -168,8 +170,11 @@ async function loadDashboard() {
                 const dataFmt = parts.length >= 3 ? `${parts[2]}/${parts[1]}` : '-';
                 const label = b.days_until === 0 ? '🎂 Hoje!' : `em ${b.days_until} dia${b.days_until > 1 ? 's' : ''}`;
                 const phone = String(b.phone || '').replace(/\D/g, '');
-                const msg   = encodeURIComponent(`🎂 Feliz aniversário, ${b.name}! O Salão Tainara Nails deseja um dia maravilhoso pra você! 💅🌸`);
-                const wpp   = `https://wa.me/55${phone}?text=${msg}`;
+                // Substitui {nome} pelo PRIMEIRO NOME da cliente e codifica para preservar emojis
+                const primeiroNome = String(b.name || '').trim().split(' ')[0];
+                const mensagemFormatada = birthdayMsgTemplate.replace(/\{nome\}/g, primeiroNome);
+                const msg = encodeURIComponent(mensagemFormatada);
+                const wpp = `https://wa.me/55${phone}?text=${msg}`;
                 return `
                   <tr>
                     <td class="font-semibold">${esc(b.name)}</td>

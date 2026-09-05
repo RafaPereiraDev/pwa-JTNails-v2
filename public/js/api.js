@@ -117,4 +117,8 @@ const api = {
   deleteUser: (id) => api.delete(`/users/${id}`),
   toggleUserStatus: (id) => api.put(`/users/${id}/toggle-status`, {}),
   resetUserPassword: (id, new_password) => api.put(`/users/${id}/reset-password`, { new_password }),
+
+  // Settings
+  getBirthdayMessage: () => api.get('/settings/birthday-message'),
+  updateBirthdayMessage: (message) => api.put('/settings/birthday-message', { message }),
 };
