@@ -54,11 +54,17 @@ router.get('/available-slots', async (req, res) => {
     const prof = await getOne('SELECT id FROM professionals WHERE id = $1 AND active = TRUE', [professional_id]);
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
-    const duration   = svc.duration || 60;
-    const now        = new Date();
-    const todayStr   = now.toLocaleDateString('en-CA');
+    const duration = svc.duration || 60;
+
+    // Usa o horário atual do PostgreSQL no fuso de Brasília (America/Sao_Paulo)
+    // para evitar que o servidor em UTC mostre horários já passados como disponíveis.
+    const nowRow = await getOne(
+      `SELECT NOW() AT TIME ZONE 'America/Sao_Paulo' AS now_local`
+    );
+    const nowLocal   = new Date(nowRow.now_local);
+    const todayStr   = nowLocal.toLocaleDateString('en-CA');
     const isToday    = date === todayStr;
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const nowMinutes = nowLocal.getHours() * 60 + nowLocal.getMinutes();
 
     const appts = await getAll(
       `SELECT start_time::text AS start_time, end_time::text AS end_time FROM appointments
@@ -115,9 +121,11 @@ router.post('/appointments', async (req, res) => {
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
     const startMin = toMinutes(start_time);
-    const now      = new Date();
-    const todayStr = now.toLocaleDateString('en-CA');
-    if (date < todayStr || (date === todayStr && startMin <= now.getHours() * 60 + now.getMinutes()))
+    // Usa horário de Brasília para não bloquear agendamentos futuros quando servidor está em UTC
+    const nowRow2  = await getOne(`SELECT NOW() AT TIME ZONE 'America/Sao_Paulo' AS now_local`);
+    const nowLocal2 = new Date(nowRow2.now_local);
+    const todayStr2 = nowLocal2.toLocaleDateString('en-CA');
+    if (date < todayStr2 || (date === todayStr2 && startMin <= nowLocal2.getHours() * 60 + nowLocal2.getMinutes()))
       return res.status(400).json({ error: 'Não é possível agendar em um horário que já passou' });
 
     const duration = svc.duration || 60;

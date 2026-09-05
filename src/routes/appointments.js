@@ -72,7 +72,8 @@ router.get('/pending-confirmation', authenticateToken, async (req, res) => {
     const ehAtendente = req.user.professional_id && req.user.role !== 'master';
     let sql = APPT_SELECT + `
       WHERE a.status IN ('scheduled','confirmed','in_progress')
-        AND (a.date::text || ' ' || a.end_time::text)::timestamp < NOW()
+        AND (a.date::text || ' ' || a.end_time::text)::timestamp
+              < (NOW() AT TIME ZONE 'America/Sao_Paulo')
     `;
     const params = [];
     if (ehAtendente) {
@@ -215,7 +216,9 @@ router.post('/', authenticateToken, async (req, res) => {
     if (!client_id || !professional_id || !service_id || !date || !start_time)
       return res.status(400).json({ error: 'Cliente, profissional, serviço, data e horário são obrigatórios' });
 
-    const today = new Date().toLocaleDateString('en-CA');
+    // Não permite agendar em datas passadas (usa fuso de Brasília)
+    const nowRow = await getOne(`SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo')::date::text AS today`);
+    const today  = nowRow.today;
     if (date < today)
       return res.status(400).json({ error: 'Não é possível agendar em uma data que já passou' });
 
