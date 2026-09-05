@@ -51,10 +51,15 @@ async function hasConflict(professional_id, date, start_time, end_time, exclude_
 }
 
 const APPT_SELECT = `
-  SELECT a.*,
-    c.name  as client_name,  c.phone as client_phone,
-    s.name  as service_name, s.duration as service_duration,
-    p.name  as professional_name, p.color as professional_color
+  SELECT
+    a.id, a.client_id, a.professional_id, a.service_id,
+    a.date::text        AS date,
+    a.start_time::text  AS start_time,
+    a.end_time::text    AS end_time,
+    a.price, a.status, a.payment_method, a.notes, a.created_at,
+    c.name  AS client_name,  c.phone AS client_phone,
+    s.name  AS service_name, s.duration AS service_duration,
+    p.name  AS professional_name, p.color AS professional_color
   FROM appointments a
   JOIN clients      c ON a.client_id       = c.id
   JOIN services     s ON a.service_id      = s.id
@@ -259,8 +264,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Você não pode transferir agendamentos para outra profissional' });
 
     const newProfId = professional_id || appt.professional_id;
-    const newDate   = date       || appt.date;
-    const newStart  = start_time || appt.start_time;
+    const newDate   = date       || (appt.date instanceof Date ? appt.date.toLocaleDateString('en-CA') : String(appt.date));
+    const newStart  = start_time || String(appt.start_time).slice(0, 5);
     const newSvcId  = service_id || appt.service_id;
     const svc       = await getOne('SELECT * FROM services WHERE id = $1', [newSvcId]);
     const newEnd    = calcEndTime(String(newStart).slice(0,5), svc.duration);

@@ -11,7 +11,11 @@ router.get('/', authenticateToken, async (req, res) => {
       prof = req.user.professional_id;
 
     let sql = `
-      SELECT bt.*, p.name as professional_name, p.color as professional_color
+      SELECT bt.id, bt.professional_id, bt.reason, bt.created_at,
+        bt.date::text       AS date,
+        bt.start_time::text AS start_time,
+        bt.end_time::text   AS end_time,
+        p.name AS professional_name, p.color AS professional_color
       FROM blocked_times bt JOIN professionals p ON bt.professional_id = p.id
       WHERE 1=1
     `;

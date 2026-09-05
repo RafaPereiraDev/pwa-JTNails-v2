@@ -113,5 +113,6 @@ const api = {
   createUser: (data) => api.post('/users', data),
   updateUser: (id, data) => api.put(`/users/${id}`, data),
   deleteUser: (id) => api.delete(`/users/${id}`),
+  toggleUserStatus: (id) => api.put(`/users/${id}/toggle-status`, {}),
   resetUserPassword: (id, new_password) => api.put(`/users/${id}/reset-password`, { new_password }),
 };

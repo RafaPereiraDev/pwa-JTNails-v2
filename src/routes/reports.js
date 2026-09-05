@@ -42,7 +42,10 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 
     // Próximos atendimentos do dia
     const nextAppointments = await getAll(`
-      SELECT a.*, c.name AS client_name, c.phone AS client_phone,
+      SELECT a.id, a.client_id, a.professional_id, a.service_id,
+        a.date::text AS date, a.start_time::text AS start_time, a.end_time::text AS end_time,
+        a.price, a.status, a.payment_method, a.notes,
+        c.name AS client_name, c.phone AS client_phone,
         s.name AS service_name, p.name AS professional_name, p.color AS professional_color
       FROM appointments a
       JOIN clients      c ON a.client_id       = c.id
@@ -88,7 +91,10 @@ router.get('/appointments', authenticateToken, async (req, res) => {
       prof = req.user.professional_id;
 
     let sql = `
-      SELECT a.*, c.name AS client_name, c.phone AS client_phone,
+      SELECT a.id, a.client_id, a.professional_id, a.service_id,
+        a.date::text AS date, a.start_time::text AS start_time, a.end_time::text AS end_time,
+        a.price, a.status, a.payment_method, a.notes,
+        c.name AS client_name, c.phone AS client_phone,
         s.name AS service_name, p.name AS professional_name
       FROM appointments a
       JOIN clients      c ON a.client_id       = c.id

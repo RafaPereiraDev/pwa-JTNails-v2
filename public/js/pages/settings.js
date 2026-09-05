@@ -1,4 +1,14 @@
 // ===== SETTINGS PAGE =====
+// Helper: alterna visibilidade de qualquer campo de senha
+function togglePw(inputId, iconId) {
+  const inp  = document.getElementById(inputId);
+  const icon = document.getElementById(iconId);
+  if (!inp) return;
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  if (icon) { icon.className = show ? 'fa fa-eye-slash' : 'fa fa-eye'; }
+}
+
 async function loadSettings() {
   const container = document.getElementById('page-settings');
 
@@ -13,7 +23,6 @@ async function loadSettings() {
       ${isAdminLevel() ? `<button class="tab-btn" onclick="switchSettingsTab('users', this)">Usuários</button>` : ''}
     </div>
 
-    <!-- Account -->
     <div id="settings-account" class="tab-panel active">
       <div class="card">
         <div class="card-header">
@@ -23,15 +32,27 @@ async function loadSettings() {
           <form id="change-pw-form">
             <div class="form-group">
               <label>Senha atual</label>
-              <input type="password" id="pw-current" required placeholder="••••••••" />
+              <div class="input-icon">
+                <i class="fa fa-lock"></i>
+                <input type="password" id="pw-current" required placeholder="••••••••" />
+                <button type="button" class="btn-eye" onclick="togglePw('pw-current','eye-cur')"><i class="fa fa-eye" id="eye-cur"></i></button>
+              </div>
             </div>
             <div class="form-group">
               <label>Nova senha</label>
-              <input type="password" id="pw-new" required placeholder="Mínimo 6 caracteres" minlength="6" />
+              <div class="input-icon">
+                <i class="fa fa-lock"></i>
+                <input type="password" id="pw-new" required placeholder="Mínimo 6 caracteres" minlength="6" />
+                <button type="button" class="btn-eye" onclick="togglePw('pw-new','eye-new')"><i class="fa fa-eye" id="eye-new"></i></button>
+              </div>
             </div>
             <div class="form-group">
               <label>Confirmar nova senha</label>
-              <input type="password" id="pw-confirm" required placeholder="••••••••" />
+              <div class="input-icon">
+                <i class="fa fa-lock"></i>
+                <input type="password" id="pw-confirm" required placeholder="••••••••" />
+                <button type="button" class="btn-eye" onclick="togglePw('pw-confirm','eye-conf')"><i class="fa fa-eye" id="eye-conf"></i></button>
+              </div>
             </div>
             <div id="pw-error" class="alert alert-error" style="display:none"></div>
             <button type="submit" class="btn btn-primary"><i class="fa fa-lock"></i> Alterar Senha</button>
@@ -228,7 +249,14 @@ async function loadUsersTable() {
                   <td>${esc(u.email)}</td>
                   <td><span class="badge badge-${u.role}">${ {master:'Mestre', admin:'Administradora', professional:'Profissional'}[u.role] || esc(u.role) }</span></td>
                   <td>${esc(u.professional_name || '-')}</td>
-                  <td><span class="badge ${u.active ? 'badge-active' : 'badge-inactive'}">${u.active ? 'Ativo' : 'Inativo'}</span></td>
+                  <td>
+                    <button class="btn btn-xs ${u.active ? 'btn-success' : 'btn-secondary'}"
+                      onclick="toggleUserStatus(${u.id}, ${u.active})"
+                      ${u.id === currentUser?.id ? 'disabled title="Não pode alterar o próprio status"' : ''}>
+                      <i class="fa fa-${u.active ? 'check-circle' : 'ban'}"></i>
+                      ${u.active ? 'Ativo' : 'Inativo'}
+                    </button>
+                  </td>
                   <td>
                     <div style="display:flex;gap:6px">
                       <button class="btn btn-secondary btn-xs" onclick="openUserModal(${u.id})" title="Editar função"><i class="fa fa-user-gear"></i> Função</button>
@@ -322,7 +350,11 @@ function openResetPassword(id, name) {
     <form id="reset-pw-form">
       <div class="form-group">
         <label>Nova senha *</label>
-        <input type="password" id="reset-pw" required minlength="6" placeholder="Mínimo 6 caracteres" />
+        <div class="input-icon">
+          <i class="fa fa-lock"></i>
+          <input type="password" id="reset-pw" required minlength="6" placeholder="Mínimo 6 caracteres" />
+          <button type="button" class="btn-eye" onclick="togglePw('reset-pw','eye-reset')"><i class="fa fa-eye" id="eye-reset"></i></button>
+        </div>
       </div>
       <div id="reset-error" class="alert alert-error" style="display:none"></div>
       <div class="modal-footer" style="padding:0;margin-top:16px">
@@ -359,10 +391,23 @@ async function deactivateUser(id) {
   }
 }
 
+async function toggleUserStatus(id, currentlyActive) {
+  const acao = currentlyActive ? 'desativar' : 'ativar';
+  const ok = await confirmDialog(`Deseja <strong>${acao}</strong> este usuário?`);
+  if (!ok) return;
+  try {
+    const res = await api.toggleUserStatus(id);
+    toast(res.message, 'success');
+    loadUsersTable();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
 async function deleteUserConfirm(id, name) {
   const ok = await confirmDialog(
-    `Tem certeza que deseja excluir o usuário <strong>${esc(name)}</strong>?<br>` +
-    `<small style="color:#9ca3af">Se houver histórico de agendamentos, ele será apenas desativado. O acesso ao sistema é removido.</small>`
+    `Tem certeza que deseja <strong>excluir permanentemente</strong> o usuário <strong>${esc(name)}</strong>?<br>` +
+    `<small style="color:#ef4444">⚠️ Todos os agendamentos, bloqueios e transações vinculados serão excluídos em cascata. Esta ação não pode ser desfeita.</small>`
   );
   if (!ok) return;
   try {

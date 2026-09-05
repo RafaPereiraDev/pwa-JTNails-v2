@@ -205,31 +205,44 @@ function renderCalendar() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const todayStr = toDateStr(new Date());
 
+  // Limite máximo: 14 dias a partir de hoje
+  const maxDate = new Date();
+  maxDate.setDate(maxDate.getDate() + 14);
+  const maxDateStr = toDateStr(maxDate);
+
   const grid = document.getElementById('cal-grid');
   let cells = '';
   for (let i = 0; i < firstDay; i++) cells += `<div class="pub-cal-day empty"></div>`;
   for (let d = 1; d <= daysInMonth; d++) {
     const dateObj = new Date(year, month, d);
     const dateStr = toDateStr(dateObj);
-    const isPast = dateStr < todayStr;
-    const isToday = dateStr === todayStr;
+    const isPast    = dateStr < todayStr;
+    const isFuture  = dateStr > maxDateStr;  // além dos 14 dias
+    const isToday   = dateStr === todayStr;
     const isSelected = dateStr === state.date;
     const cls = ['pub-cal-day'];
-    if (isPast) cls.push('disabled');
+    if (isPast || isFuture) cls.push('disabled');
     else cls.push('selectable');
-    if (isToday) cls.push('today');
+    if (isToday)    cls.push('today');
     if (isSelected) cls.push('selected');
-    const onclick = isPast ? '' : `onclick="selectDate('${dateStr}')"`;
+    const onclick = (isPast || isFuture) ? '' : `onclick="selectDate('${dateStr}')"`;
     cells += `<div class="${cls.join(' ')}" ${onclick}>${d}</div>`;
   }
   grid.innerHTML = cells;
 
-  // Limita navegação: não deixa voltar para meses totalmente no passado
+  // Limita navegação: não deixa voltar para meses passados nem avançar além dos 14 dias
   const now = new Date();
   const prevBtn = document.getElementById('cal-prev');
+  const nextBtn = document.getElementById('cal-next');
   const atCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+  // Não avança se o próximo mês está totalmente além dos 14 dias
+  const nextMonthStart = new Date(year, month + 1, 1);
+  const beyondMax = toDateStr(nextMonthStart) > maxDateStr;
+
   prevBtn.disabled = atCurrentMonth;
   prevBtn.style.opacity = atCurrentMonth ? '0.35' : '1';
+  nextBtn.disabled = beyondMax;
+  nextBtn.style.opacity = beyondMax ? '0.35' : '1';
 }
 
 function calNav(dir) {

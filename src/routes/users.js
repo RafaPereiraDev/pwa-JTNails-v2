@@ -91,6 +91,28 @@ router.put('/:id/reset-password', authenticateToken, requireMaster, async (req, 
   }
 });
 
+router.put('/:id/toggle-status', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    if (parseInt(req.params.id) === req.user.id)
+      return res.status(400).json({ error: 'Não é possível alterar o status do próprio usuário' });
+
+    const user = await getOne('SELECT * FROM users WHERE id = $1', [req.params.id]);
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+    if (user.role === 'master' && req.user.role !== 'master')
+      return res.status(403).json({ error: 'Apenas o administrador mestre pode alterar a conta mestre' });
+
+    const newActive = !user.active;
+    await query('UPDATE users SET active = $1 WHERE id = $2', [newActive, req.params.id]);
+    if (user.professional_id)
+      await query('UPDATE professionals SET active = $1 WHERE id = $2', [newActive, user.professional_id]);
+
+    res.json({ message: newActive ? 'Usuário ativado com sucesso' : 'Usuário desativado com sucesso', active: newActive });
+  } catch (e) {
+    console.error('[users toggle-status]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     if (parseInt(req.params.id) === req.user.id)
@@ -101,25 +123,20 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
     if ((target.role === 'admin' || target.role === 'master') && req.user.role !== 'master')
       return res.status(403).json({ error: 'Apenas o administrador mestre pode excluir uma administradora' });
 
-    let hasHistory = 0;
+    // Exclui em cascata: transações → agendamentos → usuário → profissional
     if (target.professional_id) {
-      const { c } = await getOne(
-        'SELECT COUNT(*) as c FROM appointments WHERE professional_id = $1',
+      await query(
+        `DELETE FROM transactions WHERE appointment_id IN
+           (SELECT id FROM appointments WHERE professional_id = $1)`,
         [target.professional_id]
       );
-      hasHistory = parseInt(c);
+      await query('DELETE FROM appointments WHERE professional_id = $1', [target.professional_id]);
+      await query('DELETE FROM blocked_times WHERE professional_id = $1', [target.professional_id]);
     }
-
-    if (hasHistory > 0) {
-      await query('UPDATE users SET active = FALSE WHERE id = $1', [req.params.id]);
-      if (target.professional_id)
-        await query('UPDATE professionals SET active = FALSE WHERE id = $1', [target.professional_id]);
-      return res.json({ message: 'Usuário desativado (possui histórico de agendamentos)' });
-    }
-
     await query('DELETE FROM users WHERE id = $1', [req.params.id]);
     if (target.professional_id)
       await query('DELETE FROM professionals WHERE id = $1', [target.professional_id]);
+
     res.json({ message: 'Usuário excluído com sucesso' });
   } catch (e) {
     console.error('[users DELETE]', e.message);

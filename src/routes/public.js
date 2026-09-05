@@ -61,12 +61,13 @@ router.get('/available-slots', async (req, res) => {
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
     const appts = await getAll(
-      `SELECT start_time, end_time FROM appointments
+      `SELECT start_time::text AS start_time, end_time::text AS end_time FROM appointments
        WHERE professional_id = $1 AND date = $2 AND status NOT IN ('cancelled','no_show')`,
       [professional_id, date]
     );
     const blocks = await getAll(
-      'SELECT start_time, end_time FROM blocked_times WHERE professional_id = $1 AND date = $2',
+      `SELECT start_time::text AS start_time, end_time::text AS end_time FROM blocked_times
+       WHERE professional_id = $1 AND date = $2`,
       [professional_id, date]
     );
 
