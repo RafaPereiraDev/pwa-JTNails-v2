@@ -12,10 +12,16 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL?.includes('localhost')
     ? false
     : { rejectUnauthorized: false },
+  client_encoding: 'UTF8',
 });
 
 pool.on('error', (err) => {
   console.error('[DB] Erro inesperado no pool:', err.message);
+});
+
+// Garante que toda nova conexão use UTF-8 explicitamente (emojis, acentos)
+pool.on('connect', (client) => {
+  client.query("SET client_encoding TO 'UTF8'").catch(() => {});
 });
 
 /**

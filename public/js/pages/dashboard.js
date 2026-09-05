@@ -173,8 +173,7 @@ async function loadDashboard() {
                 // Substitui {nome} pelo PRIMEIRO NOME da cliente e codifica para preservar emojis
                 const primeiroNome = String(b.name || '').trim().split(' ')[0];
                 const mensagemFormatada = birthdayMsgTemplate.replace(/\{nome\}/g, primeiroNome);
-                const msg = encodeURIComponent(mensagemFormatada);
-                const wpp = `https://wa.me/55${phone}?text=${msg}`;
+                const wpp = `https://api.whatsapp.com/send?phone=55${phone}&text=${encodeURIComponent(mensagemFormatada)}`;
                 return `
                   <tr>
                     <td class="font-semibold">${esc(b.name)}</td>

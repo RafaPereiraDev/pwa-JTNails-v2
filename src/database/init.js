@@ -103,11 +103,12 @@ async function initDatabase() {
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)
+  // Emojis em Unicode escaped: \uD83C\uDF89=🎉 \uD83C\uDF82=🎂 \u2728=✨ \uD83D\uDC96=💖
   await query(`
     INSERT INTO settings (key, value)
     VALUES ('birthday_message', $1)
     ON CONFLICT (key) DO NOTHING
-  `, ['Parabéns, {nome}! 🎉🎂 O Salão Tainara Nails deseja a você um dia maravilhoso, repleto de alegria e momentos especiais! ✨💖']);
+  `, ['Parab\u00e9ns, {nome}! \uD83C\uDF89\uD83C\uDF82 O Sal\u00e3o Tainara Nails deseja a voc\u00ea um dia maravilhoso, repleto de alegria e momentos especiais! \u2728\uD83D\uDC96']);
 
   // ── Seed (só se o banco estiver vazio) ──────────────────────────────────────
   const { count } = await getOne('SELECT COUNT(*) as count FROM users');
