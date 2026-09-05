@@ -52,7 +52,8 @@ img { max-width: 100%; display: block; }
   justify-content: space-between;
   gap: 12px;
 }
-.pub-brand { display: flex; align-items: center; gap: 8px; }
+.pub-brand { display: flex; align-items: center; gap: 8px; text-decoration: none; cursor: pointer; }
+.pub-brand:active { opacity: .7; }
 .pub-logo {
   width: 34px; height: 34px; border-radius: 9px;
   background: linear-gradient(135deg, var(--primary), var(--secondary));

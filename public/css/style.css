@@ -41,7 +41,7 @@ body {
   min-height: 100vh;
 }
 /* Impede rolagem horizontal da página inteira no mobile */
-html, body { max-width: 100%; overflow-x: hidden; }
+html, body { max-width: 100%; overflow-x: hidden; touch-action: pan-y; }
 a { text-decoration: none; color: inherit; }
 button { cursor: pointer; border: none; background: none; font-family: inherit; }
 input, select, textarea { font-family: inherit; }
@@ -1043,6 +1043,11 @@ tbody tr:hover { background: var(--gray-50); }
 }
 @media (max-width: 400px) {
   .stats-grid { grid-template-columns: 1fr; }
+}
+
+/* Evita o zoom automático do iOS ao focar campos: fonte mínima de 16px no mobile */
+@media (max-width: 768px) {
+  input, select, textarea { font-size: 16px !important; }
 }
 
 /* ===== UTILS ===== */
