@@ -60,6 +60,33 @@ async function loadSettings() {
           </form>
         </div>
       </div>
+
+      <div class="card mt-4">
+        <div class="card-header">
+          <div class="card-title"><i class="fa fa-bell" style="color:#e91e8c"></i> Notificações</div>
+        </div>
+        <div class="card-body" style="max-width:480px">
+          <p class="text-sm text-muted mb-4">Receba um aviso no celular quando uma cliente fizer um novo agendamento na sua agenda.</p>
+
+          <label class="notif-toggle">
+            <span>
+              <strong>Notificações de novos agendamentos</strong>
+              <span class="text-xs text-muted" style="display:block">Aviso instantâneo quando alguém agenda</span>
+            </span>
+            <input type="checkbox" id="notif-new" />
+          </label>
+
+          <label class="notif-toggle">
+            <span>
+              <strong>Vibrar ao receber notificação</strong>
+              <span class="text-xs text-muted" style="display:block">O celular vibra ao chegar o aviso</span>
+            </span>
+            <input type="checkbox" id="notif-vibrate" />
+          </label>
+
+          <div id="notif-status" class="text-xs text-muted" style="margin-top:10px"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Meu Perfil (profissionais / admins com professional_id) -->
@@ -140,6 +167,119 @@ async function loadSettings() {
       errEl.style.display = '';
     }
   });
+
+  // Inicializa os toggles de notificação
+  initNotificationToggles();
+}
+
+// ===== NOTIFICAÇÕES WEB PUSH =====
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+async function initNotificationToggles() {
+  const newToggle = document.getElementById('notif-new');
+  const vibToggle = document.getElementById('notif-vibrate');
+  const statusEl  = document.getElementById('notif-status');
+  if (!newToggle) return;
+
+  const suportado = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+  if (!suportado) {
+    statusEl.textContent = '⚠️ Este navegador não suporta notificações push.';
+    newToggle.disabled = true;
+    vibToggle.disabled = true;
+    return;
+  }
+
+  // Carrega preferências salvas
+  try {
+    const prefs = await api.getNotificationPrefs();
+    newToggle.checked = prefs.notify_new_appointment;
+    vibToggle.checked = prefs.notify_vibrate;
+  } catch (e) {
+    newToggle.checked = true;
+    vibToggle.checked = true;
+  }
+
+  // Salva preferências (vibração) — só atualiza no banco
+  vibToggle.addEventListener('change', async () => {
+    try {
+      await api.updateNotificationPrefs({
+        notify_new_appointment: newToggle.checked,
+        notify_vibrate: vibToggle.checked,
+      });
+      toast('Preferência salva', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Ao ativar notificações: pede permissão + registra a subscription
+  newToggle.addEventListener('change', async () => {
+    if (newToggle.checked) {
+      const ok = await ativarPush();
+      if (!ok) { newToggle.checked = false; return; }
+    } else {
+      await desativarPush();
+    }
+    try {
+      await api.updateNotificationPrefs({
+        notify_new_appointment: newToggle.checked,
+        notify_vibrate: vibToggle.checked,
+      });
+      toast('Preferência salva', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+  });
+}
+
+async function ativarPush() {
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      toast('Permissão de notificação negada pelo navegador', 'error');
+      return false;
+    }
+
+    const reg = await navigator.serviceWorker.ready;
+    const { publicKey } = await api.getPushPublicKey();
+    if (!publicKey) {
+      toast('Notificações não configuradas no servidor', 'error');
+      return false;
+    }
+
+    // Reaproveita a inscrição existente ou cria uma nova
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+    }
+
+    await api.subscribePush(sub.toJSON());
+    toast('Notificações ativadas!', 'success');
+    return true;
+  } catch (e) {
+    console.error('ativarPush:', e);
+    toast('Não foi possível ativar as notificações', 'error');
+    return false;
+  }
+}
+
+async function desativarPush() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await api.unsubscribePush(sub.endpoint);
+      await sub.unsubscribe();
+    }
+  } catch (e) {
+    console.warn('desativarPush:', e.message);
+  }
 }
 
 function switchSettingsTab(tab, btn) {

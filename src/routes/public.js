@@ -1,6 +1,13 @@
 const express = require('express');
 const router  = express.Router();
 const { pool, getOne, getAll } = require('../database/db');
+const { notifyUser, getUserIdByProfessional } = require('../push');
+
+// Formata YYYY-MM-DD para DD/MM
+function formatDateBR(iso) {
+  const [y, m, d] = String(iso).split('-');
+  return d && m ? `${d}/${m}` : iso;
+}
 
 const OPEN_HOUR  = 8;
 const CLOSE_MINS = 18 * 60 + 30; // 18:30
@@ -190,6 +197,19 @@ router.post('/appointments', async (req, res) => {
           svc.price, notes ? String(notes).slice(0, 300) : null])).rows[0];
 
       await client.query('COMMIT');
+
+      // Notifica a profissional dona da agenda (não bloqueia a resposta)
+      getUserIdByProfessional(professional_id)
+        .then(userId => {
+          if (userId) {
+            notifyUser(userId, {
+              title: 'Novo Agendamento! 💅',
+              body:  `${client_name} agendou para ${formatDateBR(date)} às ${start_time}.`,
+              url:   '/',
+            });
+          }
+        })
+        .catch(() => {});
 
       res.status(201).json({
         message: 'Agendamento solicitado com sucesso',

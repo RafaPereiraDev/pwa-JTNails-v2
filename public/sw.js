@@ -1,5 +1,5 @@
 // ===== SERVICE WORKER — Tainara Nails =====
-const CACHE_NAME = 'tainara-nails-v1';
+const CACHE_NAME = 'tainara-nails-v2';
 
 // Assets estáticos que serão cacheados na instalação
 const STATIC_ASSETS = [
@@ -78,6 +78,50 @@ self.addEventListener('fetch', (event) => {
       }).catch(() => cached); // se offline e não tem cache, retorna o que tiver
 
       return cached || networkFetch;
+    })
+  );
+});
+
+// ── PUSH: recebe notificações do servidor ────────────────────────────────────
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = { title: 'Tainara Nails', body: event.data ? event.data.text() : '' };
+  }
+
+  const title = data.title || 'Tainara Nails';
+  const options = {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    // vibrate vem do servidor: [200,100,200] se ativado, [] se desativado
+    vibrate: Array.isArray(data.vibrate) ? data.vibrate : [200, 100, 200],
+    data: { url: data.url || '/' },
+    tag: 'novo-agendamento',
+    renotify: true,
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// ── NOTIFICATIONCLICK: abre o app ao tocar na notificação ─────────────────────
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Se já há uma aba aberta, foca nela
+      for (const client of windowClients) {
+        if ('focus' in client) {
+          client.navigate(targetUrl);
+          return client.focus();
+        }
+      }
+      // Senão, abre uma nova
+      if (clients.openWindow) return clients.openWindow(targetUrl);
     })
   );
 });

@@ -121,4 +121,11 @@ const api = {
   // Settings
   getBirthdayMessage: () => api.get('/settings/birthday-message'),
   updateBirthdayMessage: (message) => api.put('/settings/birthday-message', { message }),
+
+  // Notificações (Web Push)
+  getPushPublicKey: () => api.get('/settings/push/public-key'),
+  getNotificationPrefs: () => api.get('/settings/notifications'),
+  updateNotificationPrefs: (data) => api.put('/settings/notifications', data),
+  subscribePush: (sub) => api.post('/settings/push/subscribe', sub),
+  unsubscribePush: (endpoint) => api.post('/settings/push/unsubscribe', { endpoint }),
 };

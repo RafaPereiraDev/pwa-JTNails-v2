@@ -100,6 +100,20 @@ async function initDatabase() {
       value      TEXT,
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- Inscrições de Web Push por usuário (um usuário pode ter vários dispositivos)
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id),
+      endpoint    TEXT NOT NULL UNIQUE,
+      p256dh      TEXT NOT NULL,
+      auth        TEXT NOT NULL,
+      created_at  TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Preferências de notificação no usuário
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_new_appointment BOOLEAN DEFAULT TRUE;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_vibrate         BOOLEAN DEFAULT TRUE;
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)
