@@ -5,7 +5,9 @@ const { authenticateToken }    = require('../middleware/auth');
 
 router.get('/dashboard', authenticateToken, async (req, res) => {
   try {
-    const today = new Date().toLocaleDateString('en-CA');
+    // Usa fuso de Brasília para não mostrar dados errados quando servidor está em UTC
+    const tzRow = await getOne(`SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo')::date::text AS today`);
+    const today = tzRow.today;
     const month = today.slice(0, 7); // YYYY-MM
 
     const profId = req.user.role === 'master' ? null : req.user.professional_id;

@@ -147,7 +147,8 @@ router.post('/bulk-confirm', authenticateToken, async (req, res) => {
 // GET /api/appointments/today
 router.get('/today', authenticateToken, async (req, res) => {
   try {
-    const today = new Date().toLocaleDateString('en-CA');
+    const tzRow = await getOne(`SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo')::date::text AS today`);
+    const today = tzRow.today;
     let sql = APPT_SELECT + ` WHERE a.date = $1 AND a.status NOT IN ('cancelled','no_show')`;
     const params = [today];
     if (req.user.role === 'professional' && req.user.professional_id) {
@@ -180,7 +181,9 @@ router.get('/', authenticateToken, async (req, res) => {
     if (status) {
       sql += ` AND a.status = $${i++}`; p.push(status);
     } else {
-      const today = new Date().toLocaleDateString('en-CA');
+      // Usa fuso de Brasília para calcular "hoje" corretamente no servidor em UTC
+      const todayRow = await getOne(`SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo')::date::text AS today`);
+      const today    = todayRow.today;
       const isDayView = date && !start_date && !end_date;
       const isPast    = isDayView && date < today;
       if (!isPast) sql += ` AND a.status NOT IN ('cancelled','no_show')`;

@@ -190,13 +190,22 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
       'SELECT COUNT(*) as c FROM appointments WHERE professional_id = $1', [req.params.id]
     );
 
-    if (parseInt(c) > 0) {
+    if (parseInt(c) > 0 && req.user.role !== 'master') {
+      // Admin não-master: apenas desativa se tem agendamentos
       await query('UPDATE professionals SET active = FALSE WHERE id = $1', [req.params.id]);
       if (linkedUser)
         await query('UPDATE users SET active = FALSE WHERE id = $1', [linkedUser.id]);
       return res.json({ message: 'Profissional desativada (possui agendamentos vinculados)' });
     }
 
+    // Master ou sem agendamentos: exclui em cascata
+    await query(
+      `DELETE FROM transactions WHERE appointment_id IN
+         (SELECT id FROM appointments WHERE professional_id = $1)`,
+      [req.params.id]
+    );
+    await query('DELETE FROM appointments WHERE professional_id = $1', [req.params.id]);
+    await query('DELETE FROM blocked_times WHERE professional_id = $1', [req.params.id]);
     if (linkedUser)
       await query('UPDATE users SET active = FALSE, professional_id = NULL WHERE id = $1', [linkedUser.id]);
     await query('DELETE FROM professionals WHERE id = $1', [req.params.id]);
