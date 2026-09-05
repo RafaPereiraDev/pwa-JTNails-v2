@@ -136,9 +136,11 @@ async function loadAgendaView() {
       const d = new Date(agendaDate + 'T12:00:00');
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, '0');
+      // Último dia real do mês (evita datas inválidas como 31/09 no PostgreSQL)
+      const lastDay = new Date(y, d.getMonth() + 1, 0).getDate();
       if (label) label.textContent = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       params.start_date = `${y}-${m}-01`;
-      params.end_date = `${y}-${m}-31`;
+      params.end_date   = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
       const appointments = await api.getAppointments(params);
       renderMonthView(container, d.getFullYear(), d.getMonth(), appointments);
     }
