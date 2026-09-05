@@ -155,7 +155,7 @@ router.get('/today', authenticateToken, async (req, res) => {
     const today = tzRow.today;
     let sql = APPT_SELECT + ` WHERE a.date = $1 AND a.status NOT IN ('cancelled','no_show')`;
     const params = [today];
-    if (req.user.role === 'professional' && req.user.professional_id) {
+    if (req.user.professional_id && req.user.role !== 'master') {
       sql += ` AND a.professional_id = $2`; params.push(req.user.professional_id);
     }
     sql += ' ORDER BY a.start_time';
@@ -170,8 +170,10 @@ router.get('/today', authenticateToken, async (req, res) => {
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { date, professional_id, status, start_date, end_date } = req.query;
+    // Isolamento: qualquer usuária vinculada a uma profissional (admin ou
+    // professional) só vê a própria agenda. Só o master vê/filtra livremente.
     let prof = professional_id;
-    if (req.user.role === 'professional' && req.user.professional_id)
+    if (req.user.professional_id && req.user.role !== 'master')
       prof = req.user.professional_id;
 
     let sql = APPT_SELECT + ' WHERE 1=1';
@@ -205,7 +207,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const a = await getOne(APPT_SELECT + ' WHERE a.id = $1', [req.params.id]);
     if (!a) return res.status(404).json({ error: 'Agendamento não encontrado' });
-    if (req.user.role === 'professional' && a.professional_id !== req.user.professional_id)
+    // Isolamento: usuária vinculada só acessa agendamentos da própria agenda.
+    if (req.user.professional_id && req.user.role !== 'master' &&
+        a.professional_id !== req.user.professional_id)
       return res.status(403).json({ error: 'Acesso negado' });
     res.json(a);
   } catch (e) {

@@ -7,11 +7,28 @@
  */
 const { Pool } = require('pg');
 
+// Configuração de SSL do banco.
+// - localhost: sem SSL.
+// - Se DATABASE_CA (certificado CA do provedor) estiver definido: verificação
+//   completa do certificado (rejectUnauthorized: true) — protege contra MITM.
+// - Caso contrário: SSL ativo sem verificação de CA (comportamento herdado do
+//   Render, que não expõe o CA por padrão). Para forçar verificação estrita
+//   sem CA customizado, defina DATABASE_SSL_STRICT=true.
+function buildSslConfig() {
+  const url = process.env.DATABASE_URL || '';
+  if (url.includes('localhost') || url.includes('127.0.0.1')) return false;
+
+  const ca = process.env.DATABASE_CA;
+  if (ca) {
+    return { rejectUnauthorized: true, ca: ca.replace(/\\n/g, '\n') };
+  }
+  const strict = String(process.env.DATABASE_SSL_STRICT || '').toLowerCase() === 'true';
+  return { rejectUnauthorized: strict };
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('localhost')
-    ? false
-    : { rejectUnauthorized: false },
+  ssl: buildSslConfig(),
   client_encoding: 'UTF8',
 });
 

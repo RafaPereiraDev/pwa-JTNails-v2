@@ -4,7 +4,7 @@ let currentPage = 'dashboard';
 const pageConfig = {
   dashboard:     { title: 'Dashboard',     load: loadDashboard },
   agenda:        { title: 'Agenda',        load: loadAgenda },
-  clients:       { title: 'Clientes',      load: loadClients },
+  clients:       { title: 'Clientes',      load: loadClients,       adminOnly: true },
   services:      { title: 'Serviços',      load: loadServices },
   professionals: { title: 'Profissionais', load: loadProfessionals, adminOnly: true },
   financial:     { title: 'Financeiro',    load: loadFinancial,     hideNewAppt: true, hideMaster: true },

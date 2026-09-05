@@ -12,20 +12,28 @@ router.post('/login', async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
 
-    // Busca apenas as colunas necessárias — não traz o hash da senha no objeto
+    const emailNorm = email.toLowerCase().trim();
+
+    // 1) Busca isolada do hash apenas para verificação. Este objeto (com o hash)
+    //    fica em escopo mínimo e nunca é serializado na resposta.
+    const cred = await getOne(
+      'SELECT id, password FROM users WHERE email = $1 AND active = TRUE',
+      [emailNorm]
+    );
+
+    if (!cred || !bcrypt.compareSync(password, cred.password))
+      return res.status(401).json({ error: 'E-mail ou senha incorretos' });
+
+    // 2) Busca os dados de exibição em query separada — sem a coluna password.
     const user = await getOne(`
-      SELECT u.id, u.name, u.email, u.role, u.active, u.professional_id,
-             u.password,
+      SELECT u.id, u.name, u.email, u.role, u.professional_id,
              p.name  AS professional_name,
              p.color AS professional_color,
              p.photo AS professional_photo
       FROM users u
       LEFT JOIN professionals p ON u.professional_id = p.id
-      WHERE u.email = $1 AND u.active = TRUE
-    `, [email.toLowerCase().trim()]);
-
-    if (!user || !bcrypt.compareSync(password, user.password))
-      return res.status(401).json({ error: 'E-mail ou senha incorretos' });
+      WHERE u.id = $1
+    `, [cred.id]);
 
     const token = jwt.sign(
       { id: user.id, name: user.name, email: user.email,
