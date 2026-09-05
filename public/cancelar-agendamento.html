@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#e91e8c" />
+  <meta name="description" content="Consulte e cancele seus agendamentos no Juliana & Tainara Atelier Nails" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png" />
+  <link rel="apple-touch-icon" href="/icon-192x192.png" />
+  <title>Meus Agendamentos — Juliana &amp; Tainara Atelier Nails</title>
+  <link rel="stylesheet" href="css/agendar.css?v=4" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    .pub-appt-card {
+      text-align: left; padding: 14px 16px; margin-bottom: 12px;
+      background: #fff; border: 1px solid var(--gray-300); border-radius: 14px;
+      border-left: 5px solid var(--gray-300);
+    }
+    .pub-appt-card.active { border-left-color: var(--primary); }
+    .pub-appt-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .pub-appt-service { font-weight: 700; color: var(--gray-700); }
+    .pub-appt-badge {
+      font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px;
+      background: var(--gray-100); color: var(--gray-600); flex-shrink: 0;
+    }
+    .pub-appt-badge.ok    { background: #dcfce7; color: #15803d; }
+    .pub-appt-badge.warn  { background: #fef3c7; color: #b45309; }
+    .pub-appt-badge.gray  { background: #f3f4f6; color: #6b7280; }
+    .pub-appt-meta { font-size: 13px; color: var(--gray-600); line-height: 1.7; }
+    .pub-appt-meta i { width: 16px; color: var(--primary); }
+    .pub-appt-card .pub-btn { margin-top: 10px; }
+    .pub-section-label { font-size: 13px; font-weight: 700; color: var(--gray-600); text-transform: uppercase; letter-spacing: .5px; margin: 22px 0 10px; }
+    .pub-center { text-align: center; }
+  </style>
+</head>
+<body>
+
+  <header class="pub-header">
+    <div class="pub-brand">
+      <span class="pub-logo"><i class="fa fa-hand-sparkles"></i></span>
+      <span class="pub-brand-name">Juliana &amp; Tainara Atelier Nails</span>
+    </div>
+  </header>
+
+  <main class="pub-main">
+    <section class="pub-step">
+      <a class="pub-back" href="/agendar"><i class="fa fa-arrow-left"></i> Voltar para agendamento</a>
+      <h1 class="pub-title">Meus Agendamentos</h1>
+      <p class="pub-subtitle">Consulte seus horários ou cancele um agendamento.</p>
+
+      <!-- Busca por telefone -->
+      <form id="lookup-form" class="pub-form" autocomplete="off">
+        <div class="pub-field">
+          <label for="lookup-phone">Seu WhatsApp / telefone</label>
+          <input type="tel" id="lookup-phone" placeholder="(00) 00000-0000" inputmode="numeric" />
+        </div>
+        <div id="lookup-error" class="pub-error" hidden></div>
+        <button type="submit" class="pub-btn pub-btn-primary pub-btn-block" id="lookup-btn">
+          <i class="fa fa-magnifying-glass"></i> Consultar meus agendamentos
+        </button>
+      </form>
+
+      <!-- Resultado -->
+      <div id="result-area" hidden></div>
+    </section>
+  </main>
+
+  <!-- Modal de confirmação de cancelamento -->
+  <div class="pub-modal-overlay" id="confirm-modal" hidden>
+    <div class="pub-modal pub-center">
+      <div class="pub-success-icon" style="background:#fee2e2;color:#dc2626"><i class="fa fa-triangle-exclamation"></i></div>
+      <h2 class="pub-modal-name">Cancelar agendamento?</h2>
+      <p class="pub-modal-bio" id="confirm-text">Tem certeza que deseja cancelar este agendamento? Esta ação não pode ser desfeita.</p>
+      <div id="confirm-modal-error" class="pub-error" hidden></div>
+      <button class="pub-btn pub-btn-primary pub-btn-block" id="confirm-cancel-btn" style="background:#dc2626">
+        <i class="fa fa-check"></i> Sim, cancelar
+      </button>
+      <button class="pub-btn pub-btn-ghost pub-btn-block" id="confirm-close-btn" style="margin-top:8px">
+        Não, manter agendamento
+      </button>
+    </div>
+  </div>
+
+  <script src="js/cancelar.js?v=4"></script>
+</body>
+</html>

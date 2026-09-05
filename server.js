@@ -79,6 +79,9 @@ app.use('/api/settings',      require('./src/routes/settings'));
 app.get(['/agendar', '/agendar/'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'agendar.html'));
 });
+app.get(['/cancelar-agendamento', '/cancelar-agendamento/'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'cancelar-agendamento.html'));
+});
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Rota não encontrada' });
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

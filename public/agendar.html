@@ -14,7 +14,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/icon-512x512.png" />
   <link rel="apple-touch-icon" href="/icon-192x192.png" />
   <title>Agendar — Juliana &amp; Tainara Atelier Nails</title>
-  <link rel="stylesheet" href="css/agendar.css?v=3" />
+  <link rel="stylesheet" href="css/agendar.css?v=4" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 </head>
 <body>
@@ -41,6 +41,9 @@
       <button class="pub-back" style="visibility:hidden"><i class="fa fa-arrow-left"></i></button>
       <h1 class="pub-title">Escolha a profissional</h1>
       <p class="pub-subtitle">Quem você gostaria que fizesse seu atendimento?</p>
+      <a href="/cancelar-agendamento" class="pub-btn pub-btn-ghost pub-btn-block" style="margin-bottom:16px">
+        <i class="fa fa-calendar-check"></i> Consultar / Cancelar Meus Agendamentos
+      </a>
       <div id="professionals-list" class="pub-cards">
         <div class="pub-loading"><i class="fa fa-spinner fa-spin"></i> Carregando...</div>
       </div>
@@ -122,7 +125,23 @@
       <h1 class="pub-title">Agendamento confirmado!</h1>
       <div class="pub-summary" id="done-summary"></div>
       <p class="pub-subtitle" style="margin-top:16px">Guarde os detalhes. Até breve! 🌸</p>
-      <button type="button" class="pub-btn pub-btn-outline pub-btn-block" onclick="restart()">
+
+      <!-- Link seguro de cancelamento -->
+      <div id="done-cancel-box" class="pub-cancel-box" hidden>
+        <div class="pub-cancel-title"><i class="fa fa-shield-halved"></i> Precisar cancelar?</div>
+        <p class="pub-cancel-help">Salve este link seguro. Só quem tem ele pode cancelar este agendamento.</p>
+        <div class="pub-cancel-linkrow">
+          <input type="text" id="done-cancel-link" class="pub-cancel-input" readonly />
+          <button type="button" class="pub-btn pub-btn-ghost" id="done-copy-btn" onclick="copyCancelLink()">
+            <i class="fa fa-copy"></i> Copiar
+          </button>
+        </div>
+        <a id="done-cancel-wa" class="pub-btn pub-btn-outline pub-btn-block" href="#" target="_blank" rel="noopener" style="margin-top:8px">
+          <i class="fab fa-whatsapp"></i> Enviar link pro meu WhatsApp
+        </a>
+      </div>
+
+      <button type="button" class="pub-btn pub-btn-outline pub-btn-block" onclick="restart()" style="margin-top:16px">
         Fazer outro agendamento
       </button>
     </section>
@@ -140,7 +159,7 @@
     </div>
   </div>
 
-  <script src="js/agendar.js?v=3"></script>
+  <script src="js/agendar.js?v=4"></script>
 
   <!-- Botão discreto de instalação do PWA (aparece só quando disponível) -->
   <div id="pwa-install-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;

@@ -1,6 +1,6 @@
 const express = require('express');
 const router  = express.Router();
-const { pool, getOne, getAll } = require('../database/db');
+const { pool, query, getOne, getAll } = require('../database/db');
 const { notifyUser, getUserIdByProfessional } = require('../push');
 
 // Formata YYYY-MM-DD para DD/MM
@@ -188,13 +188,16 @@ router.post('/appointments', async (req, res) => {
         clientId = r.id;
       }
 
+      // Token seguro (UUID) para a cliente cancelar o próprio agendamento
+      const cancelToken = require('crypto').randomUUID();
+
       const result = (await client.query(`
         INSERT INTO appointments
-          (client_id, professional_id, service_id, date, start_time, end_time, price, status, notes)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,'scheduled',$8)
+          (client_id, professional_id, service_id, date, start_time, end_time, price, status, notes, cancel_token)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,'scheduled',$8,$9)
         RETURNING id
       `, [clientId, professional_id, service_id, date, start_time, end_time,
-          svc.price, notes ? String(notes).slice(0, 300) : null])).rows[0];
+          svc.price, notes ? String(notes).slice(0, 300) : null, cancelToken])).rows[0];
 
       await client.query('COMMIT');
 
@@ -214,6 +217,7 @@ router.post('/appointments', async (req, res) => {
       res.status(201).json({
         message: 'Agendamento solicitado com sucesso',
         appointment_id: result.id,
+        cancel_token: cancelToken,
         date, start_time, end_time,
       });
     } catch (err) {
@@ -224,6 +228,126 @@ router.post('/appointments', async (req, res) => {
     }
   } catch (e) {
     console.error('[public/appointments POST]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ── GET /api/public/my-appointments?phone=... ─────────────────────────────────
+// Consulta os agendamentos da cliente pelo telefone. Retorna ativos e histórico.
+// Só expõe o cancel_token dos agendamentos ainda ativos (futuros e não cancelados).
+router.get('/my-appointments', async (req, res) => {
+  try {
+    const phoneDigits = String(req.query.phone || '').replace(/\D/g, '');
+    if (phoneDigits.length < 10 || phoneDigits.length > 11)
+      return res.status(400).json({ error: 'Informe um telefone válido com DDD' });
+
+    const client = await getOne(
+      `SELECT id, name FROM clients WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = $1`,
+      [phoneDigits]
+    );
+    if (!client) return res.json({ client_name: null, appointments: [] });
+
+    const nowRow = await getOne(`SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo') AS now_local`);
+    const now = new Date(nowRow.now_local);
+
+    const rows = await getAll(`
+      SELECT a.id,
+        a.date::text       AS date,
+        a.start_time::text AS start_time,
+        a.end_time::text   AS end_time,
+        a.status, a.cancel_token,
+        s.name AS service_name, s.price,
+        p.name AS professional_name, p.color AS professional_color
+      FROM appointments a
+      JOIN services s      ON a.service_id = s.id
+      JOIN professionals p ON a.professional_id = p.id
+      WHERE a.client_id = $1
+      ORDER BY a.date DESC, a.start_time DESC
+      LIMIT 50
+    `, [client.id]);
+
+    // Marca cada agendamento como ativo (futuro e não cancelado/faltou) ou não.
+    // Só devolve o token dos ativos — evita expor token de agendamentos passados.
+    const appointments = rows.map(a => {
+      const dt = new Date(`${a.date}T${a.start_time}`);
+      const isActive = dt > now && !['cancelled', 'no_show', 'completed'].includes(a.status);
+      return {
+        id: a.id,
+        date: a.date,
+        start_time: a.start_time,
+        end_time: a.end_time,
+        status: a.status,
+        service_name: a.service_name,
+        price: a.price,
+        professional_name: a.professional_name,
+        professional_color: a.professional_color,
+        is_active: isActive,
+        cancel_token: isActive ? a.cancel_token : null,
+      };
+    });
+
+    res.json({ client_name: client.name, appointments });
+  } catch (e) {
+    console.error('[public/my-appointments]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ── POST /api/public/cancel-appointment ───────────────────────────────────────
+// Cancela um agendamento usando o token seguro. Só quem tem o token consegue.
+router.post('/cancel-appointment', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Token de cancelamento ausente' });
+
+    // Busca o agendamento pelo token
+    const appt = await getOne(`
+      SELECT a.id, a.status, a.professional_id,
+        a.date::text AS date, a.start_time::text AS start_time,
+        c.name AS client_name,
+        s.name AS service_name
+      FROM appointments a
+      JOIN clients c  ON a.client_id = c.id
+      JOIN services s ON a.service_id = s.id
+      WHERE a.cancel_token = $1
+    `, [token]);
+
+    if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado ou token inválido' });
+
+    if (['cancelled', 'no_show'].includes(appt.status))
+      return res.status(409).json({ error: 'Este agendamento já foi cancelado' });
+    if (appt.status === 'completed')
+      return res.status(409).json({ error: 'Este atendimento já foi concluído e não pode ser cancelado' });
+
+    // Cancela e libera o horário; marca que foi a própria cliente
+    await query(
+      `UPDATE appointments SET status = 'cancelled', cancelled_by = 'client' WHERE id = $1`,
+      [appt.id]
+    );
+    // Remove eventual receita gerada (não deve haver, mas por segurança)
+    await query(`DELETE FROM transactions WHERE appointment_id = $1 AND type = 'income'`, [appt.id]);
+
+    // Notifica a profissional que o horário foi liberado
+    getUserIdByProfessional(appt.professional_id)
+      .then(userId => {
+        if (userId) {
+          notifyUser(userId, {
+            title: 'Horário liberado 🔓',
+            body:  `${appt.client_name} cancelou o agendamento de ${formatDateBR(appt.date)} às ${String(appt.start_time).slice(0,5)}.`,
+            url:   '/',
+          });
+        }
+      })
+      .catch(() => {});
+
+    res.json({
+      message: 'Agendamento cancelado com sucesso',
+      date: appt.date,
+      start_time: String(appt.start_time).slice(0, 5),
+      service_name: appt.service_name,
+    });
+  } catch (e) {
+    console.error('[public/cancel-appointment]', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

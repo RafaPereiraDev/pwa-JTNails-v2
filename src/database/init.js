@@ -114,6 +114,11 @@ async function initDatabase() {
     -- Preferências de notificação no usuário
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_new_appointment BOOLEAN DEFAULT TRUE;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_vibrate         BOOLEAN DEFAULT TRUE;
+
+    -- Token seguro para a cliente cancelar o próprio agendamento + quem cancelou
+    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancel_token TEXT;
+    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancelled_by TEXT;
+    CREATE INDEX IF NOT EXISTS idx_appointments_cancel_token ON appointments(cancel_token);
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)
