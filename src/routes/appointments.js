@@ -223,6 +223,12 @@ router.post('/', authenticateToken, async (req, res) => {
     if (!client_id || !professional_id || !service_id || !date || !start_time)
       return res.status(400).json({ error: 'Cliente, profissional, serviço, data e horário são obrigatórios' });
 
+    // Valida formato de data e hora (igual ao endpoint público)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+      return res.status(400).json({ error: 'Data inválida. Use o formato YYYY-MM-DD' });
+    if (!/^\d{2}:\d{2}$/.test(String(start_time).slice(0, 5)))
+      return res.status(400).json({ error: 'Horário inválido. Use o formato HH:MM' });
+
     // Não permite agendar em datas passadas (usa fuso de Brasília)
     const nowRow = await getOne(`SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo')::date::text AS today`);
     const today  = nowRow.today;
@@ -276,6 +282,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     if (ehAtendente && professional_id && Number(professional_id) !== Number(req.user.professional_id))
       return res.status(403).json({ error: 'Você não pode transferir agendamentos para outra profissional' });
+
+    // Valida formato de data e hora se fornecidos
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date))
+      return res.status(400).json({ error: 'Data inválida. Use o formato YYYY-MM-DD' });
+    if (start_time && !/^\d{2}:\d{2}$/.test(String(start_time).slice(0, 5)))
+      return res.status(400).json({ error: 'Horário inválido. Use o formato HH:MM' });
 
     const newProfId = professional_id || appt.professional_id;
     const newDate   = date       || appt.date;

@@ -94,32 +94,51 @@ app.use((err, req, res, next) => {
 });
 
 // ── Inicialização assíncrona ──────────────────────────────────────────────────
-const { initDatabase }   = require('./src/database/init');
-const { query: dbQuery } = require('./src/database/db');
+const { initDatabase }        = require('./src/database/init');
+const { query: dbQuery, pool } = require('./src/database/db');
 
 async function cleanOldHistory() {
+  const client = await pool.connect();
   try {
     const now = new Date();
     now.setDate(1);
     now.setMonth(now.getMonth() - 2);
     const cutoff = now.toLocaleDateString('en-CA');
 
-    const txRes = await dbQuery(
+    await client.query('BEGIN');
+
+    // Conta valor financeiro que será removido (para log transparente)
+    const sumRow = (await client.query(
+      `SELECT COUNT(*) AS cnt, COALESCE(SUM(amount),0) AS total
+       FROM transactions
+       WHERE type='income' AND appointment_id IN
+         (SELECT id FROM appointments WHERE date < $1)`,
+      [cutoff]
+    )).rows[0];
+
+    const txRes   = await client.query(
       `DELETE FROM transactions
        WHERE appointment_id IN (SELECT id FROM appointments WHERE date < $1)`,
       [cutoff]
     );
-    const apptRes = await dbQuery(
+    const apptRes = await client.query(
       'DELETE FROM appointments WHERE date < $1',
       [cutoff]
     );
 
-    const deleted = apptRes.rowCount || 0;
-    if (deleted > 0) {
-      console.log(`[limpeza] ${deleted} agendamento(s) e ${txRes.rowCount || 0} transação(ões) removidos (anteriores a ${cutoff})`);
+    await client.query('COMMIT');
+
+    if ((apptRes.rowCount || 0) > 0) {
+      console.log(
+        `[limpeza] ${apptRes.rowCount} agendamento(s), ${txRes.rowCount} transação(ões) ` +
+        `(R$ ${parseFloat(sumRow.total).toFixed(2)} em receitas) removidos (anteriores a ${cutoff})`
+      );
     }
   } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[limpeza] Erro ao limpar histórico:', e.message);
+  } finally {
+    client.release();
   }
 }
 

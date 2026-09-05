@@ -10,10 +10,14 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
     const today = tzRow.today;
     const month = today.slice(0, 7); // YYYY-MM
 
-    const profId = req.user.role === 'master' ? null : req.user.professional_id;
-    // Monta sufixo de filtro por profissional para queries de appointments
-    const profWhere = profId ? ' AND a.professional_id = $2' : '';
-    const pArg      = profId ? [profId] : [];
+    // Admin/professional com professional_id: vê só os próprios dados.
+    // Master e admin SEM professional_id (caso raro): tratados como visão geral,
+    // mas limitados ao próprio escopo — admin sem vínculo não deve ver dados globais.
+    const profId = req.user.role === 'master'
+      ? null
+      : req.user.professional_id || -1; // -1 garante que não retorna nada se admin sem vínculo
+    const profWhere = profId && profId !== -1 ? ' AND a.professional_id = $2' : (profId === -1 ? ' AND 1=0' : '');
+    const pArg      = profId && profId !== -1 ? [profId] : [];
 
     // Stats de hoje
     const todayStats = await getOne(`
@@ -25,7 +29,7 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
     `, [today, ...pArg]);
 
     // Despesas do mês (escopo por profissional ou tudo para master)
-    const txProfWhere = profId ? ' AND professional_id = $2' : '';
+    const txProfWhere = profId && profId !== -1 ? ' AND professional_id = $2' : (profId === -1 ? ' AND 1=0' : '');
     const monthExpenses = await getOne(`
       SELECT COALESCE(SUM(amount),0) AS expenses
       FROM transactions
@@ -60,7 +64,7 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 
     // Faturamento individual (admin/professional) ou vazio (master)
     let profStats = [];
-    if (profId) {
+    if (profId && profId !== -1) {
       profStats = await getAll(`
         SELECT p.id, p.name, p.color,
           COUNT(a.id) AS total,

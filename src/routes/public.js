@@ -1,6 +1,6 @@
 const express = require('express');
 const router  = express.Router();
-const { getOne, getAll } = require('../database/db');
+const { pool, getOne, getAll } = require('../database/db');
 
 const OPEN_HOUR  = 8;
 const CLOSE_MINS = 18 * 60 + 30; // 18:30
@@ -55,12 +55,7 @@ router.get('/available-slots', async (req, res) => {
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
     const duration = svc.duration || 60;
-
-    // Usa o horário atual do PostgreSQL no fuso de Brasília (America/Sao_Paulo)
-    // para evitar que o servidor em UTC mostre horários já passados como disponíveis.
-    const nowRow = await getOne(
-      `SELECT NOW() AT TIME ZONE 'America/Sao_Paulo' AS now_local`
-    );
+    const nowRow   = await getOne(`SELECT NOW() AT TIME ZONE 'America/Sao_Paulo' AS now_local`);
     const nowLocal   = new Date(nowRow.now_local);
     const todayStr   = nowLocal.toLocaleDateString('en-CA');
     const isToday    = date === todayStr;
@@ -97,6 +92,8 @@ router.get('/available-slots', async (req, res) => {
 });
 
 // POST /api/public/appointments
+// CORREÇÃO: toda a operação roda dentro de uma transação com SELECT FOR UPDATE
+// para eliminar a race condition de double-booking.
 router.post('/appointments', async (req, res) => {
   try {
     let { professional_id, service_id, date, start_time, client_name, client_phone, notes } = req.body;
@@ -121,11 +118,10 @@ router.post('/appointments', async (req, res) => {
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
     const startMin = toMinutes(start_time);
-    // Usa horário de Brasília para não bloquear agendamentos futuros quando servidor está em UTC
-    const nowRow2  = await getOne(`SELECT NOW() AT TIME ZONE 'America/Sao_Paulo' AS now_local`);
-    const nowLocal2 = new Date(nowRow2.now_local);
-    const todayStr2 = nowLocal2.toLocaleDateString('en-CA');
-    if (date < todayStr2 || (date === todayStr2 && startMin <= nowLocal2.getHours() * 60 + nowLocal2.getMinutes()))
+    const nowRow   = await getOne(`SELECT NOW() AT TIME ZONE 'America/Sao_Paulo' AS now_local`);
+    const nowLocal  = new Date(nowRow.now_local);
+    const todayStr  = nowLocal.toLocaleDateString('en-CA');
+    if (date < todayStr || (date === todayStr && startMin <= nowLocal.getHours() * 60 + nowLocal.getMinutes()))
       return res.status(400).json({ error: 'Não é possível agendar em um horário que já passou' });
 
     const duration = svc.duration || 60;
@@ -135,52 +131,77 @@ router.post('/appointments', async (req, res) => {
 
     const end_time = toHHMM(endMin);
 
-    const conflictAppt = await getOne(`
-      SELECT id FROM appointments
-      WHERE professional_id = $1 AND date = $2
-        AND status NOT IN ('cancelled','no_show')
-        AND ((start_time < $3 AND end_time > $4) OR (start_time >= $4 AND start_time < $3))
-    `, [professional_id, date, end_time, start_time]);
+    // Tudo a partir daqui dentro de uma transação serializada
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    const conflictBlock = await getOne(`
-      SELECT id FROM blocked_times
-      WHERE professional_id = $1 AND date = $2
-        AND ((start_time < $3 AND end_time > $4) OR (start_time >= $4 AND start_time < $3))
-    `, [professional_id, date, end_time, start_time]);
-
-    if (conflictAppt || conflictBlock)
-      return res.status(409).json({ error: 'Este horário acabou de ser ocupado. Escolha outro, por favor.' });
-
-    // Normaliza telefone: remove tudo que não é dígito para comparar — PostgreSQL usa REGEXP_REPLACE
-    let client = await getOne(
-      `SELECT id FROM clients WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = $1`,
-      [phoneDigits]
-    );
-
-    let clientId;
-    if (client) {
-      clientId = client.id;
-    } else {
-      const r = await getOne(
-        'INSERT INTO clients (name, phone) VALUES ($1,$2) RETURNING id',
-        [client_name, phoneDigits]
+      // LOCK: bloqueia todas as linhas de agendamento da profissional neste dia,
+      // impedindo que duas transações simultâneas passem pela checagem de conflito.
+      await client.query(
+        `SELECT id FROM appointments
+         WHERE professional_id = $1 AND date = $2
+         FOR UPDATE`,
+        [professional_id, date]
       );
-      clientId = r.id;
+
+      // Verifica conflito dentro da transação (após o lock)
+      const conflictAppt = (await client.query(`
+        SELECT id FROM appointments
+        WHERE professional_id = $1 AND date = $2
+          AND status NOT IN ('cancelled','no_show')
+          AND ((start_time < $3 AND end_time > $4) OR (start_time >= $4 AND start_time < $3))
+      `, [professional_id, date, end_time, start_time])).rows[0];
+
+      const conflictBlock = (await client.query(`
+        SELECT id FROM blocked_times
+        WHERE professional_id = $1 AND date = $2
+          AND ((start_time < $3 AND end_time > $4) OR (start_time >= $4 AND start_time < $3))
+      `, [professional_id, date, end_time, start_time])).rows[0];
+
+      if (conflictAppt || conflictBlock) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Este horário acabou de ser ocupado. Escolha outro, por favor.' });
+      }
+
+      // Reaproveita ou cria cliente pelo telefone
+      let clientRow = (await client.query(
+        `SELECT id FROM clients WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = $1`,
+        [phoneDigits]
+      )).rows[0];
+
+      let clientId;
+      if (clientRow) {
+        clientId = clientRow.id;
+      } else {
+        const r = (await client.query(
+          'INSERT INTO clients (name, phone) VALUES ($1,$2) RETURNING id',
+          [client_name, phoneDigits]
+        )).rows[0];
+        clientId = r.id;
+      }
+
+      const result = (await client.query(`
+        INSERT INTO appointments
+          (client_id, professional_id, service_id, date, start_time, end_time, price, status, notes)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,'scheduled',$8)
+        RETURNING id
+      `, [clientId, professional_id, service_id, date, start_time, end_time,
+          svc.price, notes ? String(notes).slice(0, 300) : null])).rows[0];
+
+      await client.query('COMMIT');
+
+      res.status(201).json({
+        message: 'Agendamento solicitado com sucesso',
+        appointment_id: result.id,
+        date, start_time, end_time,
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-
-    const result = await getOne(`
-      INSERT INTO appointments
-        (client_id, professional_id, service_id, date, start_time, end_time, price, status, notes)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,'scheduled',$8)
-      RETURNING id
-    `, [clientId, professional_id, service_id, date, start_time, end_time,
-        svc.price, notes ? String(notes).slice(0, 300) : null]);
-
-    res.status(201).json({
-      message: 'Agendamento solicitado com sucesso',
-      appointment_id: result.id,
-      date, start_time, end_time,
-    });
   } catch (e) {
     console.error('[public/appointments POST]', e.message);
     res.status(500).json({ error: 'Erro interno' });

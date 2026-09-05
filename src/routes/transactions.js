@@ -3,19 +3,20 @@ const router  = express.Router();
 const { query, getOne, getAll } = require('../database/db');
 const { authenticateToken }     = require('../middleware/auth');
 
-// Master não tem acesso ao financeiro
-router.use(authenticateToken, (req, res, next) => {
-  if (req.user.role === 'master')
-    return res.status(403).json({ error: 'O administrador mestre não tem acesso ao financeiro' });
-  next();
-});
+// Acesso ao financeiro:
+// - Master: bloqueado (não vê faturamento de ninguém) — verificado em cada rota
+// - Admin/professional: vê apenas os próprios dados
 
 router.get('/summary', authenticateToken, async (req, res) => {
   try {
     const { start_date, end_date, professional_id } = req.query;
     const isMaster = req.user.role === 'master';
-    const prof     = isMaster ? professional_id : req.user.professional_id;
 
+    // Master não acessa o financeiro
+    if (isMaster)
+      return res.status(403).json({ error: 'O administrador mestre não tem acesso ao financeiro' });
+
+    const prof = req.user.professional_id;
     const s = start_date || '1900-01-01';
     const e = end_date   || '9999-12-31';
 
@@ -60,6 +61,8 @@ router.get('/summary', authenticateToken, async (req, res) => {
 
 router.get('/', authenticateToken, async (req, res) => {
   try {
+    if (req.user.role === 'master')
+      return res.status(403).json({ error: 'O administrador mestre não tem acesso ao financeiro' });
     const { type, professional_id, start_date, end_date, category } = req.query;
     const isMaster = req.user.role === 'master';
     const prof     = isMaster ? professional_id : req.user.professional_id;
@@ -102,6 +105,8 @@ router.get('/', authenticateToken, async (req, res) => {
 
 router.post('/', authenticateToken, async (req, res) => {
   try {
+    if (req.user.role === 'master')
+      return res.status(403).json({ error: 'O administrador mestre não tem acesso ao financeiro' });
     const { type, description, category, amount, payment_method, date, notes } = req.body;
     if (!description || !amount || !date)
       return res.status(400).json({ error: 'Descrição, valor e data são obrigatórios' });
@@ -134,6 +139,8 @@ router.post('/', authenticateToken, async (req, res) => {
 
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
+    if (req.user.role === 'master')
+      return res.status(403).json({ error: 'O administrador mestre não tem acesso ao financeiro' });
     const tx = await getOne('SELECT * FROM transactions WHERE id = $1', [req.params.id]);
     if (!tx) return res.status(404).json({ error: 'Transação não encontrada' });
     if (tx.appointment_id)
@@ -168,6 +175,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
+    if (req.user.role === 'master')
+      return res.status(403).json({ error: 'O administrador mestre não tem acesso ao financeiro' });
     const tx = await getOne('SELECT * FROM transactions WHERE id = $1', [req.params.id]);
     if (!tx) return res.status(404).json({ error: 'Transação não encontrada' });
     if (tx.appointment_id)

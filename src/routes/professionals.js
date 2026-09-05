@@ -134,9 +134,10 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
         [name, phone || null, email, color || '#e91e8c']
       );
       const id = profResult.rows[0].id;
+      const hash = await require('bcryptjs').hash(String(password), 10);
       await client.query(
         'INSERT INTO users (name, email, password, role, professional_id) VALUES ($1,$2,$3,$4,$5)',
-        [name, email, bcrypt.hashSync(String(password), 10), role, id]
+        [name, email, hash, role, id]
       );
       return id;
     });
@@ -153,6 +154,12 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     const { name, phone, email, color, active } = req.body;
     const prof = await getOne('SELECT * FROM professionals WHERE id = $1', [req.params.id]);
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
+
+    // Valida email se foi fornecido (mesmo bug do POST já corrigido)
+    if (email !== undefined && email !== null && email !== '') {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+        return res.status(400).json({ error: 'E-mail inválido' });
+    }
 
     const newName   = name   || prof.name;
     const newEmail  = email  !== undefined ? email  : prof.email;

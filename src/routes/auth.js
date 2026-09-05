@@ -12,8 +12,13 @@ router.post('/login', async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
 
+    // Busca apenas as colunas necessárias — não traz o hash da senha no objeto
     const user = await getOne(`
-      SELECT u.*, p.name as professional_name, p.color as professional_color, p.photo as professional_photo
+      SELECT u.id, u.name, u.email, u.role, u.active, u.professional_id,
+             u.password,
+             p.name  AS professional_name,
+             p.color AS professional_color,
+             p.photo AS professional_photo
       FROM users u
       LEFT JOIN professionals p ON u.professional_id = p.id
       WHERE u.email = $1 AND u.active = TRUE
@@ -74,14 +79,13 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     if (new_password.length < 6)
       return res.status(400).json({ error: 'Nova senha deve ter pelo menos 6 caracteres' });
 
-    const user = await getOne('SELECT * FROM users WHERE id = $1', [req.user.id]);
-    if (!bcrypt.compareSync(current_password, user.password))
+    // Busca só o hash para comparar — não mantém dados desnecessários em memória
+    const userRow = await getOne('SELECT id, password FROM users WHERE id = $1', [req.user.id]);
+    if (!bcrypt.compareSync(current_password, userRow.password))
       return res.status(401).json({ error: 'Senha atual incorreta' });
 
-    await getOne(
-      'UPDATE users SET password = $1 WHERE id = $2',
-      [bcrypt.hashSync(new_password, 10), req.user.id]
-    );
+    const hash = await bcrypt.hash(new_password, 10);
+    await query('UPDATE users SET password = $1 WHERE id = $2', [hash, req.user.id]);
     res.json({ message: 'Senha alterada com sucesso' });
   } catch (e) {
     console.error('[auth/change-password]', e.message);

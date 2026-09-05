@@ -1,9 +1,11 @@
 const express = require('express');
 const router  = express.Router();
-const { query, getOne, getAll } = require('../database/db');
-const { authenticateToken }     = require('../middleware/auth');
+const { query, getOne, getAll }           = require('../database/db');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
-router.get('/', authenticateToken, async (req, res) => {
+// Leitura e escrita de clientes: apenas admin e master
+// Profissionais sem papel admin não devem ver toda a base de clientes do salão
+router.get('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { search } = req.query;
     let sql = `
@@ -26,7 +28,7 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const client = await getOne(`
       SELECT c.id, c.name, c.phone, c.email, c.birth_date, c.notes, c.reliability, c.created_at,
@@ -56,7 +58,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { name, phone, email, birth_date, notes } = req.body;
     if (!name || !phone)
@@ -75,7 +77,7 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { name, phone, email, birth_date, notes } = req.body;
     const c = await getOne('SELECT * FROM clients WHERE id = $1', [req.params.id]);

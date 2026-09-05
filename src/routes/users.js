@@ -33,9 +33,10 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     const existing = await getOne('SELECT id FROM users WHERE email = $1', [email.toLowerCase().trim()]);
     if (existing) return res.status(400).json({ error: 'E-mail já cadastrado' });
 
+    const hash = await bcrypt.hash(password, 10);
     const result = await getOne(
       'INSERT INTO users (name, email, password, role, professional_id) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-      [name.trim(), email.toLowerCase().trim(), bcrypt.hashSync(password, 10), role, professional_id || null]
+      [name.trim(), email.toLowerCase().trim(), hash, role, professional_id || null]
     );
     res.status(201).json({ id: result.id, message: 'Usuário criado com sucesso' });
   } catch (e) {
@@ -82,8 +83,8 @@ router.put('/:id/reset-password', authenticateToken, requireMaster, async (req, 
       return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
     const target = await getOne('SELECT * FROM users WHERE id = $1', [req.params.id]);
     if (!target) return res.status(404).json({ error: 'Usuário não encontrado' });
-    await query('UPDATE users SET password = $1 WHERE id = $2',
-      [bcrypt.hashSync(new_password, 10), req.params.id]);
+    const hash = await bcrypt.hash(new_password, 10);
+    await query('UPDATE users SET password = $1 WHERE id = $2', [hash, req.params.id]);
     res.json({ message: 'Senha redefinida com sucesso' });
   } catch (e) {
     console.error('[users reset-password]', e.message);
