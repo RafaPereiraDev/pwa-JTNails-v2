@@ -371,16 +371,19 @@ function renderWeekView(container, range, appointments, blocked) {
   const cols = days.length;
 
   container.innerHTML = `
-    <div class="card" style="overflow:auto">
+    <div class="card" style="overflow-x:auto">
+     <div class="week-grid-wrap" style="min-width:650px">
       <!-- Day headers -->
       <div style="display:grid;grid-template-columns:56px repeat(${cols},1fr);border-bottom:1px solid var(--gray-200);background:var(--gray-50)">
         <div></div>
         ${days.map(day => {
           const isPast = day < today;
+          const isToday = day === today;
           return `
-          <div style="padding:10px 6px;text-align:center;border-left:1px solid var(--gray-200);${isPast ? 'opacity:0.45' : ''}">
-            <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase">${new Date(day+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'short'})}</div>
-            <div style="font-size:20px;font-weight:700;color:${day === today ? 'var(--primary)' : 'var(--dark)'}">${parseInt(day.split('-')[2])}</div>
+          <div style="padding:10px 6px;text-align:center;border-left:1px solid var(--gray-200);${isToday ? 'background:var(--primary-light)' : ''}${isPast ? 'opacity:0.45' : ''}">
+            <div style="font-size:11px;font-weight:700;color:${isToday ? 'var(--primary)' : 'var(--gray-500)'};text-transform:uppercase">${new Date(day+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'short'})}</div>
+            <div style="font-size:20px;font-weight:700;color:${isToday ? 'var(--primary)' : 'var(--dark)'}">${parseInt(day.split('-')[2])}</div>
+            ${isToday ? `<div style="font-size:9px;font-weight:800;color:var(--primary);letter-spacing:.5px;text-transform:uppercase;margin-top:1px">Hoje</div>` : ''}
           </div>`;
         }).join('')}
       </div>
@@ -425,6 +428,7 @@ function renderWeekView(container, range, appointments, blocked) {
             </div>`;
         }).join('')}
       </div>
+     </div>
     </div>
   `;
 }
