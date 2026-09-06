@@ -182,20 +182,10 @@
       <div class="pub-summary" id="done-summary"></div>
       <p class="pub-subtitle" style="margin-top:16px">Guarde os detalhes. Até breve! 🌸</p>
 
-      <!-- Link seguro de cancelamento -->
-      <div id="done-cancel-box" class="pub-cancel-box" hidden>
-        <div class="pub-cancel-title"><i class="fa fa-shield-halved"></i> Precisar cancelar?</div>
-        <p class="pub-cancel-help">Salve este link seguro. Só quem tem ele pode cancelar este agendamento.</p>
-        <div class="pub-cancel-linkrow">
-          <input type="text" id="done-cancel-link" class="pub-cancel-input" readonly />
-          <button type="button" class="pub-btn pub-btn-ghost" id="done-copy-btn" onclick="copyCancelLink()">
-            <i class="fa fa-copy"></i> Copiar
-          </button>
-        </div>
-        <a id="done-cancel-wa" class="pub-btn pub-btn-outline pub-btn-block" href="#" target="_blank" rel="noopener" style="margin-top:8px">
-          <i class="fab fa-whatsapp"></i> Enviar link pro meu WhatsApp
-        </a>
-      </div>
+      <!-- Orientação: consultar/cancelar pela área da cliente (com senha) -->
+      <a href="/cancelar-agendamento" class="pub-btn pub-btn-ghost pub-btn-block" style="margin-top:8px">
+        <i class="fa fa-calendar-check"></i> Consultar ou cancelar meus agendamentos
+      </a>
 
       <button type="button" class="pub-btn pub-btn-outline pub-btn-block" onclick="restart()" style="margin-top:16px">
         Fazer outro agendamento
@@ -216,7 +206,7 @@
   </div>
 
   <script src="js/password-policy.js?v=1"></script>
-  <script src="js/agendar.js?v=6"></script>
+  <script src="js/agendar.js?v=7"></script>
 
   <!-- Botão discreto de instalação do PWA (aparece só quando disponível) -->
   <div id="pwa-install-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;

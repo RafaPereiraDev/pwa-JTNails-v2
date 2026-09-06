@@ -577,43 +577,11 @@ function renderDone(res) {
       <span class="pub-sum-value">${formatDateBR(s.date)} às ${esc(s.time)}</span>
     </div>
   `;
-  // Link seguro de cancelamento (token vem do backend)
-  // Guarda defensiva: se o HTML estiver em cache antigo, os elementos podem não existir
-  const box = document.getElementById('done-cancel-box');
-  const linkInput = document.getElementById('done-cancel-link');
-  const waLink = document.getElementById('done-cancel-wa');
-  if (box && linkInput && res && res.cancel_token) {
-    const link = `${window.location.origin}/cancelar-agendamento?token=${res.cancel_token}`;
-    linkInput.value = link;
-    if (waLink) {
-      const waText = `Meu link para cancelar o agendamento no Juliana & Tainara Atelier Nails (${formatDateBR(s.date)} às ${s.time}): ${link}`;
-      waLink.href = `https://wa.me/55${s.client.phone}?text=${encodeURIComponent(waText)}`;
-    }
-    box.hidden = false;
-  } else if (box) {
-    box.hidden = true;
-  }
 
   for (let i = 1; i <= 5; i++) document.getElementById('step-' + i).hidden = true;
   document.getElementById('step-done').hidden = false;
   document.querySelectorAll('.pub-step-dot').forEach(d => { d.classList.add('done'); d.classList.remove('active'); });
   window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function copyCancelLink() {
-  const input = document.getElementById('done-cancel-link');
-  const btn = document.getElementById('done-copy-btn');
-  const done = () => {
-    if (!btn) return;
-    const original = btn.innerHTML;
-    btn.innerHTML = '<i class="fa fa-check"></i> Copiado';
-    setTimeout(() => { btn.innerHTML = original; }, 1800);
-  };
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(input.value).then(done).catch(() => { input.select(); document.execCommand('copy'); done(); });
-  } else {
-    input.select(); document.execCommand('copy'); done();
-  }
 }
 
 function restart() {
