@@ -76,14 +76,6 @@ async function loadSettings() {
             <input type="checkbox" id="notif-new" />
           </label>
 
-          <label class="notif-toggle">
-            <span>
-              <strong>Vibrar ao receber notificação</strong>
-              <span class="text-xs text-muted" style="display:block">O celular vibra ao chegar o aviso</span>
-            </span>
-            <input type="checkbox" id="notif-vibrate" />
-          </label>
-
           <div id="notif-status" class="text-xs text-muted" style="margin-top:10px"></div>
         </div>
       </div>
@@ -184,7 +176,6 @@ function urlBase64ToUint8Array(base64String) {
 
 async function initNotificationToggles() {
   const newToggle = document.getElementById('notif-new');
-  const vibToggle = document.getElementById('notif-vibrate');
   const statusEl  = document.getElementById('notif-status');
   if (!newToggle) return;
 
@@ -192,7 +183,6 @@ async function initNotificationToggles() {
   if (!suportado) {
     statusEl.textContent = '⚠️ Este navegador não suporta notificações push.';
     newToggle.disabled = true;
-    vibToggle.disabled = true;
     return;
   }
 
@@ -200,22 +190,9 @@ async function initNotificationToggles() {
   try {
     const prefs = await api.getNotificationPrefs();
     newToggle.checked = prefs.notify_new_appointment;
-    vibToggle.checked = prefs.notify_vibrate;
   } catch (e) {
     newToggle.checked = true;
-    vibToggle.checked = true;
   }
-
-  // Salva preferências (vibração) — só atualiza no banco
-  vibToggle.addEventListener('change', async () => {
-    try {
-      await api.updateNotificationPrefs({
-        notify_new_appointment: newToggle.checked,
-        notify_vibrate: vibToggle.checked,
-      });
-      toast('Preferência salva', 'success');
-    } catch (e) { toast(e.message, 'error'); }
-  });
 
   // Ao ativar notificações: pede permissão + registra a subscription
   newToggle.addEventListener('change', async () => {
@@ -228,7 +205,6 @@ async function initNotificationToggles() {
     try {
       await api.updateNotificationPrefs({
         notify_new_appointment: newToggle.checked,
-        notify_vibrate: vibToggle.checked,
       });
       toast('Preferência salva', 'success');
     } catch (e) { toast(e.message, 'error'); }

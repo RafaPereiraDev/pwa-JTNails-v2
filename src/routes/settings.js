@@ -72,10 +72,10 @@ router.get('/notifications', authenticateToken, async (req, res) => {
 // PUT /api/settings/notifications — salva as preferências
 router.put('/notifications', authenticateToken, async (req, res) => {
   try {
-    const { notify_new_appointment, notify_vibrate } = req.body;
+    const { notify_new_appointment } = req.body;
     await query(
-      'UPDATE users SET notify_new_appointment = $1, notify_vibrate = $2 WHERE id = $3',
-      [!!notify_new_appointment, !!notify_vibrate, req.user.id]
+      'UPDATE users SET notify_new_appointment = $1 WHERE id = $2',
+      [!!notify_new_appointment, req.user.id]
     );
     res.json({ message: 'Preferências salvas' });
   } catch (e) {
