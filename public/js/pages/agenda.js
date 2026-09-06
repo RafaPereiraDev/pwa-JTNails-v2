@@ -122,7 +122,9 @@ async function loadAgendaView() {
       renderDayView(container, agendaDate, appointments, blocked);
 
     } else if (agendaView === 'week') {
-      const range = getWeekRange(agendaDate);
+      // "Próximos 7 dias": a primeira coluna é sempre o dia exibido (agendaDate),
+      // seguido dos 6 dias seguintes. Não usa semana fixa seg–dom.
+      const range = { start: agendaDate, end: addDays(agendaDate, 6) };
       if (label) label.textContent = `${formatDate(range.start)} - ${formatDate(range.end)}`;
       params.start_date = range.start;
       params.end_date = range.end;
