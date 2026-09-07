@@ -1,13 +1,14 @@
 /* ===== TAINARA NAILS — AGENDAMENTO PÚBLICO (MOBILE-FIRST) ===== */
 :root {
-  --primary: #e91e8c;
-  --primary-dark: #c2166f;
-  --primary-light: #fce4f3;
-  --secondary: #9c27b0;
+  /* ===== Paleta Atelier — verde/bege/dourado ===== */
+  --primary: #3B5848;        /* verde elegante — botões/ações */
+  --primary-dark: #2C4033;   /* verde musgo — hover/pressed */
+  --primary-light: #E5E0D8;  /* bege suave — fundos/badges */
+  --secondary: #B29661;      /* dourado queimado — acentos */
   --success: #22c55e;
   --danger: #ef4444;
-  --dark: #1e1b2e;
-  --gray-50: #fafafa;
+  --dark: #212F27;           /* verde grafite */
+  --gray-50: #F8F7F5;        /* fundo geral (creme) */
   --gray-100: #f4f4f5;
   --gray-200: #e4e4e7;
   --gray-300: #d1d5db;
@@ -383,7 +384,7 @@ img { max-width: 100%; display: block; }
   gap: 8px;
   height: 0;
   overflow: hidden;
-  background: #e91e8c;
+  background: #3B5848;
   color: #fff;
   font-size: 13px;
   font-weight: 600;

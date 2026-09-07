@@ -148,7 +148,7 @@ async function openProfessionalModal(id = null) {
       ` : ''}
       <div class="form-group">
         <label>Cor na agenda</label>
-        <input type="color" id="pf-color" value="${prof ? (prof.color || '#e91e8c') : '#e91e8c'}" style="height:40px;padding:4px" />
+        <input type="color" id="pf-color" value="${prof ? (prof.color || '#3B5848') : '#3B5848'}" style="height:40px;padding:4px" />
       </div>
       <div id="pf-error" class="alert alert-error" style="display:none"></div>
       <div class="modal-footer" style="padding:0;margin-top:16px">

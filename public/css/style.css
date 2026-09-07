@@ -1,16 +1,19 @@
 /* ===== VARIABLES ===== */
 :root {
-  --primary: #e91e8c;
-  --primary-dark: #c2166f;
-  --primary-light: #fce4f3;
-  --secondary: #9c27b0;
-  --accent: #ff6eb4;
+  /* ===== Paleta Atelier — verde/bege/dourado ===== */
+  --primary: #3B5848;        /* verde elegante — botões/ações */
+  --primary-dark: #2C4033;   /* verde musgo — hover/pressed */
+  --primary-light: #E5E0D8;  /* bege suave — fundos/badges */
+  --secondary: #B29661;      /* dourado queimado — acentos */
+  --accent: #C5A059;         /* dourado areia — detalhes */
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
   --info: #3b82f6;
-  --dark: #1e1b2e;
-  --gray-50: #fafafa;
+  --dark: #212F27;           /* verde grafite — sidebar */
+  --cream: #F8F7F5;          /* off-white — fundo geral */
+  --beige: #EFECE6;          /* bege claro — cards secundários */
+  --gray-50: #F8F7F5;        /* fundo geral (creme) */
   --gray-100: #f4f4f5;
   --gray-200: #e4e4e7;
   --gray-300: #d1d5db;
@@ -58,7 +61,7 @@ img { max-width: 100%; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1e1b2e 0%, #3d1f5c 40%, #6b0f3a 100%);
+  background: linear-gradient(135deg, #212F27 0%, #2C4033 45%, #3B5848 100%);
   padding: 20px;
 }
 .login-card {
@@ -378,7 +381,8 @@ select { appearance: none; cursor: pointer; }
   margin-bottom: 24px;
 }
 .stat-card {
-  background: var(--white);
+  background: var(--beige);
+  border: 1px solid #e3ddd2;
   border-radius: var(--border-radius);
   padding: 20px;
   box-shadow: var(--shadow);
@@ -396,8 +400,8 @@ select { appearance: none; cursor: pointer; }
   font-size: 22px;
   flex-shrink: 0;
 }
-.stat-icon.pink { background: var(--primary-light); color: var(--primary); }
-.stat-icon.purple { background: #f3e8ff; color: var(--secondary); }
+.stat-icon.pink { background: #dfe6e0; color: var(--primary); }
+.stat-icon.purple { background: #f3ecdd; color: var(--secondary); }
 .stat-icon.green { background: #dcfce7; color: var(--success); }
 .stat-icon.orange { background: #fff7ed; color: var(--warning); }
 .stat-icon.blue { background: #eff6ff; color: var(--info); }
@@ -469,7 +473,7 @@ tbody tr:hover { background: var(--gray-50); }
 .badge-inactive { background: var(--gray-100); color: var(--gray-500); }
 .badge-master { background: #fef9c3; color: #a16207; }
 .badge-admin { background: var(--primary-light); color: var(--primary); }
-.badge-professional { background: #f3e8ff; color: var(--secondary); }
+.badge-professional { background: #f3ecdd; color: #8a6d2f; }
 .badge-income { background: #dcfce7; color: #15803d; }
 .badge-expense { background: #fef2f2; color: var(--danger); }
 
@@ -1210,7 +1214,7 @@ tbody tr:hover { background: var(--gray-50); }
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 .notif-toggle input[type="checkbox"]:checked {
-  background: var(--primary, #e91e8c);
+  background: var(--primary, #3B5848);
 }
 .notif-toggle input[type="checkbox"]:checked::after {
   transform: translateX(20px);

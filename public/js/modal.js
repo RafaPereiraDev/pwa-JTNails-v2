@@ -58,7 +58,7 @@ function renderAppointmentDetail(appt) {
     cancelled:   '#ef4444',
     no_show:     '#6b7280'
   };
-  const color = appt.professional_color || '#e91e8c';
+  const color = appt.professional_color || '#3B5848';
 
   // Agenda compartilhada: qualquer usuária do painel pode agir sobre qualquer agendamento.
   const isOwn = true;

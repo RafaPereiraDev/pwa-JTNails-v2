@@ -131,7 +131,7 @@ async function loadProfessionals() {
     }
     list.innerHTML = allProfessionals.map(p => `
       <div class="pub-card">
-        <div class="pub-card-avatar" style="background:${esc(p.color) || '#e91e8c'}">
+        <div class="pub-card-avatar" style="background:${esc(p.color) || '#3B5848'}">
           ${p.photo ? `<img src="${esc(p.photo)}" alt="${esc(p.name)}" />` : initials(p.name)}
         </div>
         <div class="pub-card-info">
@@ -167,7 +167,7 @@ function openBio(id) {
     av.innerHTML = `<img src="${esc(p.photo)}" alt="${esc(p.name)}" />`;
   } else {
     av.classList.remove('has-photo');
-    av.style.background = p.color || '#e91e8c';
+    av.style.background = p.color || '#3B5848';
     av.innerHTML = initials(p.name);
   }
   document.getElementById('bio-name').textContent = p.name;

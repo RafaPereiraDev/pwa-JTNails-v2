@@ -1,6 +1,14 @@
 // ===== CLIENTS PAGE =====
 let clientSearchTimer = null;
 
+// Recarrega a lista de clientes apenas se estivermos na página de Clientes.
+// (O cadastro pode ser aberto pelo Dashboard, onde não há tabela para recarregar.)
+function reloadClientsListIfVisible() {
+  if (typeof currentPage !== 'undefined' && currentPage === 'clients') {
+    loadClients();
+  }
+}
+
 async function loadClients() {
   const container = document.getElementById('page-clients');
   container.innerHTML = `
@@ -276,7 +284,7 @@ async function openClientModal(id = null) {
         await api.updateClient(id, data);
         toast('Cliente atualizado!', 'success');
         closeModal();
-        loadClients();
+        reloadClientsListIfVisible();
       } else {
         await api.createClient(data);
         toast('Cliente criado!', 'success');
@@ -286,7 +294,7 @@ async function openClientModal(id = null) {
         } else {
           closeModal();
         }
-        loadClients();
+        reloadClientsListIfVisible();
       }
     } catch(err) {
       errEl.textContent = err.message;

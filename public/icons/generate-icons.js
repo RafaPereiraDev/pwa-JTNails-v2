@@ -7,9 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 
-// Ícone SVG inline — fundo rosa com emoji de unhas
+// Ícone SVG inline — fundo verde com emoji de unhas
 const svg = (size) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
-  <rect width="${size}" height="${size}" rx="${Math.round(size * 0.15)}" fill="#e91e8c"/>
+  <rect width="${size}" height="${size}" rx="${Math.round(size * 0.15)}" fill="#3B5848"/>
   <rect x="${size*0.15}" y="${size*0.15}" width="${size*0.7}" height="${size*0.7}" rx="${Math.round(size*0.08)}" fill="rgba(255,255,255,0.15)"/>
   <text x="${size/2}" y="${size*0.68}" font-size="${size*0.52}" text-anchor="middle" font-family="Segoe UI Emoji, Apple Color Emoji, sans-serif" fill="white">💅</text>
 </svg>`;

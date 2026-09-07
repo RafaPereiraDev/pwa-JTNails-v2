@@ -152,12 +152,12 @@ async function loadDashboard() {
       </div>
 
       ${birthdays && birthdays.length > 0 ? `
-      <div class="card mt-4" style="border-left:4px solid #e91e8c">
-        <div class="card-header" style="background:linear-gradient(135deg,#fff0f6,#fff)">
-          <div class="card-title" style="color:#e91e8c">
+      <div class="card mt-4" style="border-left:4px solid #B29661">
+        <div class="card-header" style="background:linear-gradient(135deg,#f3ecdd,#fff)">
+          <div class="card-title" style="color:#8a6d2f">
             <i class="fa fa-cake-candles"></i> Aniversariantes de hoje
           </div>
-          <span class="badge" style="background:#fce4f3;color:#e91e8c">${birthdays.length} cliente${birthdays.length > 1 ? 's' : ''}</span>
+          <span class="badge" style="background:#f3ecdd;color:#8a6d2f">${birthdays.length} cliente${birthdays.length > 1 ? 's' : ''}</span>
         </div>
         <div class="table-wrapper">
           <table>
@@ -178,7 +178,7 @@ async function loadDashboard() {
                   <tr>
                     <td class="font-semibold">${esc(b.name)}</td>
                     <td>${dataFmt}</td>
-                    <td><span class="badge" style="background:${b.days_until === 0 ? '#fce7f3' : '#f0fdf4'};color:${b.days_until === 0 ? '#e91e8c' : '#15803d'}">${label}</span></td>
+                    <td><span class="badge" style="background:${b.days_until === 0 ? '#f3ecdd' : '#f0fdf4'};color:${b.days_until === 0 ? '#8a6d2f' : '#15803d'}">${label}</span></td>
                     <td>${phone ? `<a href="${wpp}" target="_blank" class="btn btn-xs" style="background:#25d366;color:#fff;border:none"><i class="fab fa-whatsapp"></i> Parabenizar</a>` : ''}</td>
                   </tr>`;
               }).join('')}
@@ -195,45 +195,10 @@ async function loadDashboard() {
   checkPendingConfirmations();
 }
 
+// Reutiliza o cadastro completo da página de Clientes (com senha + envio de acesso
+// por WhatsApp). Evita duplicar o formulário e mantém uma única fonte de verdade.
 function openNewClientModal() {
-  openModal('Novo Cliente', `
-    <form id="quick-client-form">
-      <div class="form-group">
-        <label>Nome completo *</label>
-        <input type="text" id="qc-name" required placeholder="Nome da cliente" />
-      </div>
-      <div class="form-group">
-        <label>Telefone *</label>
-        <input type="tel" id="qc-phone" required placeholder="(11) 99999-9999" />
-      </div>
-      <div class="form-group">
-        <label>E-mail</label>
-        <input type="email" id="qc-email" placeholder="email@exemplo.com" />
-      </div>
-      <div id="qc-error" class="alert alert-error" style="display:none"></div>
-      <div class="modal-footer" style="padding:0;margin-top:16px">
-        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar</button>
-      </div>
-    </form>
-  `, 'modal-sm');
-
-  document.getElementById('quick-client-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const errEl = document.getElementById('qc-error');
-    try {
-      await api.createClient({
-        name: document.getElementById('qc-name').value,
-        phone: document.getElementById('qc-phone').value,
-        email: document.getElementById('qc-email').value || null
-      });
-      toast('Cliente criado com sucesso!', 'success');
-      closeModal();
-    } catch (err) {
-      errEl.textContent = err.message;
-      errEl.style.display = '';
-    }
-  });
+  openClientModal();
 }
 
 // ===== MODAL DE CONFIRMAÇÃO DE PENDÊNCIAS =====
@@ -340,7 +305,7 @@ function openPendingModal(pending) {
       }
       #pending-save-btn {
         flex: 1; padding: 14px; border-radius: 10px;
-        background: var(--primary, #e91e8c); color: #fff;
+        background: var(--primary, #3B5848); color: #fff;
         font-size: 15px; font-weight: 700; border: none; cursor: pointer;
         display: flex; align-items: center; justify-content: center; gap: 8px;
         transition: opacity 0.15s;
@@ -365,7 +330,7 @@ function openPendingModal(pending) {
         ${pending.map(a => `
           <div class="pending-item status-completed" id="pitem-${a.id}">
             <div class="pending-item-info">
-              <span class="pending-item-dot" style="background:${a.professional_color || '#e91e8c'}"></span>
+              <span class="pending-item-dot" style="background:${a.professional_color || '#3B5848'}"></span>
               <div>
                 <div class="pending-item-name">${esc(a.client_name)}</div>
                 <div class="pending-item-sub">

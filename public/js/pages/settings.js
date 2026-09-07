@@ -63,7 +63,7 @@ async function loadSettings() {
 
       <div class="card mt-4">
         <div class="card-header">
-          <div class="card-title"><i class="fa fa-bell" style="color:#e91e8c"></i> Notificações</div>
+          <div class="card-title"><i class="fa fa-bell" style="color:#B29661"></i> Notificações</div>
         </div>
         <div class="card-body" style="max-width:480px">
           <p class="text-sm text-muted mb-4">Receba um aviso no celular quando uma cliente fizer um novo agendamento na sua agenda.</p>
@@ -101,12 +101,12 @@ async function loadSettings() {
     <div id="settings-messages" class="tab-panel">
       <div class="card">
         <div class="card-header">
-          <div class="card-title"><i class="fa fa-cake-candles" style="color:#e91e8c"></i> Mensagem de Aniversário</div>
+          <div class="card-title"><i class="fa fa-cake-candles" style="color:#B29661"></i> Mensagem de Aniversário</div>
         </div>
         <div class="card-body" style="max-width:560px">
           <p class="text-sm text-muted mb-4">
             Esta é a mensagem enviada pelo WhatsApp quando você clica em "Parabenizar" no card de aniversários do Dashboard.
-            Use a tag <strong style="color:#e91e8c">{nome}</strong> onde quiser que apareça o primeiro nome da aniversariante.
+            Use a tag <strong style="color:#B29661">{nome}</strong> onde quiser que apareça o primeiro nome da aniversariante.
           </p>
           <form id="birthday-msg-form">
             <div class="form-group">

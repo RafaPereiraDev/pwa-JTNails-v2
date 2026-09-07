@@ -226,7 +226,7 @@ function renderDayView(container, date, appointments, blocked) {
   const apptBlocks = appointments.map(a => {
     const top = getTop(a.start_time);
     const height = getHeight(a.start_time, a.end_time);
-    const color = a.professional_color || '#e91e8c';
+    const color = a.professional_color || '#3B5848';
     return `
       <div class="appt-block" style="background:${color};position:absolute;top:${top}px;height:${height}px;${overlapStyle(dayLayout, a.id)}z-index:5"
         onclick="event.stopPropagation();openEditAppointment(${a.id})">
@@ -402,7 +402,7 @@ function renderWeekView(container, range, appointments, blocked) {
               ${hours.map(() => `<div style="height:${SLOT_HEIGHT}px;border-bottom:1px solid var(--gray-100)"></div>`).join('')}
               ${dayAppts.map(a => `
                 <div class="appt-block"
-                  style="background:${a.professional_color || '#e91e8c'};position:absolute;top:${getTop(a.start_time)}px;height:${getHeight(a.start_time,a.end_time)}px;${overlapStyle(dayLayout, a.id)}font-size:11px;z-index:5"
+                  style="background:${a.professional_color || '#3B5848'};position:absolute;top:${getTop(a.start_time)}px;height:${getHeight(a.start_time,a.end_time)}px;${overlapStyle(dayLayout, a.id)}font-size:11px;z-index:5"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
                   ${canCompleteAppt(a) ? `<button class="appt-done-btn appt-done-btn-sm" onclick="completeAppointmentFromCalendar(${a.id}, event)" title="Marcar como concluído">
                     <i class="fa fa-check"></i>
@@ -468,7 +468,7 @@ function renderMonthView(container, year, month, appointments) {
               ${!isPast ? `onclick="goToDayView('${cell.date}')"` : ''}>
               <div class="day-num">${parseInt(cell.date.split('-')[2])}</div>
               ${shown.map(a => `
-                <div class="month-appt" style="background:${a.professional_color || '#e91e8c'};position:relative;padding-right:20px"
+                <div class="month-appt" style="background:${a.professional_color || '#3B5848'};position:relative;padding-right:20px"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
                   ${formatTime(a.start_time)} ${esc(a.client_name)}
                   ${canModifyAppt(a) ? `<button class="appt-delete-btn appt-delete-btn-month" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
