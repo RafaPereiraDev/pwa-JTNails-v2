@@ -43,10 +43,47 @@ function overlaps(aS, aE, bS, bE) { return aS < bE && aE > bS; }
 router.get('/professionals', async (req, res) => {
   try {
     res.json(await getAll(
-      'SELECT id, name, color, photo, bio FROM professionals WHERE active = TRUE ORDER BY name'
+      `SELECT id, name, color, photo, bio,
+              fidelidade_ativa, fidelidade_porcentagem,
+              aniversario_ativo, aniversario_porcentagem
+       FROM professionals WHERE active = TRUE ORDER BY name`
     ));
   } catch (e) {
     console.error('[public/professionals]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/public/loyalty?phone=...&professional_id=...
+// Saldo de selos do telefone com aquela profissional + config de fidelidade dela.
+router.get('/loyalty', async (req, res) => {
+  try {
+    const phoneDigits = onlyDigits(req.query.phone);
+    const profId = parseInt(req.query.professional_id);
+    if (!validPhone(phoneDigits) || !profId)
+      return res.status(400).json({ error: 'Telefone e profissional são obrigatórios' });
+
+    const prof = await getOne(
+      `SELECT fidelidade_ativa, fidelidade_porcentagem FROM professionals
+       WHERE id = $1 AND active = TRUE`, [profId]
+    );
+    if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
+
+    const row = await getOne(
+      `SELECT stamps FROM loyalty WHERE phone = $1 AND professional_id = $2`,
+      [phoneDigits, profId]
+    );
+    const stamps = row ? row.stamps : 0;
+
+    res.json({
+      fidelidade_ativa:       prof.fidelidade_ativa !== false,
+      fidelidade_porcentagem: Number(prof.fidelidade_porcentagem ?? 10),
+      stamps,
+      goal: 10,
+      ready: stamps >= 10, // atingiu a meta → desconto disponível no próximo agendamento
+    });
+  } catch (e) {
+    console.error('[public/loyalty]', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });
@@ -153,7 +190,10 @@ router.post('/appointments', async (req, res) => {
     const svc = await getOne('SELECT * FROM services WHERE id = $1 AND active = TRUE', [service_id]);
     if (!svc) return res.status(404).json({ error: 'Serviço não encontrado ou inativo' });
 
-    const prof = await getOne('SELECT id FROM professionals WHERE id = $1 AND active = TRUE', [professional_id]);
+    const prof = await getOne(
+      `SELECT id, fidelidade_ativa, fidelidade_porcentagem,
+              aniversario_ativo, aniversario_porcentagem
+       FROM professionals WHERE id = $1 AND active = TRUE`, [professional_id]);
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
     const startMin = toMinutes(start_time);
@@ -240,24 +280,74 @@ router.post('/appointments', async (req, res) => {
         }
       }
 
+      // ── Desconto (validado no servidor, nunca confia no cliente) ──────────
+      // Fidelidade: saldo de selos >= 10 com ESTA profissional e promoção ativa.
+      // Aniversário: cliente faz aniversário hoje (MM-DD) e promoção ativa.
+      // Se ambos se aplicam, usa o de MAIOR desconto. Só um é gravado.
+      const originalPrice = parseFloat(svc.price);
+      let fidelidadeResgatada = false;
+      let cupomAniversario    = false;
+      let descontoPct         = 0;
+
+      // Selos atuais (lock da linha para não resgatar duas vezes em paralelo)
+      const loyaltyRow = (await client.query(
+        `SELECT stamps FROM loyalty WHERE phone = $1 AND professional_id = $2 FOR UPDATE`,
+        [phoneDigits, professional_id]
+      )).rows[0];
+      const stamps = loyaltyRow ? loyaltyRow.stamps : 0;
+      const fidelidadePct = prof.fidelidade_ativa !== false ? Number(prof.fidelidade_porcentagem ?? 10) : 0;
+
+      // Aniversário: confere a data de nascimento da cliente (se houver)
+      let aniversarioPct = 0;
+      if (prof.aniversario_ativo !== false) {
+        const cli = (await client.query('SELECT birth_date FROM clients WHERE id = $1', [clientId])).rows[0];
+        if (cli && cli.birth_date && /^\d{4}-\d{2}-\d{2}/.test(cli.birth_date)) {
+          const bMMDD = cli.birth_date.slice(5, 10);
+          const tMMDD = todayStr.slice(5, 10);
+          if (bMMDD === tMMDD) aniversarioPct = Number(prof.aniversario_porcentagem ?? 10);
+        }
+      }
+
+      const fidelidadeAplicavel = stamps >= 10 && fidelidadePct > 0;
+      if (fidelidadeAplicavel && fidelidadePct >= aniversarioPct) {
+        fidelidadeResgatada = true;
+        descontoPct = fidelidadePct;
+      } else if (aniversarioPct > 0) {
+        cupomAniversario = true;
+        descontoPct = aniversarioPct;
+      } else if (fidelidadeAplicavel) {
+        fidelidadeResgatada = true;
+        descontoPct = fidelidadePct;
+      }
+
+      const descontoValor = Math.round(originalPrice * (descontoPct / 100) * 100) / 100;
+      const finalPrice    = Math.max(0, Math.round((originalPrice - descontoValor) * 100) / 100);
+
       // Token seguro (UUID) para a cliente cancelar o próprio agendamento
       const cancelToken = require('crypto').randomUUID();
 
       const result = (await client.query(`
         INSERT INTO appointments
-          (client_id, professional_id, service_id, date, start_time, end_time, price, status, notes, cancel_token)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,'scheduled',$8,$9)
+          (client_id, professional_id, service_id, date, start_time, end_time, price, status, notes, cancel_token,
+           fidelidade_resgatada, cupom_aniversario, discount_amount, original_price)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,'scheduled',$8,$9,$10,$11,$12,$13)
         RETURNING id
       `, [clientId, professional_id, service_id, date, start_time, end_time,
-          svc.price, notes ? String(notes).slice(0, 300) : null, cancelToken])).rows[0];
+          finalPrice, notes ? String(notes).slice(0, 300) : null, cancelToken,
+          fidelidadeResgatada, cupomAniversario, descontoValor, originalPrice])).rows[0];
 
       await client.query('COMMIT');
 
       // Notifica a profissional dona da agenda (não bloqueia a resposta)
+      const temDesconto = fidelidadeResgatada || cupomAniversario;
       getUserIdByProfessional(professional_id)
         .then(userId => {
           if (userId) {
-            notifyUser(userId, {
+            notifyUser(userId, temDesconto ? {
+              title: '🎁 Novo agendamento COM DESCONTO!',
+              body:  `${client_name} agendou para ${formatDateBR(date)} às ${start_time} — ${fidelidadeResgatada ? 'fidelidade' : 'aniversário'} (-${descontoPct}%).`,
+              url:   '/',
+            } : {
               title: 'Novo Agendamento! 💅',
               body:  `${client_name} agendou para ${formatDateBR(date)} às ${start_time}.`,
               url:   '/',
@@ -271,6 +361,12 @@ router.post('/appointments', async (req, res) => {
         appointment_id: result.id,
         cancel_token: cancelToken,
         date, start_time, end_time,
+        original_price: originalPrice,
+        discount_amount: descontoValor,
+        discount_pct: descontoPct,
+        final_price: finalPrice,
+        fidelidade_resgatada: fidelidadeResgatada,
+        cupom_aniversario: cupomAniversario,
       });
     } catch (err) {
       await client.query('ROLLBACK');

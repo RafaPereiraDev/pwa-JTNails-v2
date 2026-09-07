@@ -14,8 +14,9 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/icon-512x512.png" />
   <link rel="apple-touch-icon" href="/icon-192x192.png" />
   <title>Agendar — Juliana &amp; Tainara Atelier Nails</title>
-  <link rel="stylesheet" href="css/agendar.css?v=7" />
+  <link rel="stylesheet" href="css/agendar.css?v=8" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js" defer></script>
 </head>
 <body>
 
@@ -206,7 +207,7 @@
   </div>
 
   <script src="js/password-policy.js?v=1"></script>
-  <script src="js/agendar.js?v=7"></script>
+  <script src="js/agendar.js?v=8"></script>
 
   <!-- Botão discreto de instalação do PWA (aparece só quando disponível) -->
   <div id="pwa-install-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;
@@ -230,14 +231,51 @@
     </div>
   </div>
 
+  <!-- Modal de aniversário (cliente logada aniversariante) -->
+  <div class="pub-modal-overlay" id="birthday-modal" hidden onclick="closeBirthdayModal(event)">
+    <div class="pub-modal pub-center">
+      <button class="pub-modal-close" onclick="closeBirthdayModal()" aria-label="Fechar"><i class="fa fa-times"></i></button>
+      <div class="pub-onboard-icon" style="background:linear-gradient(135deg,#f59e0b,#e91e8c)"><i class="fa fa-cake-candles"></i></div>
+      <h2 class="pub-modal-name">Feliz aniversário<span id="bday-name"></span>! 🎂</h2>
+      <p class="pub-modal-bio" id="bday-text">Hoje é seu dia! Agende agora e aproveite seu desconto especial de aniversário. 🎉</p>
+      <button class="pub-btn pub-btn-primary pub-btn-block" onclick="closeBirthdayModal()">
+        <i class="fa fa-gift"></i> Quero aproveitar
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal de onboarding / instalação do PWA (primeira visita) -->
+  <div class="pub-modal-overlay" id="pwa-onboarding" hidden onclick="closeOnboarding(event)">
+    <div class="pub-modal pub-center">
+      <button class="pub-modal-close" onclick="closeOnboarding()" aria-label="Fechar"><i class="fa fa-times"></i></button>
+      <div class="pub-onboard-icon"><i class="fa fa-mobile-screen-button"></i></div>
+      <h2 class="pub-modal-name">Adicione o App na sua Tela de Início! 📱</h2>
+      <p class="pub-modal-bio">Acesse seus agendamentos com um toque, direto da tela do seu celular.</p>
+
+      <!-- Android / Desktop -->
+      <div id="onboard-android" hidden>
+        <button class="pub-btn pub-btn-primary pub-btn-block" id="onboard-install-btn">
+          <i class="fa fa-download"></i> Instalar App Agora
+        </button>
+      </div>
+
+      <!-- iOS / Safari -->
+      <div id="onboard-ios" hidden style="text-align:left">
+        <div class="pub-onboard-step"><span class="pub-onboard-num">1</span> Toque em <strong>Compartilhar</strong> <i class="fa fa-arrow-up-from-bracket" style="color:var(--primary)"></i></div>
+        <div class="pub-onboard-step"><span class="pub-onboard-num">2</span> Escolha <strong>Adicionar à Tela de Início</strong> <i class="fa fa-square-plus" style="color:var(--primary)"></i></div>
+      </div>
+
+      <button class="pub-btn pub-btn-ghost pub-btn-block" style="margin-top:10px" onclick="closeOnboarding()">Entendi</button>
+    </div>
+  </div>
+
   <script>
-    // PWA Install prompt
+    // ===== PWA: barra de instalação + modal de onboarding =====
     let _deferredPrompt = null;
 
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       _deferredPrompt = e;
-      // Só mostra se o usuário ainda não dispensou
       if (!localStorage.getItem('pwa-install-dismissed')) {
         const bar = document.getElementById('pwa-install-bar');
         if (bar) bar.style.display = 'flex';
@@ -259,11 +297,53 @@
       localStorage.setItem('pwa-install-dismissed', '1');
     }
 
-    // Esconde a barra se já está instalado
     window.addEventListener('appinstalled', () => {
       const bar = document.getElementById('pwa-install-bar');
       if (bar) bar.style.display = 'none';
     });
+
+    // ---- Modal de onboarding (primeira visita) ----
+    function isIOS() {
+      return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+    function isStandalone() {
+      return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    }
+    function closeOnboarding(ev) {
+      if (ev && ev.target !== document.getElementById('pwa-onboarding')) return;
+      const m = document.getElementById('pwa-onboarding');
+      if (m) m.hidden = true;
+      try { localStorage.setItem('pwa_install_prompt_seen', 'true'); } catch (_) {}
+    }
+    (function initOnboarding() {
+      // Não mostra se já está instalado ou já viu antes
+      if (isStandalone()) return;
+      let seen = false;
+      try { seen = localStorage.getItem('pwa_install_prompt_seen') === 'true'; } catch (_) {}
+      if (seen) return;
+
+      setTimeout(() => {
+        const modal = document.getElementById('pwa-onboarding');
+        if (!modal) return;
+        const androidBox = document.getElementById('onboard-android');
+        const iosBox     = document.getElementById('onboard-ios');
+        if (isIOS()) {
+          iosBox.hidden = false;
+        } else {
+          androidBox.hidden = false;
+          const btn = document.getElementById('onboard-install-btn');
+          btn.onclick = () => {
+            if (_deferredPrompt) {
+              _deferredPrompt.prompt();
+              _deferredPrompt.userChoice.then(() => { _deferredPrompt = null; });
+            }
+            closeOnboarding();
+          };
+        }
+        modal.hidden = false;
+      }, 2000);
+    })();
   </script>
 </body>
 </html>

@@ -68,6 +68,70 @@ router.put('/me/profile', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/professionals/me/promotions — config de fidelidade/aniversário da própria profissional
+router.get('/me/promotions', authenticateToken, async (req, res) => {
+  try {
+    const profId = req.user.professional_id;
+    if (!profId)
+      return res.status(403).json({ error: 'Seu usuário não está vinculado a uma profissional' });
+    const p = await getOne(
+      `SELECT fidelidade_ativa, fidelidade_porcentagem, aniversario_ativo, aniversario_porcentagem
+       FROM professionals WHERE id = $1`, [profId]
+    );
+    if (!p) return res.status(404).json({ error: 'Profissional não encontrada' });
+    res.json({
+      fidelidade_ativa:        p.fidelidade_ativa !== false,
+      fidelidade_porcentagem:  Number(p.fidelidade_porcentagem ?? 10),
+      aniversario_ativo:       p.aniversario_ativo !== false,
+      aniversario_porcentagem: Number(p.aniversario_porcentagem ?? 10),
+    });
+  } catch (e) {
+    console.error('[professionals GET /me/promotions]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// PUT /api/professionals/me/promotions — a própria profissional ajusta suas promoções
+router.put('/me/promotions', authenticateToken, async (req, res) => {
+  try {
+    const profId = req.user.professional_id;
+    if (!profId)
+      return res.status(403).json({ error: 'Seu usuário não está vinculado a uma profissional' });
+
+    const clampPct = (v, def) => {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return def;
+      return Math.min(100, Math.max(0, Math.round(n * 100) / 100));
+    };
+
+    const prof = await getOne(
+      `SELECT fidelidade_ativa, fidelidade_porcentagem, aniversario_ativo, aniversario_porcentagem
+       FROM professionals WHERE id = $1`, [profId]
+    );
+    if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
+
+    const { fidelidade_ativa, fidelidade_porcentagem, aniversario_ativo, aniversario_porcentagem } = req.body;
+
+    await query(
+      `UPDATE professionals SET
+         fidelidade_ativa = $1, fidelidade_porcentagem = $2,
+         aniversario_ativo = $3, aniversario_porcentagem = $4
+       WHERE id = $5`,
+      [
+        fidelidade_ativa !== undefined ? !!fidelidade_ativa : prof.fidelidade_ativa,
+        fidelidade_porcentagem !== undefined ? clampPct(fidelidade_porcentagem, 10) : prof.fidelidade_porcentagem,
+        aniversario_ativo !== undefined ? !!aniversario_ativo : prof.aniversario_ativo,
+        aniversario_porcentagem !== undefined ? clampPct(aniversario_porcentagem, 10) : prof.aniversario_porcentagem,
+        profId,
+      ]
+    );
+    res.json({ message: 'Promoções atualizadas com sucesso' });
+  } catch (e) {
+    console.error('[professionals PUT /me/promotions]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 router.get('/:id/stats', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;

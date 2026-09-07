@@ -9,6 +9,37 @@ function calcEndTime(start, mins) {
   return `${String(Math.floor(t / 60) % 24).padStart(2,'0')}:${String(t % 60).padStart(2,'0')}`;
 }
 
+// Atualiza o cartão de selos ao concluir um atendimento.
+// - Se foi resgate de fidelidade: zera os selos daquele telefone com a profissional.
+// - Atendimento normal (sem resgate): +1 selo.
+// `q` é o executor de query (client.query numa transação, ou o query global).
+async function applyLoyaltyOnComplete(q, appt) {
+  const cli = (await q('SELECT phone FROM clients WHERE id = $1', [appt.client_id])).rows[0];
+  if (!cli || !cli.phone) return;
+  const phone = String(cli.phone).replace(/\D/g, '');
+  if (!phone) return;
+
+  if (appt.fidelidade_resgatada) {
+    await q(
+      `INSERT INTO loyalty (phone, professional_id, stamps, updated_at)
+       VALUES ($1,$2,0,NOW())
+       ON CONFLICT (phone, professional_id)
+       DO UPDATE SET stamps = 0, updated_at = NOW()`,
+      [phone, appt.professional_id]
+    );
+  } else {
+    await q(
+      `INSERT INTO loyalty (phone, professional_id, stamps, updated_at)
+       VALUES ($1,$2,1,NOW())
+       ON CONFLICT (phone, professional_id)
+       DO UPDATE SET stamps = loyalty.stamps + 1, updated_at = NOW()`,
+      [phone, appt.professional_id]
+    );
+  }
+}
+// Wrapper para usar applyLoyaltyOnComplete fora de transação (query global)
+const globalQ = (sql, params) => query(sql, params).then(r => ({ rows: r.rows }));
+
 async function recalculateClientReliability(client_id) {
   const stats = await getOne(`
     SELECT
@@ -57,6 +88,7 @@ const APPT_SELECT = `
     a.start_time::text  AS start_time,
     a.end_time::text    AS end_time,
     a.price, a.status, a.payment_method, a.notes, a.created_at,
+    a.fidelidade_resgatada, a.cupom_aniversario, a.discount_amount, a.original_price,
     c.name  AS client_name,  c.phone AS client_phone,
     s.name  AS service_name, s.duration AS service_duration,
     p.name  AS professional_name, p.color AS professional_color
@@ -129,6 +161,8 @@ router.post('/bulk-confirm', authenticateToken, async (req, res) => {
                appt.price, payment_method || appt.payment_method || null, appt.date]
             );
           }
+          // Atualiza o cartão de selos (zera se resgate; +1 se normal)
+          await applyLoyaltyOnComplete((s, p) => client.query(s, p), appt);
         }
 
         if (['no_show','cancelled'].includes(status) && appt.status === 'completed') {
@@ -338,6 +372,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
         `, [req.params.id, updated.professional_id, `${sv.name} - ${cl.name}`,
             updated.price, updated.payment_method || payment_method || null, updated.date]);
       }
+      // Atualiza o cartão de selos (zera se resgate de fidelidade; +1 se normal)
+      await applyLoyaltyOnComplete(globalQ, appt);
     }
 
     // Remove receita se revertido para cancelado/no_show

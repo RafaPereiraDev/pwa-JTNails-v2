@@ -126,6 +126,8 @@ function renderAppointmentDetail(appt) {
       </span>
     </div>
 
+    ${(typeof discountDetailHtml === 'function') ? discountDetailHtml(appt) : ''}
+
     ${appt.payment_method ? `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:14px">
       <span style="color:#6b7280">Pagamento</span>
