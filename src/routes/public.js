@@ -698,41 +698,31 @@ router.get('/cron/birthday-reminders', async (req, res) => {
     if (!secret || provided !== secret)
       return res.status(403).json({ error: 'Não autorizado' });
 
-    // "Hoje" no fuso de Brasília
-    const nowRow = await getOne(`SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo')::date::text AS today`);
-    const todayStr = nowRow.today;
-
-    // Clientes com data de nascimento cuja JANELA de aniversário inclui hoje.
-    // Busca ampla (mês atual ou anterior, por causa da transferência de fim de semana) e filtra em JS.
-    const rows = await getAll(`
-      SELECT id, name, phone, birth_date::text AS birth_date
-      FROM clients
-      WHERE birth_date IS NOT NULL
-    `);
-
-    const aniversariantes = rows.filter(c => isWithinBirthdayWindow(c.birth_date, todayStr));
-
-    // Notifica cada profissional ativa (dona de agenda) com a lista
-    let notified = 0;
-    if (aniversariantes.length) {
-      const nomes = aniversariantes.map(c => c.name.split(' ')[0]).join(', ');
-      const profs = await getAll('SELECT id FROM professionals WHERE active = TRUE');
-      await Promise.all(profs.map(async (p) => {
-        const userId = await getUserIdByProfessional(p.id);
-        if (userId) {
-          notifyUser(userId, {
-            title: '🎂 Aniversariantes da semana',
-            body:  `Presenteie com desconto: ${nomes}. Avise para agendarem!`,
-            url:   '/',
-          });
-          notified++;
-        }
-      }));
-    }
-
-    res.json({ ok: true, count: aniversariantes.length, notified });
+    const { runBirthdayReminders } = require('../scheduler');
+    const count = await runBirthdayReminders();
+    res.json({ ok: true, count });
   } catch (e) {
     console.error('[public/cron/birthday-reminders]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ── CRON: lembrete no HORÁRIO do atendimento (profissional) ───────────────────
+// Chamar a cada ~5 min por um agendador externo (alternativa ao cron interno).
+// Reusa a mesma lógica do scheduler para evitar duplicação de código.
+// GET /api/public/cron/upcoming-reminders?secret=XYZ  (ou header x-cron-secret)
+router.get('/cron/upcoming-reminders', async (req, res) => {
+  try {
+    const secret = process.env.CRON_SECRET;
+    const provided = req.headers['x-cron-secret'] || req.query.secret;
+    if (!secret || provided !== secret)
+      return res.status(403).json({ error: 'Não autorizado' });
+
+    const { runUpcomingReminders } = require('../scheduler');
+    const count = await runUpcomingReminders();
+    res.json({ ok: true, count });
+  } catch (e) {
+    console.error('[public/cron/upcoming-reminders]', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

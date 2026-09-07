@@ -152,6 +152,10 @@ async function cleanOldHistory() {
     await cleanOldHistory();
     setInterval(cleanOldHistory, 24 * 60 * 60 * 1000);
 
+    // Agendador interno de lembretes (ativa só com ENABLE_INTERNAL_CRON=true).
+    // Ideal no Railway, que não hiberna — dispensa cron externo.
+    require('./src/scheduler').startScheduler();
+
     app.listen(PORT, '0.0.0.0', () => {
       console.log('\n================================================');
       console.log('   Tainara Nails - Sistema de Gestao');

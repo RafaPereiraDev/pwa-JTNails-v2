@@ -153,6 +153,9 @@ async function initDatabase() {
 
     -- Trava de uso único do cupom de aniversário por ano (guarda o ano usado)
     ALTER TABLE clients ADD COLUMN IF NOT EXISTS cupom_aniversario_usado_ano INTEGER;
+
+    -- Marca que o push "atendimento agora" já foi enviado (evita duplicar)
+    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)
