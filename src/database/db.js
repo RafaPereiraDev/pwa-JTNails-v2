@@ -8,15 +8,22 @@
 const { Pool } = require('pg');
 
 // Configuração de SSL do banco.
-// - localhost: sem SSL.
-// - Se DATABASE_CA (certificado CA do provedor) estiver definido: verificação
-//   completa do certificado (rejectUnauthorized: true) — protege contra MITM.
-// - Caso contrário: SSL ativo sem verificação de CA (comportamento herdado do
-//   Render, que não expõe o CA por padrão). Para forçar verificação estrita
-//   sem CA customizado, defina DATABASE_SSL_STRICT=true.
+// - localhost OU host interno do Railway (.railway.internal): sem SSL
+//   (a rede privada do Railway não usa TLS — forçar SSL causa
+//    "Connection terminated unexpectedly").
+// - DATABASE_SSL=off/false: desliga SSL manualmente (override).
+// - Se DATABASE_CA estiver definido: verificação completa do certificado.
+// - Caso contrário: SSL ativo sem verificação de CA (padrão de Render/Neon/etc.).
+//   Para verificação estrita sem CA, defina DATABASE_SSL_STRICT=true.
 function buildSslConfig() {
   const url = process.env.DATABASE_URL || '';
+
+  const sslOpt = String(process.env.DATABASE_SSL || '').toLowerCase();
+  if (sslOpt === 'off' || sslOpt === 'false' || sslOpt === 'disable') return false;
+
   if (url.includes('localhost') || url.includes('127.0.0.1')) return false;
+  // Rede interna do Railway não usa SSL
+  if (url.includes('.railway.internal')) return false;
 
   const ca = process.env.DATABASE_CA;
   if (ca) {
