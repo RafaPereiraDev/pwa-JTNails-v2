@@ -49,8 +49,6 @@ const api = {
   deleteProfessional: (id) => api.delete(`/professionals/${id}`),
   getMyProfile: () => api.get('/professionals/me/profile'),
   updateMyProfile: (data) => api.put('/professionals/me/profile', data),
-  getMyPromotions: () => api.get('/professionals/me/promotions'),
-  updateMyPromotions: (data) => api.put('/professionals/me/promotions', data),
 
   // Clients
   getClients: (search = '') =>

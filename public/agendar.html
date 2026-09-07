@@ -14,9 +14,8 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/icon-512x512.png" />
   <link rel="apple-touch-icon" href="/icon-192x192.png" />
   <title>Agendar — Juliana &amp; Tainara Atelier Nails</title>
-  <link rel="stylesheet" href="css/agendar.css?v=8" />
+  <link rel="stylesheet" href="css/agendar.css?v=9" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js" defer></script>
 </head>
 <body>
 
@@ -207,7 +206,7 @@
   </div>
 
   <script src="js/password-policy.js?v=1"></script>
-  <script src="js/agendar.js?v=9"></script>
+  <script src="js/agendar.js?v=10"></script>
 
   <!-- Botão discreto de instalação do PWA (aparece só quando disponível) -->
   <div id="pwa-install-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;
@@ -227,19 +226,6 @@
       <button onclick="installPWA()" style="padding:8px 16px;border-radius:8px;border:none;
         background:#e91e8c;color:#fff;font-size:13px;font-weight:700;cursor:pointer">
         <i class="fa fa-download"></i> Instalar
-      </button>
-    </div>
-  </div>
-
-  <!-- Modal de aniversário (cliente logada aniversariante) -->
-  <div class="pub-modal-overlay" id="birthday-modal" hidden onclick="closeBirthdayModal(event)">
-    <div class="pub-modal pub-center">
-      <button class="pub-modal-close" onclick="closeBirthdayModal()" aria-label="Fechar"><i class="fa fa-times"></i></button>
-      <div class="pub-onboard-icon" style="background:linear-gradient(135deg,#f59e0b,#e91e8c)"><i class="fa fa-cake-candles"></i></div>
-      <h2 class="pub-modal-name">Feliz aniversário<span id="bday-name"></span>! 🎂</h2>
-      <p class="pub-modal-bio" id="bday-text">Hoje é seu dia! Agende agora e aproveite seu desconto especial de aniversário. 🎉</p>
-      <button class="pub-btn pub-btn-primary pub-btn-block" onclick="closeBirthdayModal()">
-        <i class="fa fa-gift"></i> Quero aproveitar
       </button>
     </div>
   </div>

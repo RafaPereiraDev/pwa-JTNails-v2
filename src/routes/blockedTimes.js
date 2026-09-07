@@ -6,9 +6,8 @@ const { authenticateToken }     = require('../middleware/auth');
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { professional_id, date, start_date, end_date } = req.query;
-    let prof = professional_id;
-    if (req.user.role === 'professional' && req.user.professional_id)
-      prof = req.user.professional_id;
+    // Agenda compartilhada: filtra por profissional só se vier no seletor.
+    const prof = professional_id;
 
     let sql = `
       SELECT bt.id, bt.professional_id, bt.reason, bt.created_at,
@@ -40,10 +39,6 @@ router.post('/', authenticateToken, async (req, res) => {
     if (!professional_id || !date || !start_time || !end_time)
       return res.status(400).json({ error: 'Profissional, data, início e fim são obrigatórios' });
 
-    if (req.user.professional_id && req.user.role !== 'master' &&
-        req.user.professional_id !== parseInt(professional_id))
-      return res.status(403).json({ error: 'Você só pode bloquear o seu próprio horário' });
-
     const conflict = await getOne(`
       SELECT id FROM appointments
       WHERE professional_id = $1 AND date = $2
@@ -68,9 +63,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const b = await getOne('SELECT * FROM blocked_times WHERE id = $1', [req.params.id]);
     if (!b) return res.status(404).json({ error: 'Bloqueio não encontrado' });
-    if (req.user.professional_id && req.user.role !== 'master' &&
-        b.professional_id !== req.user.professional_id)
-      return res.status(403).json({ error: 'Você só pode remover os seus próprios bloqueios' });
 
     await query('DELETE FROM blocked_times WHERE id = $1', [req.params.id]);
     res.json({ message: 'Bloqueio removido com sucesso' });

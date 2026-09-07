@@ -29,8 +29,7 @@ router.post('/login', async (req, res) => {
       SELECT u.id, u.name, u.email, u.role, u.professional_id,
              p.name  AS professional_name,
              p.color AS professional_color,
-             p.photo AS professional_photo,
-             p.configuracoes_iniciais_preenchidas
+             p.photo AS professional_photo
       FROM users u
       LEFT JOIN professionals p ON u.professional_id = p.id
       WHERE u.id = $1
@@ -51,7 +50,6 @@ router.post('/login', async (req, res) => {
         professional_name:  user.professional_name,
         professional_color: user.professional_color,
         professional_photo: user.professional_photo,
-        configuracoes_iniciais_preenchidas: user.configuracoes_iniciais_preenchidas === true,
       }
     });
   } catch (e) {
@@ -67,15 +65,12 @@ router.get('/me', authenticateToken, async (req, res) => {
       SELECT u.id, u.name, u.email, u.role, u.professional_id,
              p.name  as professional_name,
              p.color as professional_color,
-             p.photo as professional_photo,
-             p.configuracoes_iniciais_preenchidas
+             p.photo as professional_photo
       FROM users u LEFT JOIN professionals p ON u.professional_id = p.id
       WHERE u.id = $1
     `, [req.user.id]);
 
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
-    if (user.configuracoes_iniciais_preenchidas != null)
-      user.configuracoes_iniciais_preenchidas = user.configuracoes_iniciais_preenchidas === true;
     res.json(user);
   } catch (e) {
     console.error('[auth/me]', e.message);

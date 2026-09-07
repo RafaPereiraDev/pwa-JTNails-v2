@@ -28,54 +28,6 @@ function setCurrentUser(user) {
   document.querySelectorAll('.hide-master').forEach(el => {
     el.style.display = user.role === 'master' ? 'none' : '';
   });
-
-  // Onboarding de promoções: só profissionais vinculadas que ainda não configuraram
-  updatePromoOnboardingBadge();
-  maybeShowPromoOnboardingModal();
-}
-
-// Precisa configurar as promoções? (profissional vinculada + flag falsa)
-function needsPromoOnboarding() {
-  return !!(currentUser && currentUser.professional_id &&
-            currentUser.configuracoes_iniciais_preenchidas === false);
-}
-
-// Liga/desliga o ponto vermelho piscante no item de menu "Configurações"
-function updatePromoOnboardingBadge() {
-  const link = document.querySelector('.nav-item[data-page="settings"]');
-  if (!link) return;
-  let dot = link.querySelector('.nav-alert-dot');
-  if (needsPromoOnboarding()) {
-    if (!dot) {
-      dot = document.createElement('span');
-      dot.className = 'nav-alert-dot';
-      link.appendChild(dot);
-    }
-  } else if (dot) {
-    dot.remove();
-  }
-}
-
-// Modal de lembrete no primeiro login
-function maybeShowPromoOnboardingModal() {
-  if (!needsPromoOnboarding()) return;
-  if (typeof openModal !== 'function') return;
-  // Pequeno atraso para o app já estar visível
-  setTimeout(() => {
-    if (!needsPromoOnboarding()) return;
-    openModal('⚙️ Configure seus Descontos', `
-      <p style="color:var(--gray-600);line-height:1.6;margin-bottom:16px">
-        Defina as porcentagens de <strong>Fidelidade</strong>, <strong>Aniversário</strong> e
-        <strong>Combo Duplo</strong> para ativar as promoções da sua agenda.
-      </p>
-      <div class="modal-footer" style="padding:0">
-        <button class="btn btn-secondary" onclick="closeModal()">Depois</button>
-        <button class="btn btn-primary" onclick="closeModal(); navigateTo('settings'); setTimeout(()=>switchSettingsTab('profile', document.querySelector('.tab-btn:nth-child(2)')), 100)">
-          <i class="fa fa-gift"></i> Configurar agora
-        </button>
-      </div>
-    `, 'modal-sm');
-  }, 800);
 }
 
 // Mostra a foto de perfil no avatar da sidebar, ou as iniciais se não houver foto.

@@ -231,6 +231,17 @@ async function openClientModal(id = null) {
         <label>Data de nascimento</label>
         <input type="date" id="cf-birth" value="${client ? esc(client.birth_date || '') : ''}" />
       </div>
+      ${!id ? `
+      <div class="form-group">
+        <label>Senha de acesso <span class="text-xs text-muted">(para a cliente entrar no app)</span></label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="cf-password" placeholder="Mínimo 8 caracteres" style="flex:1" />
+          <button type="button" class="btn btn-secondary btn-sm" onclick="gerarSenhaCliente()" title="Gerar senha aleatória">
+            <i class="fa fa-dice"></i> Gerar
+          </button>
+        </div>
+        <div class="text-xs text-muted" style="margin-top:4px">Opcional. Você poderá enviar o acesso por WhatsApp após salvar.</div>
+      </div>` : ''}
       <div class="form-group">
         <label>Observações</label>
         <textarea id="cf-notes">${client ? esc(client.notes || '') : ''}</textarea>
@@ -250,6 +261,8 @@ async function openClientModal(id = null) {
     e.preventDefault();
     const errEl = document.getElementById('cf-error');
     errEl.style.display = 'none';
+    const senhaEl = document.getElementById('cf-password');
+    const senha = senhaEl ? senhaEl.value.trim() : '';
     const data = {
       name: document.getElementById('cf-name').value,
       phone: document.getElementById('cf-phone').value,
@@ -257,17 +270,82 @@ async function openClientModal(id = null) {
       birth_date: document.getElementById('cf-birth').value || null,
       notes: document.getElementById('cf-notes').value || null
     };
+    if (!id && senha) data.password = senha;
     try {
-      if (id) await api.updateClient(id, data);
-      else await api.createClient(data);
-      toast(id ? 'Cliente atualizado!' : 'Cliente criado!', 'success');
-      closeModal();
-      loadClients();
+      if (id) {
+        await api.updateClient(id, data);
+        toast('Cliente atualizado!', 'success');
+        closeModal();
+        loadClients();
+      } else {
+        await api.createClient(data);
+        toast('Cliente criado!', 'success');
+        // Se definiu senha, oferece o envio do acesso por WhatsApp
+        if (senha) {
+          openAccessSentModal(data.name, data.phone, senha);
+        } else {
+          closeModal();
+        }
+        loadClients();
+      }
     } catch(err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
     }
   });
+}
+
+// Gera uma senha aleatória forte (evita caracteres ambíguos) no campo de cadastro
+function gerarSenhaCliente() {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let pwd = '';
+  const arr = (window.crypto && window.crypto.getRandomValues)
+    ? window.crypto.getRandomValues(new Uint32Array(10))
+    : Array.from({ length: 10 }, () => Math.floor(Math.random() * 1e9));
+  for (let i = 0; i < 10; i++) pwd += chars[arr[i] % chars.length];
+  const el = document.getElementById('cf-password');
+  if (el) el.value = pwd;
+}
+
+// Modal de confirmação pós-cadastro com botão "Enviar Acesso via WhatsApp"
+function openAccessSentModal(name, phone, senha) {
+  const APP_URL = 'https://jt-nails.up.railway.app';
+  const primeiroNome = String(name).trim().split(' ')[0];
+  const phoneMasked = maskPhone(phone);
+  const msg =
+`Olá, ${primeiroNome}! ✨
+
+Seu cadastro no salão JT Nails foi realizado com sucesso.
+
+Acesse nosso aplicativo para agendar, consultar ou cancelar seus horários:
+
+🔗 ${APP_URL}
+
+Seus dados de acesso:
+
+📱 WhatsApp: ${phoneMasked}
+
+🔑 Senha: ${senha}
+
+Guarde essa senha para acessar seu painel sempre que precisar!`;
+
+  const link = whatsappLink(phone, msg);
+
+  openModal('Cliente cadastrada! 🎉', `
+    <p style="color:var(--gray-600);line-height:1.6;margin-bottom:14px">
+      Cadastro de <strong>${esc(name)}</strong> concluído. Envie os dados de acesso pelo WhatsApp:
+    </p>
+    <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.6">
+      <div>📱 <strong>WhatsApp:</strong> ${esc(phoneMasked)}</div>
+      <div>🔑 <strong>Senha:</strong> ${esc(senha)}</div>
+    </div>
+    <div class="modal-footer" style="padding:0">
+      <button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
+      <a class="btn btn-primary whatsapp-btn" href="${link}" target="_blank" rel="noopener" onclick="setTimeout(closeModal, 300)" style="background:#25d366;border:none">
+        <i class="fab fa-whatsapp"></i> Enviar Acesso via WhatsApp
+      </a>
+    </div>
+  `, 'modal-sm');
 }
 
 // Calcula a idade a partir de birth_date (YYYY-MM-DD). Retorna null se inválida.

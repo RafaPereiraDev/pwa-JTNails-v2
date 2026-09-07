@@ -155,28 +155,7 @@ const TIME_START = 7;
 const TIME_END = 23;
 const SLOT_HEIGHT = 52; // px per hour
 
-// Um agendamento tem desconto (fidelidade ou aniversário)?
-function apptHasDiscount(a) {
-  return (a.fidelidade_resgatada || a.cupom_aniversario) && Number(a.discount_amount) > 0;
-}
-// Badge 🎁 para blocos/cards com desconto
-function discountBadge() {
-  return `<span class="appt-discount-badge" title="Cliente com desconto"><i class="fa fa-gift"></i></span>`;
-}
-// Detalhamento de valores para o modal/detalhe do agendamento
-function discountDetailHtml(a) {
-  if (!apptHasDiscount(a)) return '';
-  const orig = Number(a.original_price != null ? a.original_price : a.price) + Number(a.discount_amount || 0);
-  const original = a.original_price != null ? Number(a.original_price) : orig;
-  const tipo = a.fidelidade_resgatada ? 'Fidelidade' : 'Aniversário';
-  return `
-    <div class="appt-discount-detail">
-      <div><i class="fa fa-gift"></i> <strong>Cliente com desconto (${esc(tipo)})</strong></div>
-      <div>Valor Original: <span style="text-decoration:line-through">${formatCurrency(original)}</span></div>
-      <div>Desconto: <span style="color:#16a34a">- ${formatCurrency(a.discount_amount)}</span></div>
-      <div><strong>Valor Final a Cobrar: ${formatCurrency(a.price)}</strong></div>
-    </div>`;
-}
+
 
 // Calcula o posicionamento lado a lado para agendamentos que se sobrepõem no tempo.
 // Retorna um Map: id do appt -> { col, cols } (coluna ocupada e total de colunas do grupo).
@@ -249,9 +228,8 @@ function renderDayView(container, date, appointments, blocked) {
     const height = getHeight(a.start_time, a.end_time);
     const color = a.professional_color || '#e91e8c';
     return `
-      <div class="appt-block ${apptHasDiscount(a) ? 'appt-discount' : ''}" style="background:${color};position:absolute;top:${top}px;height:${height}px;${overlapStyle(dayLayout, a.id)}z-index:5"
+      <div class="appt-block" style="background:${color};position:absolute;top:${top}px;height:${height}px;${overlapStyle(dayLayout, a.id)}z-index:5"
         onclick="event.stopPropagation();openEditAppointment(${a.id})">
-        ${apptHasDiscount(a) ? discountBadge() : ''}
         ${canCompleteAppt(a) ? `<button class="appt-done-btn" onclick="completeAppointmentFromCalendar(${a.id}, event)" title="Marcar como concluído">
           <i class="fa fa-check"></i>
         </button>` : ''}
@@ -308,27 +286,17 @@ function renderDayView(container, date, appointments, blocked) {
 }
 
 // Decide se o usuário atual pode CRIAR agendamento na visão atual da agenda.
-// - Master: sempre pode.
-// - Atendente (tem professional_id): só quando o filtro está em "Todas" ou na própria agenda.
-//   Se está olhando a agenda de OUTRA profissional, clicar em horário vazio não faz nada.
+// Agenda compartilhada: qualquer usuária do painel pode criar/editar em qualquer agenda.
 function canCreateInCurrentAgenda() {
-  if (!currentUser) return false;
-  if (currentUser.role === 'master' || !currentUser.professional_id) return true;
-  // é uma atendente: só pode se o filtro não estiver preso em outra profissional
-  if (agendaProfFilter === 'all') return true;
-  return String(agendaProfFilter) === String(currentUser.professional_id);
+  return !!currentUser;
 }
 
-// Uma atendente (com professional_id, exceto master) só pode alterar/excluir agendamento
-// da própria agenda. Nos da colega, o botão de excluir não aparece.
+// Agenda compartilhada: qualquer usuária pode alterar/excluir qualquer agendamento.
 function canModifyAppt(appt) {
-  if (!currentUser) return false;
-  if (currentUser.role === 'master' || !currentUser.professional_id) return true;
-  return appt.professional_id === currentUser.professional_id;
+  return !!currentUser;
 }
 
-// Só faz sentido concluir um atendimento que ainda está ativo (não cancelado/concluído/faltou),
-// e só na própria agenda.
+// Só faz sentido concluir um atendimento que ainda está ativo (não cancelado/concluído/faltou).
 function canCompleteAppt(appt) {
   return canModifyAppt(appt) && ['scheduled','confirmed','in_progress'].includes(appt.status);
 }
@@ -433,10 +401,9 @@ function renderWeekView(container, range, appointments, blocked) {
               onclick="handleWeekColClick(event, '${day}')">
               ${hours.map(() => `<div style="height:${SLOT_HEIGHT}px;border-bottom:1px solid var(--gray-100)"></div>`).join('')}
               ${dayAppts.map(a => `
-                <div class="appt-block ${apptHasDiscount(a) ? 'appt-discount' : ''}"
+                <div class="appt-block"
                   style="background:${a.professional_color || '#e91e8c'};position:absolute;top:${getTop(a.start_time)}px;height:${getHeight(a.start_time,a.end_time)}px;${overlapStyle(dayLayout, a.id)}font-size:11px;z-index:5"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
-                  ${apptHasDiscount(a) ? discountBadge() : ''}
                   ${canCompleteAppt(a) ? `<button class="appt-done-btn appt-done-btn-sm" onclick="completeAppointmentFromCalendar(${a.id}, event)" title="Marcar como concluído">
                     <i class="fa fa-check"></i>
                   </button>` : ''}

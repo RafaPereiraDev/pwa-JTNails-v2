@@ -20,35 +20,6 @@ function signClientToken(c) {
 function onlyDigits(v) { return String(v || '').replace(/\D/g, ''); }
 function validPhone(d) { return d.length >= 10 && d.length <= 11; }
 
-// Verifica se `targetStr` (YYYY-MM-DD) cai dentro da janela do aniversário de birthDate.
-// Regra: vale na semana (segunda a domingo) do aniversário. Se o aniversário cair no
-// sábado/domingo, a validade passa para a SEMANA SEGUINTE inteira (seg-dom).
-// Compara pelo ano de `targetStr` (o aniversário "deste ano").
-function isWithinBirthdayWindow(birthDate, targetStr) {
-  if (!birthDate || !/^\d{4}-\d{2}-\d{2}/.test(birthDate)) return false;
-  const [ , bm, bd] = birthDate.slice(0, 10).split('-').map(Number);
-  const [ty] = targetStr.split('-').map(Number);
-
-  // Data do aniversário no ano do agendamento (meio-dia evita problema de fuso)
-  const bday = new Date(ty, bm - 1, bd, 12, 0, 0);
-  if (isNaN(bday)) return false;
-
-  // Início da semana (segunda) que contém o aniversário
-  const dow = bday.getDay(); // 0=dom ... 6=sab
-  const isWeekend = dow === 0 || dow === 6;
-  const diffToMonday = (dow === 0 ? -6 : 1 - dow); // leva até a segunda daquela semana
-  const monday = new Date(bday); monday.setDate(bday.getDate() + diffToMonday);
-
-  // Fim de semana → empurra a janela para a semana seguinte
-  if (isWeekend) monday.setDate(monday.getDate() + 7);
-
-  const start = new Date(monday); start.setHours(0, 0, 0, 0);
-  const end = new Date(monday); end.setDate(monday.getDate() + 6); end.setHours(23, 59, 59, 999);
-
-  const toStr = (d) => d.toLocaleDateString('en-CA');
-  return targetStr >= toStr(start) && targetStr <= toStr(end);
-}
-
 // Formata YYYY-MM-DD para DD/MM
 function formatDateBR(iso) {
   const [y, m, d] = String(iso).split('-');
@@ -72,47 +43,10 @@ function overlaps(aS, aE, bS, bE) { return aS < bE && aE > bS; }
 router.get('/professionals', async (req, res) => {
   try {
     res.json(await getAll(
-      `SELECT id, name, color, photo, bio,
-              fidelidade_ativa, fidelidade_porcentagem,
-              aniversario_ativo, aniversario_porcentagem
-       FROM professionals WHERE active = TRUE ORDER BY name`
+      'SELECT id, name, color, photo, bio FROM professionals WHERE active = TRUE ORDER BY name'
     ));
   } catch (e) {
     console.error('[public/professionals]', e.message);
-    res.status(500).json({ error: 'Erro interno' });
-  }
-});
-
-// GET /api/public/loyalty?phone=...&professional_id=...
-// Saldo de selos do telefone com aquela profissional + config de fidelidade dela.
-router.get('/loyalty', async (req, res) => {
-  try {
-    const phoneDigits = onlyDigits(req.query.phone);
-    const profId = parseInt(req.query.professional_id);
-    if (!validPhone(phoneDigits) || !profId)
-      return res.status(400).json({ error: 'Telefone e profissional são obrigatórios' });
-
-    const prof = await getOne(
-      `SELECT fidelidade_ativa, fidelidade_porcentagem FROM professionals
-       WHERE id = $1 AND active = TRUE`, [profId]
-    );
-    if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
-
-    const row = await getOne(
-      `SELECT stamps FROM loyalty WHERE phone = $1 AND professional_id = $2`,
-      [phoneDigits, profId]
-    );
-    const stamps = row ? row.stamps : 0;
-
-    res.json({
-      fidelidade_ativa:       prof.fidelidade_ativa !== false,
-      fidelidade_porcentagem: Number(prof.fidelidade_porcentagem ?? 10),
-      stamps,
-      goal: 10,
-      ready: stamps >= 10, // atingiu a meta → desconto disponível no próximo agendamento
-    });
-  } catch (e) {
-    console.error('[public/loyalty]', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });
@@ -219,10 +153,7 @@ router.post('/appointments', async (req, res) => {
     const svc = await getOne('SELECT * FROM services WHERE id = $1 AND active = TRUE', [service_id]);
     if (!svc) return res.status(404).json({ error: 'Serviço não encontrado ou inativo' });
 
-    const prof = await getOne(
-      `SELECT id, fidelidade_ativa, fidelidade_porcentagem,
-              aniversario_ativo, aniversario_porcentagem, desconto_combo_porcentagem
-       FROM professionals WHERE id = $1 AND active = TRUE`, [professional_id]);
+    const prof = await getOne('SELECT id FROM professionals WHERE id = $1 AND active = TRUE', [professional_id]);
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
     const startMin = toMinutes(start_time);
@@ -309,86 +240,24 @@ router.post('/appointments', async (req, res) => {
         }
       }
 
-      // ── Desconto (validado no servidor, nunca confia no cliente) ──────────
-      // Fidelidade: saldo de selos >= 10 com ESTA profissional e promoção ativa.
-      // Aniversário: cliente faz aniversário hoje (MM-DD) e promoção ativa.
-      // Se ambos se aplicam, usa o de MAIOR desconto. Só um é gravado.
-      const originalPrice = parseFloat(svc.price);
-      let fidelidadeResgatada = false;
-      let cupomAniversario    = false;
-      let descontoPct         = 0;
-
-      // Selos atuais (lock da linha para não resgatar duas vezes em paralelo)
-      const loyaltyRow = (await client.query(
-        `SELECT stamps FROM loyalty WHERE phone = $1 AND professional_id = $2 FOR UPDATE`,
-        [phoneDigits, professional_id]
-      )).rows[0];
-      const stamps = loyaltyRow ? loyaltyRow.stamps : 0;
-      const fidelidadePct = prof.fidelidade_ativa !== false ? Number(prof.fidelidade_porcentagem ?? 10) : 0;
-      const fidelidadeAplicavel = stamps >= 10 && fidelidadePct > 0;
-
-      // Aniversário: vale na SEMANA do aniversário (sáb/dom → semana seguinte),
-      // 1 uso por ano (cupom_aniversario_usado_ano). Confere pela data do agendamento.
-      let aniversarioAplicavel = false;
-      const anoAgendamento = parseInt(date.slice(0, 4));
-      if (prof.aniversario_ativo !== false && Number(prof.aniversario_porcentagem ?? 10) > 0) {
-        const cli = (await client.query(
-          'SELECT birth_date, cupom_aniversario_usado_ano FROM clients WHERE id = $1', [clientId]
-        )).rows[0];
-        if (cli && isWithinBirthdayWindow(cli.birth_date, date) &&
-            Number(cli.cupom_aniversario_usado_ano) !== anoAgendamento) {
-          aniversarioAplicavel = true;
-        }
-      }
-
-      // Decisão do desconto:
-      //  - Fidelidade + Aniversário → COMBO (valor fixo, NÃO soma)
-      //  - Só fidelidade → % fidelidade
-      //  - Só aniversário → % aniversário
-      let combo = false;
-      if (fidelidadeAplicavel && aniversarioAplicavel) {
-        combo = true;
-        fidelidadeResgatada = true;
-        cupomAniversario    = true;
-        descontoPct = Number(prof.desconto_combo_porcentagem ?? 20);
-      } else if (fidelidadeAplicavel) {
-        fidelidadeResgatada = true;
-        descontoPct = fidelidadePct;
-      } else if (aniversarioAplicavel) {
-        cupomAniversario = true;
-        descontoPct = Number(prof.aniversario_porcentagem ?? 10);
-      }
-
-      const descontoValor = Math.round(originalPrice * (descontoPct / 100) * 100) / 100;
-      const finalPrice    = Math.max(0, Math.round((originalPrice - descontoValor) * 100) / 100);
-
       // Token seguro (UUID) para a cliente cancelar o próprio agendamento
       const cancelToken = require('crypto').randomUUID();
 
       const result = (await client.query(`
         INSERT INTO appointments
-          (client_id, professional_id, service_id, date, start_time, end_time, price, status, notes, cancel_token,
-           fidelidade_resgatada, cupom_aniversario, discount_amount, original_price)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,'scheduled',$8,$9,$10,$11,$12,$13)
+          (client_id, professional_id, service_id, date, start_time, end_time, price, status, notes, cancel_token)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,'scheduled',$8,$9)
         RETURNING id
       `, [clientId, professional_id, service_id, date, start_time, end_time,
-          finalPrice, notes ? String(notes).slice(0, 300) : null, cancelToken,
-          fidelidadeResgatada, cupomAniversario, descontoValor, originalPrice])).rows[0];
+          parseFloat(svc.price), notes ? String(notes).slice(0, 300) : null, cancelToken])).rows[0];
 
       await client.query('COMMIT');
 
       // Notifica a profissional dona da agenda (não bloqueia a resposta)
-      const temDesconto = fidelidadeResgatada || cupomAniversario;
-      const tipoDesc = combo ? 'PARABÉNS DUPLO (fidelidade + aniversário)'
-                     : fidelidadeResgatada ? 'fidelidade' : 'aniversário';
       getUserIdByProfessional(professional_id)
         .then(userId => {
           if (userId) {
-            notifyUser(userId, temDesconto ? {
-              title: combo ? '🎉 Agendamento com PARABÉNS DUPLO!' : '🎁 Novo agendamento COM DESCONTO!',
-              body:  `${client_name} agendou para ${formatDateBR(date)} às ${start_time} — ${tipoDesc} (-${descontoPct}%).`,
-              url:   '/',
-            } : {
+            notifyUser(userId, {
               title: 'Novo Agendamento! 💅',
               body:  `${client_name} agendou para ${formatDateBR(date)} às ${start_time}.`,
               url:   '/',
@@ -402,13 +271,6 @@ router.post('/appointments', async (req, res) => {
         appointment_id: result.id,
         cancel_token: cancelToken,
         date, start_time, end_time,
-        original_price: originalPrice,
-        discount_amount: descontoValor,
-        discount_pct: descontoPct,
-        final_price: finalPrice,
-        fidelidade_resgatada: fidelidadeResgatada,
-        cupom_aniversario: cupomAniversario,
-        combo,
       });
     } catch (err) {
       await client.query('ROLLBACK');
@@ -681,48 +543,6 @@ router.get('/client/me', authenticateClient, async (req, res) => {
     res.json(c);
   } catch (e) {
     console.error('[public/client/me]', e.message);
-    res.status(500).json({ error: 'Erro interno' });
-  }
-});
-
-// ── CRON: lembrete de aniversariantes da semana ───────────────────────────────
-// Feito para ser chamado por um agendador externo toda segunda de manhã
-// (Render Cron Job ou cron-job.org) com o header/param do CRON_SECRET.
-// Como as CLIENTES não têm inscrição de push, notificamos a PROFISSIONAL com a
-// lista de aniversariantes da semana para ela avisar o presente.
-// GET /api/public/cron/birthday-reminders?secret=XYZ  (ou header x-cron-secret)
-router.get('/cron/birthday-reminders', async (req, res) => {
-  try {
-    const secret = process.env.CRON_SECRET;
-    const provided = req.headers['x-cron-secret'] || req.query.secret;
-    if (!secret || provided !== secret)
-      return res.status(403).json({ error: 'Não autorizado' });
-
-    const { runBirthdayReminders } = require('../scheduler');
-    const count = await runBirthdayReminders();
-    res.json({ ok: true, count });
-  } catch (e) {
-    console.error('[public/cron/birthday-reminders]', e.message);
-    res.status(500).json({ error: 'Erro interno' });
-  }
-});
-
-// ── CRON: lembrete no HORÁRIO do atendimento (profissional) ───────────────────
-// Chamar a cada ~5 min por um agendador externo (alternativa ao cron interno).
-// Reusa a mesma lógica do scheduler para evitar duplicação de código.
-// GET /api/public/cron/upcoming-reminders?secret=XYZ  (ou header x-cron-secret)
-router.get('/cron/upcoming-reminders', async (req, res) => {
-  try {
-    const secret = process.env.CRON_SECRET;
-    const provided = req.headers['x-cron-secret'] || req.query.secret;
-    if (!secret || provided !== secret)
-      return res.status(403).json({ error: 'Não autorizado' });
-
-    const { runUpcomingReminders } = require('../scheduler');
-    const count = await runUpcomingReminders();
-    res.json({ ok: true, count });
-  } catch (e) {
-    console.error('[public/cron/upcoming-reminders]', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

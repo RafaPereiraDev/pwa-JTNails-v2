@@ -9,47 +9,6 @@ function calcEndTime(start, mins) {
   return `${String(Math.floor(t / 60) % 24).padStart(2,'0')}:${String(t % 60).padStart(2,'0')}`;
 }
 
-// Atualiza o cartão de selos ao concluir um atendimento.
-// - Se foi resgate de fidelidade: zera os selos daquele telefone com a profissional.
-// - Atendimento normal (sem resgate): +1 selo.
-// `q` é o executor de query (client.query numa transação, ou o query global).
-async function applyLoyaltyOnComplete(q, appt) {
-  const cli = (await q('SELECT phone FROM clients WHERE id = $1', [appt.client_id])).rows[0];
-  if (!cli || !cli.phone) return;
-  const phone = String(cli.phone).replace(/\D/g, '');
-  if (!phone) return;
-
-  if (appt.fidelidade_resgatada) {
-    await q(
-      `INSERT INTO loyalty (phone, professional_id, stamps, updated_at)
-       VALUES ($1,$2,0,NOW())
-       ON CONFLICT (phone, professional_id)
-       DO UPDATE SET stamps = 0, updated_at = NOW()`,
-      [phone, appt.professional_id]
-    );
-  } else {
-    await q(
-      `INSERT INTO loyalty (phone, professional_id, stamps, updated_at)
-       VALUES ($1,$2,1,NOW())
-       ON CONFLICT (phone, professional_id)
-       DO UPDATE SET stamps = loyalty.stamps + 1, updated_at = NOW()`,
-      [phone, appt.professional_id]
-    );
-  }
-
-  // Trava de uso único do cupom de aniversário no ano (usa o ano da data do agendamento)
-  if (appt.cupom_aniversario) {
-    const ano = parseInt(String(appt.date).slice(0, 4)) ||
-                new Date().getFullYear();
-    await q(
-      `UPDATE clients SET cupom_aniversario_usado_ano = $1 WHERE id = $2`,
-      [ano, appt.client_id]
-    );
-  }
-}
-// Wrapper para usar applyLoyaltyOnComplete fora de transação (query global)
-const globalQ = (sql, params) => query(sql, params).then(r => ({ rows: r.rows }));
-
 async function recalculateClientReliability(client_id) {
   const stats = await getOne(`
     SELECT
@@ -98,7 +57,6 @@ const APPT_SELECT = `
     a.start_time::text  AS start_time,
     a.end_time::text    AS end_time,
     a.price, a.status, a.payment_method, a.notes, a.created_at,
-    a.fidelidade_resgatada, a.cupom_aniversario, a.discount_amount, a.original_price,
     c.name  AS client_name,  c.phone AS client_phone,
     s.name  AS service_name, s.duration AS service_duration,
     p.name  AS professional_name, p.color AS professional_color
@@ -111,16 +69,16 @@ const APPT_SELECT = `
 // GET /api/appointments/pending-confirmation
 router.get('/pending-confirmation', authenticateToken, async (req, res) => {
   try {
-    const ehAtendente = req.user.professional_id && req.user.role !== 'master';
     let sql = APPT_SELECT + `
       WHERE a.status IN ('scheduled','confirmed','in_progress')
         AND (a.date::text || ' ' || a.end_time::text)::timestamp
               < (NOW() AT TIME ZONE 'America/Sao_Paulo')
     `;
     const params = [];
-    if (ehAtendente) {
+    // Agenda compartilhada: opcionalmente filtra por profissional via query.
+    if (req.query.professional_id) {
       sql += ` AND a.professional_id = $1`;
-      params.push(req.user.professional_id);
+      params.push(req.query.professional_id);
     }
     sql += ' ORDER BY a.date, a.start_time';
     res.json(await getAll(sql, params));
@@ -137,8 +95,6 @@ router.post('/bulk-confirm', authenticateToken, async (req, res) => {
     if (!Array.isArray(updates) || updates.length === 0)
       return res.status(400).json({ error: 'Envie um array com as confirmações' });
 
-    const ehAtendente = req.user.professional_id && req.user.role !== 'master';
-
     await withTransaction(async (client) => {
       for (const { id, status, payment_method } of updates) {
         if (!id || !['completed','no_show','cancelled'].includes(status)) continue;
@@ -149,7 +105,6 @@ router.post('/bulk-confirm', authenticateToken, async (req, res) => {
           [id]
         )).rows[0];
         if (!appt) continue;
-        if (ehAtendente && appt.professional_id !== req.user.professional_id) continue;
 
         await client.query(
           'UPDATE appointments SET status=$1, payment_method=COALESCE($2, payment_method) WHERE id=$3',
@@ -171,8 +126,6 @@ router.post('/bulk-confirm', authenticateToken, async (req, res) => {
                appt.price, payment_method || appt.payment_method || null, appt.date]
             );
           }
-          // Atualiza o cartão de selos (zera se resgate; +1 se normal)
-          await applyLoyaltyOnComplete((s, p) => client.query(s, p), appt);
         }
 
         if (['no_show','cancelled'].includes(status) && appt.status === 'completed') {
@@ -199,8 +152,9 @@ router.get('/today', authenticateToken, async (req, res) => {
     const today = tzRow.today;
     let sql = APPT_SELECT + ` WHERE a.date = $1 AND a.status NOT IN ('cancelled','no_show')`;
     const params = [today];
-    if (req.user.professional_id && req.user.role !== 'master') {
-      sql += ` AND a.professional_id = $2`; params.push(req.user.professional_id);
+    // Agenda compartilhada: opcionalmente filtra por profissional via query.
+    if (req.query.professional_id) {
+      sql += ` AND a.professional_id = $2`; params.push(req.query.professional_id);
     }
     sql += ' ORDER BY a.start_time';
     res.json(await getAll(sql, params));
@@ -214,11 +168,9 @@ router.get('/today', authenticateToken, async (req, res) => {
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { date, professional_id, status, start_date, end_date } = req.query;
-    // Isolamento: qualquer usuária vinculada a uma profissional (admin ou
-    // professional) só vê a própria agenda. Só o master vê/filtra livremente.
-    let prof = professional_id;
-    if (req.user.professional_id && req.user.role !== 'master')
-      prof = req.user.professional_id;
+    // Agenda compartilhada: qualquer usuária do painel pode ver a agenda de
+    // qualquer profissional. O filtro `professional_id` vem do seletor da tela.
+    const prof = professional_id;
 
     let sql = APPT_SELECT + ' WHERE 1=1';
     const p = [];
@@ -251,10 +203,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const a = await getOne(APPT_SELECT + ' WHERE a.id = $1', [req.params.id]);
     if (!a) return res.status(404).json({ error: 'Agendamento não encontrado' });
-    // Isolamento: usuária vinculada só acessa agendamentos da própria agenda.
-    if (req.user.professional_id && req.user.role !== 'master' &&
-        a.professional_id !== req.user.professional_id)
-      return res.status(403).json({ error: 'Acesso negado' });
     res.json(a);
   } catch (e) {
     console.error('[appointments GET /:id]', e.message);
@@ -282,10 +230,6 @@ router.post('/', authenticateToken, async (req, res) => {
     const today  = nowRow.today;
     if (date < today)
       return res.status(400).json({ error: 'Não é possível agendar em uma data que já passou' });
-
-    if (req.user.professional_id && req.user.role !== 'master' &&
-        Number(professional_id) !== Number(req.user.professional_id))
-      return res.status(403).json({ error: 'Você só pode criar agendamentos na sua própria agenda' });
 
     const svc = await getOne('SELECT * FROM services WHERE id = $1 AND active = TRUE', [service_id]);
     if (!svc) return res.status(404).json({ error: 'Serviço não encontrado ou inativo' });
@@ -321,15 +265,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
     );
     if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
 
-    const ehAtendente = req.user.professional_id && req.user.role !== 'master';
-    if (ehAtendente && appt.professional_id !== req.user.professional_id)
-      return res.status(403).json({ error: 'Você só pode alterar agendamentos da sua própria agenda' });
-
     const { client_id, professional_id, service_id, date, start_time,
             price, payment_method, notes, status } = req.body;
-
-    if (ehAtendente && professional_id && Number(professional_id) !== Number(req.user.professional_id))
-      return res.status(403).json({ error: 'Você não pode transferir agendamentos para outra profissional' });
 
     // Valida formato de data e hora se fornecidos
     if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date))
@@ -382,8 +319,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
         `, [req.params.id, updated.professional_id, `${sv.name} - ${cl.name}`,
             updated.price, updated.payment_method || payment_method || null, updated.date]);
       }
-      // Atualiza o cartão de selos (zera se resgate de fidelidade; +1 se normal)
-      await applyLoyaltyOnComplete(globalQ, appt);
     }
 
     // Remove receita se revertido para cancelado/no_show
@@ -412,10 +347,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       [req.params.id]
     );
     if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
-
-    if (req.user.professional_id && req.user.role !== 'master' &&
-        appt.professional_id !== req.user.professional_id)
-      return res.status(403).json({ error: 'Você só pode cancelar agendamentos da sua própria agenda' });
 
     await query(`DELETE FROM transactions WHERE appointment_id=$1 AND type='income'`, [req.params.id]);
     await query(`UPDATE appointments SET status='cancelled' WHERE id=$1`, [req.params.id]);

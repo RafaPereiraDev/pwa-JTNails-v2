@@ -327,30 +327,6 @@ function showAuthBlock(which) {
   });
 }
 
-// Modal de aniversário — mostra uma vez por sessão se hoje for o aniversário da cliente logada
-let _birthdayChecked = false;
-function closeBirthdayModal(ev) {
-  const m = document.getElementById('birthday-modal');
-  if (ev && ev.target !== m) return;
-  if (m) m.hidden = true;
-}
-async function maybeShowBirthday() {
-  if (_birthdayChecked || !getClientToken()) return;
-  _birthdayChecked = true;
-  try {
-    const me = await apiGet('/client/me');
-    if (me && me.birth_date && /^\d{4}-\d{2}-\d{2}/.test(me.birth_date)) {
-      const today = new Date();
-      const mmdd = `${String(today.getMonth() + 1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-      if (me.birth_date.slice(5, 10) === mmdd) {
-        const first = (me.name || '').split(' ')[0];
-        document.getElementById('bday-name').textContent = first ? `, ${first}` : '';
-        document.getElementById('birthday-modal').hidden = false;
-      }
-    }
-  } catch (_) { /* silencioso */ }
-}
-
 // Chamado ao entrar no passo 4 — decide o que mostrar
 function initStep4() {
   const sub = document.getElementById('step4-subtitle');
@@ -361,7 +337,6 @@ function initStep4() {
       info && info.name ? `Olá, ${info.name.split(' ')[0]}!` : 'Você está identificada';
     if (sub) sub.textContent = 'Falta pouco! Confirme e revise seu agendamento.';
     showAuthBlock('auth-block');
-    maybeShowBirthday();
   } else {
     if (sub) sub.textContent = 'Falta pouco! Vamos identificar seu acesso.';
     document.getElementById('cli-phone').value = '';
@@ -514,82 +489,14 @@ function proceedAuthed() {
   const info = getClientInfo();
   state.client.name  = (info && info.name) || state.client.name;
   state.client.notes = document.getElementById('cli-notes-authed').value.trim();
-  document.getElementById('summary').innerHTML = `<div class="pub-loading"><i class="fa fa-spinner fa-spin"></i> Calculando...</div>`;
-  goStep(5);
   renderSummary();
-}
-
-// ---------- Cartão de fidelidade (10 selos) ----------
-function loyaltyCardHtml(stamps, goal) {
-  goal = goal || 10;
-  const filled = Math.min(stamps, goal);
-  let dots = '';
-  for (let i = 0; i < goal; i++) {
-    const on = i < filled;
-    dots += `<span class="pub-stamp ${on ? 'on' : ''}">${on ? '<i class="fa fa-star"></i>' : (i + 1)}</span>`;
-  }
-  const ready = stamps >= goal;
-  return `
-    <div class="pub-loyalty ${ready ? 'ready' : ''}">
-      <div class="pub-loyalty-head">
-        <i class="fa fa-crown"></i>
-        ${ready ? 'Cartão completo! Desconto liberado 🎉' : `Cartão fidelidade — ${filled}/${goal} selos`}
-      </div>
-      <div class="pub-stamps">${dots}</div>
-      ${!ready ? `<div class="pub-loyalty-hint">Faltam ${goal - filled} para ganhar desconto no próximo agendamento.</div>` : ''}
-    </div>`;
+  goStep(5);
 }
 
 // ---------- PASSO 5: Resumo e confirmação ----------
-async function renderSummary() {
+function renderSummary() {
   const s = state;
-  const price = Number(s.service.price) || 0;
-  const prof = s.professional || {};
-
-  // Consulta os selos da cliente com esta profissional (preview do desconto).
-  // O desconto REAL é sempre recalculado no backend ao confirmar.
-  let loyalty = null;
-  if (prof.fidelidade_ativa && s.client.phone) {
-    try {
-      loyalty = await apiGet(`/loyalty?phone=${encodeURIComponent(s.client.phone)}&professional_id=${prof.id}`);
-    } catch (_) { loyalty = null; }
-  }
-
-  const fidReady = loyalty && loyalty.ready && Number(loyalty.fidelidade_porcentagem) > 0;
-  const descPct  = fidReady ? Number(loyalty.fidelidade_porcentagem) : 0;
-  const descVal  = Math.round(price * (descPct / 100) * 100) / 100;
-  const finalVal = Math.max(0, Math.round((price - descVal) * 100) / 100);
-  state._discountPreview = fidReady; // usado por submitBooking para disparar confetes
-
-  const totalBlock = fidReady ? `
-    <div class="pub-sum-row">
-      <span class="pub-sum-label">Valor</span>
-      <span class="pub-sum-value" style="text-decoration:line-through;color:var(--gray-400)">${currency(price)}</span>
-    </div>
-    <div class="pub-sum-row">
-      <span class="pub-sum-label"><i class="fa fa-crown" style="color:#d4af37"></i> Desconto fidelidade (${descPct}%)</span>
-      <span class="pub-sum-value" style="color:#16a34a">- ${currency(descVal)}</span>
-    </div>
-    <div class="pub-sum-row pub-sum-total">
-      <span class="pub-sum-label">Total</span>
-      <span class="pub-sum-value">${currency(finalVal)}</span>
-    </div>
-  ` : `
-    <div class="pub-sum-row pub-sum-total">
-      <span class="pub-sum-label">Valor</span>
-      <span class="pub-sum-value">${currency(price)}</span>
-    </div>`;
-
-  const banner = fidReady
-    ? `<div class="pub-reward-banner">🥳 Parabéns! Seu desconto de fidelidade foi liberado para este agendamento!</div>`
-    : '';
-
-  const loyaltyCard = (loyalty && loyalty.fidelidade_ativa)
-    ? loyaltyCardHtml(loyalty.stamps, loyalty.goal) : '';
-
   document.getElementById('summary').innerHTML = `
-    ${banner}
-    ${loyaltyCard}
     <div class="pub-sum-row">
       <span class="pub-sum-label"><i class="fa fa-user"></i> Profissional</span>
       <span class="pub-sum-value">${esc(s.professional.name)}</span>
@@ -614,13 +521,11 @@ async function renderSummary() {
       <span class="pub-sum-label"><i class="fab fa-whatsapp"></i> Contato</span>
       <span class="pub-sum-value">${esc(maskPhone(s.client.phone))}</span>
     </div>
-    ${totalBlock}
+    <div class="pub-sum-row pub-sum-total">
+      <span class="pub-sum-label">Valor</span>
+      <span class="pub-sum-value">${currency(Number(s.service.price) || 0)}</span>
+    </div>
   `;
-
-  // Confetes ao mostrar a tela de revisão com desconto liberado
-  if (fidReady && typeof confetti === 'function') {
-    setTimeout(() => confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }), 250);
-  }
 }
 
 async function submitBooking() {
@@ -658,33 +563,7 @@ async function submitBooking() {
 
 function renderDone(res) {
   const s = state;
-  const temDesconto = res && (res.fidelidade_resgatada || res.cupom_aniversario) && Number(res.discount_amount) > 0;
-  const isCombo = res && res.combo;
-  const tipoLabel = isCombo ? 'Aniversário + Fidelidade'
-                  : res && res.fidelidade_resgatada ? 'Fidelidade'
-                  : 'Aniversário';
-
-  const banner = temDesconto ? (isCombo
-    ? `<div class="pub-reward-banner" style="background:linear-gradient(135deg,#d4af37,#e91e8c)">🎉 PARABÉNS DUPLO! Você ganhou nosso Desconto Especial de Aniversário + Fidelidade (${res.discount_pct}% OFF)!</div>`
-    : `<div class="pub-reward-banner">🥳 Desconto de ${tipoLabel.toLowerCase()} aplicado (${res.discount_pct}% OFF)!</div>`)
-    : '';
-
-  const valorBlock = temDesconto ? `
-    <div class="pub-sum-row">
-      <span class="pub-sum-label"><i class="fa fa-tag"></i> Valor</span>
-      <span class="pub-sum-value" style="text-decoration:line-through;color:var(--gray-400)">${currency(res.original_price)}</span>
-    </div>
-    <div class="pub-sum-row">
-      <span class="pub-sum-label"><i class="fa fa-crown" style="color:#d4af37"></i> Desconto ${esc(tipoLabel)} (${res.discount_pct}%)</span>
-      <span class="pub-sum-value" style="color:#16a34a">- ${currency(res.discount_amount)}</span>
-    </div>
-    <div class="pub-sum-row pub-sum-total">
-      <span class="pub-sum-label">Total</span>
-      <span class="pub-sum-value">${currency(res.final_price)}</span>
-    </div>` : '';
-
   document.getElementById('done-summary').innerHTML = `
-    ${banner}
     <div class="pub-sum-row">
       <span class="pub-sum-label"><i class="fa fa-user"></i> Profissional</span>
       <span class="pub-sum-value">${esc(s.professional.name)}</span>
@@ -697,20 +576,12 @@ function renderDone(res) {
       <span class="pub-sum-label"><i class="fa fa-calendar"></i> Data e hora</span>
       <span class="pub-sum-value">${formatDateBR(s.date)} às ${esc(s.time)}</span>
     </div>
-    ${valorBlock}
   `;
 
   for (let i = 1; i <= 5; i++) document.getElementById('step-' + i).hidden = true;
   document.getElementById('step-done').hidden = false;
   document.querySelectorAll('.pub-step-dot').forEach(d => { d.classList.add('done'); d.classList.remove('active'); });
   window.scrollTo({ top: 0, behavior: 'smooth' });
-
-  // Confetes finais quando confirmou com desconto (mais intenso no combo)
-  if (temDesconto && typeof confetti === 'function') {
-    const n = isCombo ? 180 : 120;
-    setTimeout(() => confetti({ particleCount: n, spread: isCombo ? 90 : 75, origin: { y: 0.6 } }), 300);
-    if (isCombo) setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { y: 0.5 } }), 700);
-  }
 }
 
 function restart() {

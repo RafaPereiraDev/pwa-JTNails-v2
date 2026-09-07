@@ -94,15 +94,6 @@ async function loadSettings() {
         </div>
       </div>
 
-      <div class="card" style="margin-top:16px">
-        <div class="card-header">
-          <div class="card-title"><i class="fa fa-gift" style="color:#e91e8c"></i> Promoções e Fidelidade</div>
-        </div>
-        <div class="card-body" style="max-width:520px">
-          <p class="text-sm text-muted mb-4">Estas promoções valem só para os seus atendimentos. Cada profissional define as próprias.</p>
-          <div id="promotions-form-container"><div class="loading"><i class="fa fa-spinner fa-spin"></i></div></div>
-        </div>
-      </div>
     </div>` : ''}
 
     <!-- Mensagens (admin e master) -->
@@ -276,7 +267,7 @@ function switchSettingsTab(tab, btn) {
   const profilePanel = document.getElementById('settings-profile');
   if (profilePanel) {
     profilePanel.classList.toggle('active', tab === 'profile');
-    if (tab === 'profile') { loadMyProfileForm(); loadPromotionsForm(); }
+    if (tab === 'profile') loadMyProfileForm();
   }
 
   const messagesPanel = document.getElementById('settings-messages');
@@ -435,85 +426,6 @@ function removeProfilePhoto() {
   const avatar = document.getElementById('profile-avatar');
   const name = currentUser ? currentUser.name : '?';
   avatar.innerHTML = `<span>${getInitials(name)}</span>`;
-}
-
-// ===== PROMOÇÕES E FIDELIDADE (por profissional) =====
-async function loadPromotionsForm() {
-  const container = document.getElementById('promotions-form-container');
-  if (!container) return;
-  loading(container);
-
-  let cfg;
-  try {
-    cfg = await api.getMyPromotions();
-  } catch (e) {
-    container.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
-    return;
-  }
-
-  container.innerHTML = `
-    <form id="promotions-form">
-      <label class="notif-toggle">
-        <span>
-          <strong>Cartão fidelidade</strong>
-          <span class="text-xs text-muted" style="display:block">A cada 10 atendimentos, o próximo sai com desconto</span>
-        </span>
-        <input type="checkbox" id="promo-fid-ativa" ${cfg.fidelidade_ativa ? 'checked' : ''} />
-      </label>
-      <div class="form-group" style="margin-top:10px">
-        <label>Desconto da fidelidade (%)</label>
-        <input type="number" id="promo-fid-pct" min="0" max="100" step="1" value="${Number(cfg.fidelidade_porcentagem)}" />
-      </div>
-
-      <hr style="border:none;border-top:1px solid var(--gray-200);margin:16px 0" />
-
-      <label class="notif-toggle">
-        <span>
-          <strong>Desconto de aniversário</strong>
-          <span class="text-xs text-muted" style="display:block">Cliente ganha desconto ao agendar no dia do aniversário</span>
-        </span>
-        <input type="checkbox" id="promo-aniv-ativa" ${cfg.aniversario_ativo ? 'checked' : ''} />
-      </label>
-      <div class="form-group" style="margin-top:10px">
-        <label>Desconto de aniversário (%)</label>
-        <input type="number" id="promo-aniv-pct" min="0" max="100" step="1" value="${Number(cfg.aniversario_porcentagem)}" />
-      </div>
-
-      <hr style="border:none;border-top:1px solid var(--gray-200);margin:16px 0" />
-
-      <div class="form-group">
-        <label><i class="fa fa-star" style="color:#d4af37"></i> Desconto combinado — Fidelidade + Aniversário (%)</label>
-        <input type="number" id="promo-combo-pct" min="0" max="100" step="1" value="${Number(cfg.desconto_combo_porcentagem)}" />
-        <div class="text-xs text-muted" style="margin-top:4px">Aplicado quando a cliente atinge o cartão fidelidade E está na semana do aniversário. É um valor único (não soma).</div>
-      </div>
-
-      <div id="promo-error" class="alert alert-error" style="display:none;margin-top:12px"></div>
-      <button type="submit" class="btn btn-primary" style="margin-top:12px"><i class="fa fa-save"></i> Salvar Promoções</button>
-    </form>
-  `;
-
-  document.getElementById('promotions-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const errEl = document.getElementById('promo-error');
-    errEl.style.display = 'none';
-    const payload = {
-      fidelidade_ativa:        document.getElementById('promo-fid-ativa').checked,
-      fidelidade_porcentagem:  Number(document.getElementById('promo-fid-pct').value) || 0,
-      aniversario_ativo:       document.getElementById('promo-aniv-ativa').checked,
-      aniversario_porcentagem: Number(document.getElementById('promo-aniv-pct').value) || 0,
-      desconto_combo_porcentagem: Number(document.getElementById('promo-combo-pct').value) || 0,
-    };
-    try {
-      await api.updateMyPromotions(payload);
-      toast('Promoções salvas!', 'success');
-      // Onboarding concluído: marca a flag e remove o alerta do menu
-      if (currentUser) currentUser.configuracoes_iniciais_preenchidas = true;
-      updatePromoOnboardingBadge();
-    } catch (err) {
-      errEl.textContent = err.message;
-      errEl.style.display = '';
-    }
-  });
 }
 
 async function loadUsersTable() {

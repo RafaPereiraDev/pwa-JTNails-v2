@@ -4,8 +4,8 @@ Guia para migrar o sistema do Render para o Railway. O código já está pronto 
 migração é basicamente configuração. Tempo estimado: 20–30 minutos.
 
 ## Por que Railway
-- **Não hiberna** (no Render free, o app dormia e quebrava os cron jobs).
-- Com isso, o **agendador interno** (`ENABLE_INTERNAL_CRON=true`) substitui o cron externo.
+- **Não hiberna** (no Render free, o app dormia).
+- Deploy simples via GitHub e PostgreSQL integrado.
 
 ---
 
@@ -29,19 +29,14 @@ CORS_ORIGINS=https://SEU_DOMINIO.up.railway.app
 SEED_ADMIN_PASSWORD=<defina>
 SEED_TAINARA_PASSWORD=<defina>
 SEED_PROF2_PASSWORD=<defina>
-VAPID_PUBLIC_KEY=<mesma do Render>
-VAPID_PRIVATE_KEY=<mesma do Render>
+VAPID_PUBLIC_KEY=<sua chave>
+VAPID_PRIVATE_KEY=<sua chave>
 VAPID_SUBJECT=mailto:contato@seudominio.com
-ENABLE_INTERNAL_CRON=true
 ```
 
 Notas:
-- **Reaproveite as mesmas chaves VAPID** do Render para não invalidar as
-  inscrições de push já existentes das profissionais.
 - `PORT` — NÃO defina manualmente; o Railway injeta sozinho (o código lê `process.env.PORT`).
-- `ENABLE_INTERNAL_CRON=true` liga os lembretes internos (dispensa o cron-job.org).
-- `CRON_SECRET` deixa de ser necessário se usar o cron interno (mas pode manter as
-  rotas externas, se quiser um disparo redundante).
+- As chaves VAPID são usadas pela notificação push de novo agendamento.
 
 ## Passo 3 — SSL do banco
 O código já trata SSL automaticamente (`src/database/db.js`):
@@ -70,14 +65,6 @@ usuário master e as profissionais na primeira inicialização.
 2. Em **Settings → Networking → Generate Domain**, gere o domínio público.
 3. Ajuste `CORS_ORIGINS` para o domínio final.
 4. Acesse `/agendar` (área pública) e `/` (painel) para validar.
-
-## Passo 6 — Conferir os lembretes
-Com `ENABLE_INTERNAL_CRON=true`, os logs devem mostrar:
-```
-[scheduler] Cron interno ativado.
-```
-- Aviso de "atendimento agora": verificado a cada 5 minutos.
-- Aniversariantes da semana: enviado nas segundas, entre 8h e 9h (horário de Brasília).
 
 ## Rollback
 O Render continua funcionando em paralelo até você apontar o tráfego para o Railway.

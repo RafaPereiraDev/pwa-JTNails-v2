@@ -119,15 +119,24 @@ router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
 
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { name, phone, email, birth_date, notes } = req.body;
+    const { name, phone, email, birth_date, notes, password } = req.body;
     if (!name || !phone)
       return res.status(400).json({ error: 'Nome e telefone são obrigatórios' });
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       return res.status(400).json({ error: 'E-mail inválido' });
 
+    // Senha é opcional no cadastro. Se informada, valida a política e guarda o hash
+    // (é a senha de acesso da cliente à área pública de agendamento).
+    let passwordHash = null;
+    if (password) {
+      const pwCheck = validatePassword(String(password), [name, phone]);
+      if (!pwCheck.valid) return res.status(400).json({ error: pwCheck.error });
+      passwordHash = await bcrypt.hash(String(password), 10);
+    }
+
     const result = await getOne(
-      'INSERT INTO clients (name, phone, email, birth_date, notes) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-      [name.trim(), phone.trim(), email || null, birth_date || null, notes || null]
+      'INSERT INTO clients (name, phone, email, birth_date, notes, password) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+      [name.trim(), phone.trim(), email || null, birth_date || null, notes || null, passwordHash]
     );
     res.status(201).json(await getOne('SELECT * FROM clients WHERE id = $1', [result.id]));
   } catch (e) {

@@ -122,40 +122,6 @@ async function initDatabase() {
 
     -- Senha da cliente (bcrypt) para login na área pública de agendamento/consulta
     ALTER TABLE clients ADD COLUMN IF NOT EXISTS password TEXT;
-
-    -- ── MÓDULO DE FIDELIDADE E PROMOÇÕES ─────────────────────────────────────
-    -- Config por profissional: liga/desliga e % de desconto de cada promoção
-    ALTER TABLE professionals ADD COLUMN IF NOT EXISTS fidelidade_ativa       BOOLEAN DEFAULT TRUE;
-    ALTER TABLE professionals ADD COLUMN IF NOT EXISTS fidelidade_porcentagem NUMERIC(5,2) DEFAULT 10;
-    ALTER TABLE professionals ADD COLUMN IF NOT EXISTS aniversario_ativo      BOOLEAN DEFAULT TRUE;
-    ALTER TABLE professionals ADD COLUMN IF NOT EXISTS aniversario_porcentagem NUMERIC(5,2) DEFAULT 10;
-
-    -- Cartão de selos: identificado por telefone (só dígitos) + profissional
-    CREATE TABLE IF NOT EXISTS loyalty (
-      id              SERIAL PRIMARY KEY,
-      phone           TEXT    NOT NULL,
-      professional_id INTEGER NOT NULL REFERENCES professionals(id),
-      stamps          INTEGER NOT NULL DEFAULT 0,
-      updated_at      TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE (phone, professional_id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_loyalty_phone ON loyalty(phone);
-
-    -- Flags de desconto no agendamento + valor original antes do desconto
-    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS fidelidade_resgatada BOOLEAN DEFAULT FALSE;
-    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cupom_aniversario    BOOLEAN DEFAULT FALSE;
-    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS discount_amount      NUMERIC(10,2) DEFAULT 0;
-    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS original_price       NUMERIC(10,2);
-
-    -- Desconto combinado (fidelidade + aniversário no mesmo atendimento) e onboarding
-    ALTER TABLE professionals ADD COLUMN IF NOT EXISTS desconto_combo_porcentagem      NUMERIC(5,2) DEFAULT 20;
-    ALTER TABLE professionals ADD COLUMN IF NOT EXISTS configuracoes_iniciais_preenchidas BOOLEAN DEFAULT FALSE;
-
-    -- Trava de uso único do cupom de aniversário por ano (guarda o ano usado)
-    ALTER TABLE clients ADD COLUMN IF NOT EXISTS cupom_aniversario_usado_ano INTEGER;
-
-    -- Marca que o push "atendimento agora" já foi enviado (evita duplicar)
-    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)

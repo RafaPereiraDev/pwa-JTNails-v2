@@ -60,10 +60,8 @@ function renderAppointmentDetail(appt) {
   };
   const color = appt.professional_color || '#e91e8c';
 
-  // Uma atendente (com professional_id, exceto master) só pode AGIR sobre agendamentos
-  // da própria agenda. Nos da colega, os detalhes aparecem apenas para leitura.
-  const ehAtendente = currentUser && currentUser.professional_id && currentUser.role !== 'master';
-  const isOwn = !ehAtendente || appt.professional_id === currentUser.professional_id;
+  // Agenda compartilhada: qualquer usuária do painel pode agir sobre qualquer agendamento.
+  const isOwn = true;
 
   const canAct = isOwn && !['cancelled','no_show','completed'].includes(appt.status);
 
@@ -126,7 +124,7 @@ function renderAppointmentDetail(appt) {
       </span>
     </div>
 
-    ${(typeof discountDetailHtml === 'function') ? discountDetailHtml(appt) : ''}
+
 
     ${appt.payment_method ? `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:14px">
@@ -269,12 +267,8 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
   window._apptClients = clients;
   const preSelected = appt ? clients.find(c => c.id === appt.client_id) : null;
 
-  // Uma atendente (com professional_id, exceto master) só agenda na própria agenda:
-  // o select de profissional mostra apenas ela mesma. O master vê todas.
-  const ehAtendente = currentUser.professional_id && currentUser.role !== 'master';
-  const profList = ehAtendente
-    ? professionals.filter(p => p.id === currentUser.professional_id)
-    : professionals;
+  // Agenda compartilhada: o select mostra TODAS as profissionais, para qualquer usuária.
+  const profList = professionals;
 
   const profOptions = profList.map(p =>
     `<option value="${p.id}" ${
