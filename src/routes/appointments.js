@@ -36,6 +36,16 @@ async function applyLoyaltyOnComplete(q, appt) {
       [phone, appt.professional_id]
     );
   }
+
+  // Trava de uso único do cupom de aniversário no ano (usa o ano da data do agendamento)
+  if (appt.cupom_aniversario) {
+    const ano = parseInt(String(appt.date).slice(0, 4)) ||
+                new Date().getFullYear();
+    await q(
+      `UPDATE clients SET cupom_aniversario_usado_ano = $1 WHERE id = $2`,
+      [ano, appt.client_id]
+    );
+  }
 }
 // Wrapper para usar applyLoyaltyOnComplete fora de transação (query global)
 const globalQ = (sql, params) => query(sql, params).then(r => ({ rows: r.rows }));

@@ -146,6 +146,13 @@ async function initDatabase() {
     ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cupom_aniversario    BOOLEAN DEFAULT FALSE;
     ALTER TABLE appointments ADD COLUMN IF NOT EXISTS discount_amount      NUMERIC(10,2) DEFAULT 0;
     ALTER TABLE appointments ADD COLUMN IF NOT EXISTS original_price       NUMERIC(10,2);
+
+    -- Desconto combinado (fidelidade + aniversário no mesmo atendimento) e onboarding
+    ALTER TABLE professionals ADD COLUMN IF NOT EXISTS desconto_combo_porcentagem      NUMERIC(5,2) DEFAULT 20;
+    ALTER TABLE professionals ADD COLUMN IF NOT EXISTS configuracoes_iniciais_preenchidas BOOLEAN DEFAULT FALSE;
+
+    -- Trava de uso único do cupom de aniversário por ano (guarda o ano usado)
+    ALTER TABLE clients ADD COLUMN IF NOT EXISTS cupom_aniversario_usado_ano INTEGER;
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)

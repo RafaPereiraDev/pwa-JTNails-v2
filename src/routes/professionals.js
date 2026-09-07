@@ -75,7 +75,8 @@ router.get('/me/promotions', authenticateToken, async (req, res) => {
     if (!profId)
       return res.status(403).json({ error: 'Seu usuário não está vinculado a uma profissional' });
     const p = await getOne(
-      `SELECT fidelidade_ativa, fidelidade_porcentagem, aniversario_ativo, aniversario_porcentagem
+      `SELECT fidelidade_ativa, fidelidade_porcentagem, aniversario_ativo, aniversario_porcentagem,
+              desconto_combo_porcentagem, configuracoes_iniciais_preenchidas
        FROM professionals WHERE id = $1`, [profId]
     );
     if (!p) return res.status(404).json({ error: 'Profissional não encontrada' });
@@ -84,6 +85,8 @@ router.get('/me/promotions', authenticateToken, async (req, res) => {
       fidelidade_porcentagem:  Number(p.fidelidade_porcentagem ?? 10),
       aniversario_ativo:       p.aniversario_ativo !== false,
       aniversario_porcentagem: Number(p.aniversario_porcentagem ?? 10),
+      desconto_combo_porcentagem: Number(p.desconto_combo_porcentagem ?? 20),
+      configuracoes_iniciais_preenchidas: p.configuracoes_iniciais_preenchidas === true,
     });
   } catch (e) {
     console.error('[professionals GET /me/promotions]', e.message);
@@ -105,23 +108,28 @@ router.put('/me/promotions', authenticateToken, async (req, res) => {
     };
 
     const prof = await getOne(
-      `SELECT fidelidade_ativa, fidelidade_porcentagem, aniversario_ativo, aniversario_porcentagem
+      `SELECT fidelidade_ativa, fidelidade_porcentagem, aniversario_ativo, aniversario_porcentagem,
+              desconto_combo_porcentagem
        FROM professionals WHERE id = $1`, [profId]
     );
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
-    const { fidelidade_ativa, fidelidade_porcentagem, aniversario_ativo, aniversario_porcentagem } = req.body;
+    const { fidelidade_ativa, fidelidade_porcentagem, aniversario_ativo,
+            aniversario_porcentagem, desconto_combo_porcentagem } = req.body;
 
     await query(
       `UPDATE professionals SET
          fidelidade_ativa = $1, fidelidade_porcentagem = $2,
-         aniversario_ativo = $3, aniversario_porcentagem = $4
-       WHERE id = $5`,
+         aniversario_ativo = $3, aniversario_porcentagem = $4,
+         desconto_combo_porcentagem = $5,
+         configuracoes_iniciais_preenchidas = TRUE
+       WHERE id = $6`,
       [
         fidelidade_ativa !== undefined ? !!fidelidade_ativa : prof.fidelidade_ativa,
         fidelidade_porcentagem !== undefined ? clampPct(fidelidade_porcentagem, 10) : prof.fidelidade_porcentagem,
         aniversario_ativo !== undefined ? !!aniversario_ativo : prof.aniversario_ativo,
         aniversario_porcentagem !== undefined ? clampPct(aniversario_porcentagem, 10) : prof.aniversario_porcentagem,
+        desconto_combo_porcentagem !== undefined ? clampPct(desconto_combo_porcentagem, 20) : prof.desconto_combo_porcentagem,
         profId,
       ]
     );

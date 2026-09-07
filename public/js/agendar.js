@@ -659,13 +659,23 @@ async function submitBooking() {
 function renderDone(res) {
   const s = state;
   const temDesconto = res && (res.fidelidade_resgatada || res.cupom_aniversario) && Number(res.discount_amount) > 0;
+  const isCombo = res && res.combo;
+  const tipoLabel = isCombo ? 'Aniversário + Fidelidade'
+                  : res && res.fidelidade_resgatada ? 'Fidelidade'
+                  : 'Aniversário';
+
+  const banner = temDesconto ? (isCombo
+    ? `<div class="pub-reward-banner" style="background:linear-gradient(135deg,#d4af37,#e91e8c)">🎉 PARABÉNS DUPLO! Você ganhou nosso Desconto Especial de Aniversário + Fidelidade (${res.discount_pct}% OFF)!</div>`
+    : `<div class="pub-reward-banner">🥳 Desconto de ${tipoLabel.toLowerCase()} aplicado (${res.discount_pct}% OFF)!</div>`)
+    : '';
+
   const valorBlock = temDesconto ? `
     <div class="pub-sum-row">
       <span class="pub-sum-label"><i class="fa fa-tag"></i> Valor</span>
       <span class="pub-sum-value" style="text-decoration:line-through;color:var(--gray-400)">${currency(res.original_price)}</span>
     </div>
     <div class="pub-sum-row">
-      <span class="pub-sum-label"><i class="fa fa-crown" style="color:#d4af37"></i> Desconto (${res.discount_pct}%)</span>
+      <span class="pub-sum-label"><i class="fa fa-crown" style="color:#d4af37"></i> Desconto ${esc(tipoLabel)} (${res.discount_pct}%)</span>
       <span class="pub-sum-value" style="color:#16a34a">- ${currency(res.discount_amount)}</span>
     </div>
     <div class="pub-sum-row pub-sum-total">
@@ -674,6 +684,7 @@ function renderDone(res) {
     </div>` : '';
 
   document.getElementById('done-summary').innerHTML = `
+    ${banner}
     <div class="pub-sum-row">
       <span class="pub-sum-label"><i class="fa fa-user"></i> Profissional</span>
       <span class="pub-sum-value">${esc(s.professional.name)}</span>
@@ -694,9 +705,11 @@ function renderDone(res) {
   document.querySelectorAll('.pub-step-dot').forEach(d => { d.classList.add('done'); d.classList.remove('active'); });
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  // Confetes finais quando confirmou com desconto
+  // Confetes finais quando confirmou com desconto (mais intenso no combo)
   if (temDesconto && typeof confetti === 'function') {
-    setTimeout(() => confetti({ particleCount: 120, spread: 75, origin: { y: 0.6 } }), 300);
+    const n = isCombo ? 180 : 120;
+    setTimeout(() => confetti({ particleCount: n, spread: isCombo ? 90 : 75, origin: { y: 0.6 } }), 300);
+    if (isCombo) setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { y: 0.5 } }), 700);
   }
 }
 

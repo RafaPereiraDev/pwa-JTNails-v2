@@ -270,6 +270,18 @@ select { appearance: none; cursor: pointer; }
   color: var(--white);
 }
 .nav-item i { width: 18px; text-align: center; font-size: 15px; }
+.nav-item { position: relative; }
+.nav-alert-dot {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  width: 9px; height: 9px; border-radius: 50%; background: #ef4444;
+  box-shadow: 0 0 0 rgba(239,68,68,0.7);
+  animation: navDotPulse 1.2s infinite;
+}
+@keyframes navDotPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.7); }
+  70%  { box-shadow: 0 0 0 7px rgba(239,68,68,0); }
+  100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+}
 .sidebar-footer {
   padding: 16px;
   border-top: 1px solid rgba(255,255,255,0.08);
