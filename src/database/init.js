@@ -199,7 +199,7 @@ async function initDatabase() {
     );
     const p2 = await client.query(
       'INSERT INTO professionals (name, phone, email, color) VALUES ($1,$2,$3,$4) RETURNING id',
-      ['Profissional 2', '(11) 99999-0002', 'prof2@nails.com', '#9c27b0']
+      ['Juliana', '(11) 99999-0002', 'juliana@nails.com', '#9c27b0']
     );
     const profId1 = p1.rows[0].id;
     const profId2 = p2.rows[0].id;
@@ -217,7 +217,7 @@ async function initDatabase() {
     );
     await client.query(
       'INSERT INTO users (name, email, password, role, professional_id) VALUES ($1,$2,$3,$4,$5)',
-      ['Profissional 2', 'prof2@nails.com', bcrypt.hashSync(finalProf2Pass, 10), 'admin', profId2]
+      ['Juliana', 'juliana@nails.com', bcrypt.hashSync(finalProf2Pass, 10), 'admin', profId2]
     );
 
     // Serviços padrão
@@ -243,7 +243,7 @@ async function initDatabase() {
     console.log('  ANOTE AGORA — estas senhas não serão exibidas novamente.');
     console.log('  Master       -> admin@nails.com     / ' + finalAdminPass);
     console.log('  Tainara      -> tainara@nails.com   / ' + finalTainaraPass);
-    console.log('  Profissional -> prof2@nails.com     / ' + finalProf2Pass);
+    console.log('  Juliana      -> juliana@nails.com   / ' + finalProf2Pass);
     console.log('  Troque essas senhas no primeiro acesso.');
     console.log('============================================================\n');
   } else {
