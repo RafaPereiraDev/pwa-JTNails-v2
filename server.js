@@ -146,9 +146,41 @@ async function cleanOldHistory() {
   }
 }
 
+// Diagnóstico da conexão: mostra se a DATABASE_URL chegou e qual host será usado,
+// sem expor a senha nos logs.
+function logDbTarget() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    console.error('[DB] ATENÇÃO: DATABASE_URL não está definida! Configure a variável no Railway (referência ${{Postgres.DATABASE_URL}}).');
+    return;
+  }
+  try {
+    const u = new URL(url);
+    console.log(`[DB] Conectando em host=${u.hostname} port=${u.port || '5432'} db=${u.pathname.slice(1)} ssl=${require('./src/database/db').sslInfo || 'auto'}`);
+  } catch (_) {
+    console.log('[DB] DATABASE_URL definida (formato não reconhecido para log).');
+  }
+}
+
+// Tenta iniciar o banco com algumas retentativas — o Postgres do Railway pode
+// ainda estar aceitando conexões quando o app sobe.
+async function initWithRetry(attempts = 5, delayMs = 3000) {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await initDatabase();
+      return;
+    } catch (e) {
+      console.error(`[DB] Tentativa ${i}/${attempts} falhou: ${e.code || ''} ${e.message}`);
+      if (i === attempts) throw e;
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+}
+
 (async () => {
   try {
-    await initDatabase();
+    logDbTarget();
+    await initWithRetry();
     await cleanOldHistory();
     setInterval(cleanOldHistory, 24 * 60 * 60 * 1000);
 
@@ -163,7 +195,8 @@ async function cleanOldHistory() {
       console.log('   ================================================\n');
     });
   } catch (e) {
-    console.error('[FATAL] Erro na inicialização:', e.message);
+    console.error('[FATAL] Erro na inicialização:', e.code || '', e.message);
+    console.error('[FATAL] Verifique: (1) DATABASE_URL definida no serviço do app; (2) usar a URL INTERNA do Postgres do Railway; (3) app e banco no mesmo projeto.');
     process.exit(1);
   }
 })();

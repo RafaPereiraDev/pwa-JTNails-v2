@@ -39,6 +39,10 @@ const pool = new Pool({
   client_encoding: 'UTF8',
 });
 
+// Info de SSL para diagnóstico no boot (sem expor segredos)
+const _ssl = buildSslConfig();
+const sslInfo = _ssl === false ? 'desligado' : (_ssl.rejectUnauthorized ? 'estrito' : 'ligado(sem-verificacao)');
+
 pool.on('error', (err) => {
   console.error('[DB] Erro inesperado no pool:', err.message);
 });
@@ -94,4 +98,4 @@ async function withTransaction(fn) {
   }
 }
 
-module.exports = { pool, query, getOne, getAll, withTransaction };
+module.exports = { pool, query, getOne, getAll, withTransaction, sslInfo };
