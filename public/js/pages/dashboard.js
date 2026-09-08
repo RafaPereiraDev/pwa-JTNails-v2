@@ -141,7 +141,7 @@ async function loadDashboard() {
                 if (!myProf) return '<div class="text-muted text-center">Sem dados</div>';
                 return `
                   <div style="text-align:center;padding:8px 0">
-                    <div style="width:52px;height:52px;border-radius:50%;background:${myProf.color};color:white;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;margin:0 auto 12px">${getInitials(myProf.name)}</div>
+                    <div style="width:52px;height:52px;border-radius:50%;background:#C19B53;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;margin:0 auto 12px">${getInitials(myProf.name)}</div>
                     <div style="font-size:30px;font-weight:700;color:var(--primary)">${formatCurrency(myProf.revenue)}</div>
                     <div class="text-muted text-sm mt-2">${myProf.total} atendimento(s) este mês</div>
                   </div>`;

@@ -1,7 +1,7 @@
 /* ===== VARIABLES ===== */
 :root {
   /* ===== Paleta Atelier — verde/bege/dourado (rebranding) ===== */
-  --primary: #496451;        /* verde — botões/ações primárias */
+  --primary: #4E6754;        /* verde — botões/ações primárias */
   --primary-dark: #3A5141;   /* verde escuro — hover/active */
   --primary-light: #EFECE6;  /* bege suave — fundos/badges/botão secundário */
   --secondary: #C19B53;      /* dourado areia — avatares/acentos */
@@ -11,13 +11,13 @@
   --danger: #ef4444;
   --info: #3b82f6;
   --dark: #212F27;           /* verde grafite */
-  --sidebar-bg: #4B6652;     /* verde do menu lateral */
+  --sidebar-bg: #4E6754;     /* verde do menu lateral */
   --sidebar-active: #2F4234; /* item ativo do menu */
-  --metric-bg: #B0C1AC;      /* verde-oliva — cards de métrica */
+  --metric-bg: #A3B5A0;      /* verde-oliva — cards de métrica */
   --metric-fg: #2C3A2E;      /* texto/ícone dos cards de métrica */
-  --cream: #F8F7F4;          /* off-white — fundo geral */
+  --cream: #FAF8F4;          /* off-white — fundo geral */
   --beige: #EFECE6;          /* bege claro — cards/botões secundários */
-  --gray-50: #F8F7F4;        /* fundo geral (creme) */
+  --gray-50: #FAF8F4;        /* fundo geral (creme) */
   --gray-100: #f4f4f5;
   --gray-200: #e4e4e7;
   --gray-300: #d1d5db;
