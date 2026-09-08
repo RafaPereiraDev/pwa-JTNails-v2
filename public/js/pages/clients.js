@@ -317,7 +317,7 @@ function gerarSenhaCliente() {
 
 // Modal de confirmação pós-cadastro com botão "Enviar Acesso via WhatsApp"
 function openAccessSentModal(name, phone, senha) {
-  const APP_URL = 'https://jt-nails.up.railway.app';
+  const APP_URL = 'https://jt-nails.up.railway.app/agendar';
   const primeiroNome = String(name).trim().split(' ')[0];
   const phoneMasked = maskPhone(phone);
   const msg =
