@@ -455,10 +455,12 @@ async function deleteClientConfirm(id) {
       <div>• <strong>Organização:</strong> inativar esconde a cliente da lista diária sem perder os dados para futuras campanhas de reativação.</div>
     </div>
     <div id="cdel-error" class="alert alert-error" style="display:none"></div>
-    <div class="modal-footer" style="padding:0;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-      ${semHistorico ? `<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteClientPermanently(${id})"><i class="fa fa-trash"></i> Excluir Definitivamente</button>` : ''}
-      <button class="btn btn-primary" onclick="inactivateClient(${id})"><i class="fa fa-user-slash"></i> Inativar Cliente</button>
+    <div class="modal-footer" style="padding:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      ${semHistorico ? `<button class="btn btn-ghost btn-sm" style="color:var(--danger);padding-left:0" onclick="deleteClientPermanently(${id})"><i class="fa fa-trash"></i> Excluir Definitivamente</button>` : ''}
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="inactivateClient(${id})"><i class="fa fa-user-slash"></i> Inativar Cliente</button>
+      </div>
     </div>
   `, 'modal-sm');
 }
