@@ -139,9 +139,13 @@ async function loadDashboard() {
               ${(() => {
                 const myProf = professionals.find(p => p.id === currentUser.professional_id);
                 if (!myProf) return '<div class="text-muted text-center">Sem dados</div>';
+                const foto = myProf.photo || currentUser.professional_photo;
+                const avatarInner = foto
+                  ? `<img src="${esc(foto)}" alt="${esc(myProf.name)}" style="width:100%;height:100%;object-fit:cover" />`
+                  : getInitials(myProf.name);
                 return `
                   <div style="text-align:center;padding:8px 0">
-                    <div style="width:52px;height:52px;border-radius:50%;background:#C19B53;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;margin:0 auto 12px">${getInitials(myProf.name)}</div>
+                    <div style="width:52px;height:52px;border-radius:50%;overflow:hidden;background:#C19B53;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;margin:0 auto 12px">${avatarInner}</div>
                     <div style="font-size:30px;font-weight:700;color:var(--primary)">${formatCurrency(myProf.revenue)}</div>
                     <div class="text-muted text-sm mt-2">${myProf.total} atendimento(s) este mês</div>
                   </div>`;

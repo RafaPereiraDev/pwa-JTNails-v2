@@ -66,7 +66,7 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
     let profStats = [];
     if (profId && profId !== -1) {
       profStats = await getAll(`
-        SELECT p.id, p.name, p.color,
+        SELECT p.id, p.name, p.color, p.photo,
           COUNT(*) FILTER (WHERE a.status='completed') AS total,
           COALESCE(SUM(CASE WHEN a.status='completed' THEN a.price ELSE 0 END),0) AS revenue
         FROM professionals p

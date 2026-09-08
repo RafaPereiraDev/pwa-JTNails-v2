@@ -80,7 +80,7 @@ img { max-width: 100%; }
   text-align: center;
   margin-bottom: 36px;
 }
-.nail-icon { font-size: 48px; }
+.nail-icon { font-size: 48px; color: var(--secondary); }
 .login-logo h1 {
   font-size: 26px;
   font-weight: 700;
