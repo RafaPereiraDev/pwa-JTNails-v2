@@ -122,6 +122,9 @@ async function initDatabase() {
 
     -- Senha da cliente (bcrypt) para login na área pública de agendamento/consulta
     ALTER TABLE clients ADD COLUMN IF NOT EXISTS password TEXT;
+
+    -- Status ativo/inativo da cliente (inativar preserva o histórico financeiro)
+    ALTER TABLE clients ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE;
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)

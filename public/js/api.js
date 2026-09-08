@@ -31,6 +31,7 @@ const api = {
   get:    (endpoint)       => apiRequest('GET', endpoint),
   post:   (endpoint, data) => apiRequest('POST', endpoint, data),
   put:    (endpoint, data) => apiRequest('PUT', endpoint, data),
+  patch:  (endpoint, data) => apiRequest('PATCH', endpoint, data),
   delete: (endpoint)       => apiRequest('DELETE', endpoint),
 
   // Auth
@@ -51,14 +52,20 @@ const api = {
   updateMyProfile: (data) => api.put('/professionals/me/profile', data),
 
   // Clients
-  getClients: (search = '') =>
-    api.get(`/clients${search ? '?search=' + encodeURIComponent(search) : ''}`),
+  getClients: (search = '', status = 'ativo') => {
+    const qs = new URLSearchParams();
+    if (search) qs.set('search', search);
+    if (status) qs.set('status', status);
+    const q = qs.toString();
+    return api.get('/clients' + (q ? '?' + q : ''));
+  },
   getClient: (id) => api.get(`/clients/${id}`),
   getClientBirthdays: () => api.get('/clients/birthdays'),
   getClientsInactive: (days = 30) => api.get(`/clients/inactive?days=${days}`),
   createClient: (data) => api.post('/clients', data),
   updateClient: (id, data) => api.put(`/clients/${id}`, data),
   deleteClient: (id) => api.delete(`/clients/${id}`),
+  setClientStatus: (id, active) => api.patch(`/clients/${id}/status`, { active }),
   resetClientPassword: (id, new_password) => api.post(`/clients/${id}/reset-password`, { new_password }),
 
   // Services

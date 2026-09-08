@@ -10,18 +10,30 @@ const { validatePassword }                = require('../utils/passwordPolicy');
 router.get('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { search } = req.query;
+    // Filtro por status: 'ativo' (padrão), 'inativo' ou 'todos'
+    const status = String(req.query.status || 'ativo').toLowerCase();
+
     let sql = `
       SELECT c.id, c.name, c.phone, c.email, c.birth_date, c.notes, c.reliability, c.created_at,
+        (c.active IS NOT FALSE) as active,
         (c.password IS NOT NULL) as has_password,
         (SELECT COUNT(*) FROM appointments WHERE client_id = c.id) as total_appointments,
         (SELECT COALESCE(SUM(price),0) FROM appointments WHERE client_id = c.id AND status = 'completed') as total_spent,
         (SELECT MAX(date)::text FROM appointments WHERE client_id = c.id) as last_appointment
       FROM clients c
+      WHERE 1=1
     `;
     const params = [];
+    let i = 1;
+
+    if (status === 'ativo')        sql += ` AND c.active IS NOT FALSE`;
+    else if (status === 'inativo') sql += ` AND c.active = FALSE`;
+    // 'todos' → sem filtro de status
+
     if (search) {
-      sql += ' WHERE c.name ILIKE $1 OR c.phone ILIKE $1';
+      sql += ` AND (c.name ILIKE $${i} OR c.phone ILIKE $${i})`;
       params.push(`%${search}%`);
+      i++;
     }
     sql += ' ORDER BY c.name';
     res.json(await getAll(sql, params));
@@ -90,6 +102,7 @@ router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const client = await getOne(`
       SELECT c.id, c.name, c.phone, c.email, c.birth_date, c.notes, c.reliability, c.created_at,
+        (c.active IS NOT FALSE) as active,
         (c.password IS NOT NULL) as has_password,
         (SELECT COUNT(*) FROM appointments WHERE client_id = c.id) as total_appointments,
         (SELECT COALESCE(SUM(price),0) FROM appointments WHERE client_id = c.id AND status = 'completed') as total_spent,
@@ -192,18 +205,38 @@ router.post('/:id/reset-password', authenticateToken, requireAdmin, async (req, 
   }
 });
 
+// PATCH /api/clients/:id/status — inativa ou reativa a cliente (preserva histórico)
+// Body: { active: boolean }
+router.patch('/:id/status', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const active = !!req.body.active;
+    const c = await getOne('SELECT id FROM clients WHERE id = $1', [req.params.id]);
+    if (!c) return res.status(404).json({ error: 'Cliente não encontrada' });
+
+    await query('UPDATE clients SET active = $1 WHERE id = $2', [active, req.params.id]);
+    res.json({
+      message: active ? 'Cliente reativada com sucesso!' : 'Cliente inativada com sucesso!',
+      active,
+    });
+  } catch (e) {
+    console.error('[clients PATCH /:id/status]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin' && req.user.role !== 'master')
       return res.status(403).json({ error: 'Apenas administradores podem excluir clientes' });
 
+    // Só permite excluir DEFINITIVAMENTE quem não tem nenhum histórico de agendamento.
+    // Com histórico, a cliente deve ser inativada (protege relatórios financeiros).
     const { c } = await getOne(
-      `SELECT COUNT(*) as c FROM appointments
-       WHERE client_id = $1 AND status NOT IN ('cancelled','no_show')`,
+      `SELECT COUNT(*) as c FROM appointments WHERE client_id = $1`,
       [req.params.id]
     );
     if (parseInt(c) > 0)
-      return res.status(400).json({ error: 'Cliente possui agendamentos ativos e não pode ser excluída' });
+      return res.status(400).json({ error: 'Esta cliente possui histórico de atendimentos. Inative-a em vez de excluir.' });
 
     // Remove transações e agendamentos vinculados, depois a cliente
     await query(

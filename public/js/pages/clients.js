@@ -1,5 +1,6 @@
 // ===== CLIENTS PAGE =====
 let clientSearchTimer = null;
+let clientStatusFilter = 'ativo'; // 'ativo' | 'inativo' | 'todos'
 
 // Recarrega a lista de clientes apenas se estivermos na página de Clientes.
 // (O cadastro pode ser aberto pelo Dashboard, onde não há tabela para recarregar.)
@@ -18,6 +19,11 @@ async function loadClients() {
         <i class="fa fa-plus"></i> Novo Cliente
       </button>
     </div>
+    <div class="tabs mb-4" id="client-status-tabs">
+      <button class="tab-btn ${clientStatusFilter === 'ativo' ? 'active' : ''}" onclick="setClientStatusFilter('ativo', this)">Ativos</button>
+      <button class="tab-btn ${clientStatusFilter === 'inativo' ? 'active' : ''}" onclick="setClientStatusFilter('inativo', this)">Inativos</button>
+      <button class="tab-btn ${clientStatusFilter === 'todos' ? 'active' : ''}" onclick="setClientStatusFilter('todos', this)">Todos</button>
+    </div>
     <div class="search-bar">
       <div class="search-input-wrap">
         <i class="fa fa-search"></i>
@@ -29,11 +35,19 @@ async function loadClients() {
   await renderClientsTable();
 }
 
+function setClientStatusFilter(status, btn) {
+  clientStatusFilter = status;
+  document.querySelectorAll('#client-status-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const search = document.getElementById('client-search')?.value || '';
+  renderClientsTable(search);
+}
+
 async function renderClientsTable(search = '') {
   const container = document.getElementById('clients-table-container');
   loading(container);
   try {
-    const clients = await api.getClients(search);
+    const clients = await api.getClients(search, clientStatusFilter);
     if (clients.length === 0) {
       container.innerHTML = `<div class="card"><div class="card-body">${emptyState('Nenhum cliente encontrado', 'fa-users')}</div></div>`;
       return;
@@ -54,15 +68,17 @@ async function renderClientsTable(search = '') {
               </tr>
             </thead>
             <tbody>
-              ${clients.map(c => `
-                <tr>
+              ${clients.map(c => {
+                const inativo = c.active === false;
+                return `
+                <tr${inativo ? ' style="opacity:0.6"' : ''}>
                   <td>
                     <div style="display:flex;align-items:center;gap:10px">
                       <div class="client-avatar">${getInitials(c.name)}</div>
                       <div>
                         <div class="font-semibold">${esc(c.name)}</div>
                         <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
-                          ${reliabilityBadge(c.reliability || 'new')}
+                          ${inativo ? '<span class="badge badge-inactive">Inativo</span>' : reliabilityBadge(c.reliability || 'new')}
                           ${c.email ? `<span class="text-xs text-muted">${esc(c.email)}</span>` : ''}
                         </div>
                       </div>
@@ -88,14 +104,17 @@ async function renderClientsTable(search = '') {
                       <button class="btn btn-secondary btn-xs" onclick="openNewAppointment(null, null, ${c.id})" title="Novo agendamento">
                         <i class="fa fa-calendar-plus"></i>
                       </button>
-                      ${isAdminLevel() ? `
-                      <button class="btn btn-danger btn-xs" onclick="deleteClientConfirm(${c.id})" title="Excluir cliente">
+                      ${isAdminLevel() ? (inativo ? `
+                      <button class="btn btn-xs" style="background:#4B6651;color:#fff" onclick="reactivateClient(${c.id})" title="Reativar Cliente">
+                        <i class="fa fa-rotate-left"></i>
+                      </button>` : `
+                      <button class="btn btn-danger btn-xs" onclick="deleteClientConfirm(${c.id})" title="Inativar ou excluir">
                         <i class="fa fa-trash"></i>
-                      </button>` : ''}
+                      </button>`) : ''}
                     </div>
                   </td>
                 </tr>
-              `).join('')}
+              `; }).join('')}
             </tbody>
           </table>
         </div>
@@ -320,32 +339,42 @@ function openAccessSentModal(name, phone, senha) {
   const APP_URL = 'https://jt-nails.up.railway.app/agendar';
   const primeiroNome = String(name).trim().split(' ')[0];
   const phoneMasked = maskPhone(phone);
+
+  // Emojis montados por code point (à prova de corrupção de encoding do arquivo):
+  // sparkles ✨ U+2728, link 🔗 U+1F517, celular 📱 U+1F4F1, chave 🔑 U+1F511
+  const EMO = {
+    sparkles: String.fromCodePoint(0x2728),
+    link:     String.fromCodePoint(0x1F517),
+    phone:    String.fromCodePoint(0x1F4F1),
+    key:      String.fromCodePoint(0x1F511),
+  };
+
   const msg =
-`Olá, ${primeiroNome}! ✨
+`Olá, ${primeiroNome}! ${EMO.sparkles}
 
 Seu cadastro no salão JT Nails foi realizado com sucesso.
 
 Acesse nosso aplicativo para agendar, consultar ou cancelar seus horários:
 
-🔗 ${APP_URL}
+${EMO.link} ${APP_URL}
 
 Seus dados de acesso:
 
-📱 WhatsApp: ${phoneMasked}
+${EMO.phone} WhatsApp: ${phoneMasked}
 
-🔑 Senha: ${senha}
+${EMO.key} Senha: ${senha}
 
 Guarde essa senha para acessar seu painel sempre que precisar!`;
 
   const link = whatsappLink(phone, msg);
 
-  openModal('Cliente cadastrada! 🎉', `
+  openModal('Cliente cadastrada! ' + String.fromCodePoint(0x1F389), `
     <p style="color:var(--gray-600);line-height:1.6;margin-bottom:14px">
       Cadastro de <strong>${esc(name)}</strong> concluído. Envie os dados de acesso pelo WhatsApp:
     </p>
     <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.6">
-      <div>📱 <strong>WhatsApp:</strong> ${esc(phoneMasked)}</div>
-      <div>🔑 <strong>Senha:</strong> ${esc(senha)}</div>
+      <div>&#128241; <strong>WhatsApp:</strong> ${esc(phoneMasked)}</div>
+      <div>&#128273; <strong>Senha:</strong> ${esc(senha)}</div>
     </div>
     <div class="modal-footer" style="padding:0">
       <button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
@@ -406,15 +435,64 @@ function resetClientPasswordPrompt(id, name) {
   });
 }
 
+// Abre o modal explicativo: inativar (preserva histórico) e, se não houver
+// nenhum atendimento, oferece também a exclusão definitiva.
 async function deleteClientConfirm(id) {
-  const ok = await confirmDialog('Tem certeza que deseja excluir este cliente?');
-  if (!ok) return;
+  let semHistorico = false;
+  try {
+    const c = await api.getClient(id);
+    semHistorico = (parseInt(c.total_appointments) || 0) === 0;
+  } catch (_) {}
+
+  openModal('⚠️ Atenção ao excluir este cadastro', `
+    <p style="color:var(--gray-700);line-height:1.6;margin-bottom:12px">
+      Para proteger a gestão do salão, clientes que já possuem atendimentos realizados
+      não devem ser excluídos, apenas <strong>inativados</strong>.
+    </p>
+    <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.7;color:var(--gray-700)">
+      <div style="font-weight:700;margin-bottom:6px">Por que inativar em vez de excluir?</div>
+      <div>• <strong>Histórico Financeiro:</strong> excluir apaga o registro das vendas e altera seus relatórios de faturamento e ticket médio.</div>
+      <div>• <strong>Organização:</strong> inativar esconde a cliente da lista diária sem perder os dados para futuras campanhas de reativação.</div>
+    </div>
+    <div id="cdel-error" class="alert alert-error" style="display:none"></div>
+    <div class="modal-footer" style="padding:0;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      ${semHistorico ? `<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteClientPermanently(${id})"><i class="fa fa-trash"></i> Excluir Definitivamente</button>` : ''}
+      <button class="btn btn-primary" onclick="inactivateClient(${id})"><i class="fa fa-user-slash"></i> Inativar Cliente</button>
+    </div>
+  `, 'modal-sm');
+}
+
+async function inactivateClient(id) {
+  try {
+    await api.setClientStatus(id, false);
+    toast('Cliente inativada com sucesso!', 'success');
+    closeModal();
+    reloadClientsListIfVisible();
+  } catch (e) {
+    const el = document.getElementById('cdel-error');
+    if (el) { el.textContent = e.message; el.style.display = ''; } else { toast(e.message, 'error'); }
+  }
+}
+
+async function reactivateClient(id) {
+  try {
+    await api.setClientStatus(id, true);
+    toast('Cliente reativado com sucesso!', 'success');
+    reloadClientsListIfVisible();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function deleteClientPermanently(id) {
   try {
     await api.deleteClient(id);
-    toast('Cliente excluído', 'success');
+    toast('Cliente excluído definitivamente', 'success');
     closeModal();
-    loadClients();
-  } catch(e) {
-    toast(e.message, 'error');
+    reloadClientsListIfVisible();
+  } catch (e) {
+    const el = document.getElementById('cdel-error');
+    if (el) { el.textContent = e.message; el.style.display = ''; } else { toast(e.message, 'error'); }
   }
 }

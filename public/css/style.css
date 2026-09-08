@@ -483,6 +483,7 @@ tbody tr:hover { background: var(--gray-50); }
 .badge-inactive { background: var(--gray-100); color: var(--gray-500); }
 .badge-master { background: #fef9c3; color: #a16207; }
 .badge-admin { background: var(--primary-light); color: var(--primary); }
+
 .badge-professional { background: #f3ecdd; color: #8a6d2f; }
 .badge-income { background: #dcfce7; color: #15803d; }
 .badge-expense { background: #fef2f2; color: var(--danger); }
