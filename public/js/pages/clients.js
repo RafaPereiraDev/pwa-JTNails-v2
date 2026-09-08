@@ -340,31 +340,22 @@ function openAccessSentModal(name, phone, senha) {
   const primeiroNome = String(name).trim().split(' ')[0];
   const phoneMasked = maskPhone(phone);
 
-  // Emojis montados por code point (à prova de corrupção de encoding do arquivo):
-  // sparkles ✨ U+2728, link 🔗 U+1F517, celular 📱 U+1F4F1, chave 🔑 U+1F511
-  const EMO = {
-    sparkles: String.fromCodePoint(0x2728),
-    link:     String.fromCodePoint(0x1F517),
-    phone:    String.fromCodePoint(0x1F4F1),
-    key:      String.fromCodePoint(0x1F511),
-  };
+  // Emojis e acentos como sequencias de escape Unicode (ASCII puro no arquivo).
+  // Assim nenhum encoding de arquivo/SO pode corromper a mensagem antes do encodeURIComponent.
+  const emojiEstrela = '\u2728';        // sparkles
+  const emojiLink    = '\uD83D\uDD17';  // link
+  const emojiWhats   = '\uD83D\uDCF1';  // celular
+  const emojiChave   = '\uD83D\uDD11';  // chave
 
   const msg =
-`Olá, ${primeiroNome}! ${EMO.sparkles}
-
-Seu cadastro no salão JT Nails foi realizado com sucesso.
-
-Acesse nosso aplicativo para agendar, consultar ou cancelar seus horários:
-
-${EMO.link} ${APP_URL}
-
-Seus dados de acesso:
-
-${EMO.phone} WhatsApp: ${phoneMasked}
-
-${EMO.key} Senha: ${senha}
-
-Guarde essa senha para acessar seu painel sempre que precisar!`;
+    `Ol\u00E1, ${primeiroNome}! ${emojiEstrela}\n\n` +
+    `Seu cadastro no sal\u00E3o JT Nails foi realizado com sucesso.\n\n` +
+    `Acesse nosso aplicativo para agendar, consultar ou cancelar seus hor\u00E1rios:\n\n` +
+    `${emojiLink} ${APP_URL}\n\n` +
+    `Seus dados de acesso:\n\n` +
+    `${emojiWhats} WhatsApp: ${phoneMasked}\n` +
+    `${emojiChave} Senha: ${senha}\n\n` +
+    `Guarde essa senha para acessar seu painel sempre que precisar!`;
 
   const link = whatsappLink(phone, msg);
 
