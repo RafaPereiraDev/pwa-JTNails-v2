@@ -19,22 +19,22 @@ async function loadReports() {
     <div id="report-appointments" class="tab-panel active">
       <div class="card mb-4">
         <div class="card-body">
-          <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
-            <div class="form-group" style="margin:0;min-width:140px">
+          <div class="report-filters">
+            <div class="form-group">
               <label>Data início</label>
               <input type="date" id="ra-start" value="${y}-${m}-01" />
             </div>
-            <div class="form-group" style="margin:0;min-width:140px">
+            <div class="form-group">
               <label>Data fim</label>
               <input type="date" id="ra-end" value="${today}" />
             </div>
-            <div class="form-group" style="margin:0;min-width:180px" id="ra-prof-wrap">
+            <div class="form-group" style="min-width:180px" id="ra-prof-wrap">
               <label>Profissional</label>
               <select id="ra-professional">
                 <option value="">Todas</option>
               </select>
             </div>
-            <div class="form-group" style="margin:0;min-width:180px">
+            <div class="form-group" style="min-width:180px">
               <label>Status</label>
               <select id="ra-status">
                 <option value="">Todos</option>
@@ -58,16 +58,16 @@ async function loadReports() {
     <div id="report-financial" class="tab-panel">
       <div class="card mb-4">
         <div class="card-body">
-          <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
-            <div class="form-group" style="margin:0;min-width:140px">
+          <div class="report-filters">
+            <div class="form-group">
               <label>Data início</label>
               <input type="date" id="rf-start" value="${y}-${m}-01" />
             </div>
-            <div class="form-group" style="margin:0;min-width:140px">
+            <div class="form-group">
               <label>Data fim</label>
               <input type="date" id="rf-end" value="${today}" />
             </div>
-            <div class="form-group" style="margin:0;min-width:180px" id="rf-prof-wrap">
+            <div class="form-group" style="min-width:180px" id="rf-prof-wrap">
               <label>Profissional</label>
               <select id="rf-professional">
                 <option value="">Todas</option>
@@ -86,22 +86,20 @@ async function loadReports() {
     <div id="report-inactive" class="tab-panel">
       <div class="card mb-4">
         <div class="card-body">
-          <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
-            <div class="form-group" style="margin:0">
+          <div class="report-filters">
+            <div class="form-group">
               <label>Inativas há mais de</label>
-              <div style="display:flex;align-items:center;gap:8px">
-                <select id="ri-days" style="width:120px">
-                  <option value="30">30 dias</option>
-                  <option value="60">60 dias</option>
-                  <option value="90" selected>90 dias</option>
-                  <option value="180">6 meses</option>
-                  <option value="365">1 ano</option>
-                </select>
-                <button class="btn btn-primary" onclick="runInactiveReport()">
-                  <i class="fa fa-search"></i> Buscar
-                </button>
-              </div>
+              <select id="ri-days">
+                <option value="30">30 dias</option>
+                <option value="60">60 dias</option>
+                <option value="90" selected>90 dias</option>
+                <option value="180">6 meses</option>
+                <option value="365">1 ano</option>
+              </select>
             </div>
+            <button class="btn btn-primary" onclick="runInactiveReport()">
+              <i class="fa fa-search"></i> Buscar
+            </button>
           </div>
         </div>
       </div>

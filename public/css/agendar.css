@@ -1,14 +1,15 @@
 /* ===== TAINARA NAILS — AGENDAMENTO PÚBLICO (MOBILE-FIRST) ===== */
 :root {
-  /* ===== Paleta Atelier — verde/bege/dourado ===== */
-  --primary: #3B5848;        /* verde elegante — botões/ações */
-  --primary-dark: #2C4033;   /* verde musgo — hover/pressed */
-  --primary-light: #E5E0D8;  /* bege suave — fundos/badges */
-  --secondary: #B29661;      /* dourado queimado — acentos */
+  /* ===== Paleta Atelier — verde/bege/dourado (rebranding) ===== */
+  --primary: #496451;        /* verde — botões/ações (Selecionar) */
+  --primary-dark: #3A5141;   /* verde escuro — hover/active */
+  --primary-light: #EFECE6;  /* bege claro — botão secundário (Ver Bio) */
+  --secondary: #C19B53;      /* dourado areia — avatares/acentos */
+  --accent: #BBA263;         /* dourado suave — detalhes */
   --success: #22c55e;
   --danger: #ef4444;
   --dark: #212F27;           /* verde grafite */
-  --gray-50: #F8F7F5;        /* fundo geral (creme) */
+  --gray-50: #F8F7F4;        /* fundo geral (creme) */
   --gray-100: #f4f4f5;
   --gray-200: #e4e4e7;
   --gray-300: #d1d5db;
@@ -57,7 +58,7 @@ img { max-width: 100%; display: block; }
 .pub-brand:active { opacity: .7; }
 .pub-logo {
   width: 34px; height: 34px; border-radius: 9px;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  background: linear-gradient(135deg, var(--secondary), var(--accent, #BBA263));
   color: #fff; display: flex; align-items: center; justify-content: center;
   font-size: 16px;
 }
@@ -104,13 +105,13 @@ img { max-width: 100%; display: block; }
 .pub-btn-primary:active { background: var(--primary-dark); }
 .pub-btn-primary:disabled { opacity: .6; }
 .pub-btn-outline { background: transparent; border: 1.5px solid var(--gray-300); color: var(--gray-700); }
-.pub-btn-ghost { background: var(--gray-100); color: var(--gray-600); }
+.pub-btn-ghost { background: var(--primary-light); color: var(--primary-dark); }
 
 /* ===== PASSO 1 — CARDS DE PROFISSIONAIS ===== */
 .pub-cards { display: grid; gap: 14px; }
 .pub-card {
-  background: var(--white);
-  border: 1px solid var(--gray-200);
+  background: #FAF8F5;
+  border: 1px solid #E8E5DF;
   border-radius: var(--radius);
   padding: 16px;
   display: flex; align-items: center; gap: 14px;
@@ -120,6 +121,7 @@ img { max-width: 100%; display: block; }
   width: 64px; height: 64px; border-radius: 50%;
   flex-shrink: 0; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
+  background: var(--secondary); /* dourado — sobrescrito pela cor da profissional, se houver */
   color: #fff; font-size: 24px; font-weight: 700;
 }
 .pub-card-avatar img { width: 100%; height: 100%; object-fit: cover; }

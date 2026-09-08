@@ -1,19 +1,23 @@
 /* ===== VARIABLES ===== */
 :root {
-  /* ===== Paleta Atelier — verde/bege/dourado ===== */
-  --primary: #3B5848;        /* verde elegante — botões/ações */
-  --primary-dark: #2C4033;   /* verde musgo — hover/pressed */
-  --primary-light: #E5E0D8;  /* bege suave — fundos/badges */
-  --secondary: #B29661;      /* dourado queimado — acentos */
-  --accent: #C5A059;         /* dourado areia — detalhes */
+  /* ===== Paleta Atelier — verde/bege/dourado (rebranding) ===== */
+  --primary: #496451;        /* verde — botões/ações primárias */
+  --primary-dark: #3A5141;   /* verde escuro — hover/active */
+  --primary-light: #EFECE6;  /* bege suave — fundos/badges/botão secundário */
+  --secondary: #C19B53;      /* dourado areia — avatares/acentos */
+  --accent: #BBA263;         /* dourado suave — detalhes */
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
   --info: #3b82f6;
-  --dark: #212F27;           /* verde grafite — sidebar */
-  --cream: #F8F7F5;          /* off-white — fundo geral */
-  --beige: #EFECE6;          /* bege claro — cards secundários */
-  --gray-50: #F8F7F5;        /* fundo geral (creme) */
+  --dark: #212F27;           /* verde grafite */
+  --sidebar-bg: #4B6652;     /* verde do menu lateral */
+  --sidebar-active: #2F4234; /* item ativo do menu */
+  --metric-bg: #B0C1AC;      /* verde-oliva — cards de métrica */
+  --metric-fg: #2C3A2E;      /* texto/ícone dos cards de métrica */
+  --cream: #F8F7F4;          /* off-white — fundo geral */
+  --beige: #EFECE6;          /* bege claro — cards/botões secundários */
+  --gray-50: #F8F7F4;        /* fundo geral (creme) */
   --gray-100: #f4f4f5;
   --gray-200: #e4e4e7;
   --gray-300: #d1d5db;
@@ -222,7 +226,7 @@ select { appearance: none; cursor: pointer; }
   position: fixed;
   top: 0; left: 0; bottom: 0;
   width: var(--sidebar-width);
-  background: var(--dark);
+  background: var(--sidebar-bg);
   display: flex;
   flex-direction: column;
   z-index: 100;
@@ -269,7 +273,7 @@ select { appearance: none; cursor: pointer; }
   color: var(--white);
 }
 .nav-item.active {
-  background: var(--primary);
+  background: var(--sidebar-active);
   color: var(--white);
 }
 .nav-item i { width: 18px; text-align: center; font-size: 15px; }
@@ -381,8 +385,8 @@ select { appearance: none; cursor: pointer; }
   margin-bottom: 24px;
 }
 .stat-card {
-  background: var(--beige);
-  border: 1px solid #e3ddd2;
+  background: var(--metric-bg);
+  border: 1px solid #9fb29a;
   border-radius: var(--border-radius);
   padding: 20px;
   box-shadow: var(--shadow);
@@ -400,22 +404,28 @@ select { appearance: none; cursor: pointer; }
   font-size: 22px;
   flex-shrink: 0;
 }
-.stat-icon.pink { background: #dfe6e0; color: var(--primary); }
-.stat-icon.purple { background: #f3ecdd; color: var(--secondary); }
-.stat-icon.green { background: #dcfce7; color: var(--success); }
-.stat-icon.orange { background: #fff7ed; color: var(--warning); }
-.stat-icon.blue { background: #eff6ff; color: var(--info); }
-.stat-icon.red { background: #fee2e2; color: #dc2626; }
+/* Nos cards de métrica (verde-oliva), os ícones usam um fundo claro translúcido
+   e a cor escura da paleta para manter contraste legível. */
+.stat-icon.pink,
+.stat-icon.purple,
+.stat-icon.green,
+.stat-icon.orange,
+.stat-icon.blue,
+.stat-icon.red {
+  background: rgba(255,255,255,0.45);
+  color: var(--metric-fg);
+}
 .stat-info { flex: 1; min-width: 0; }
 .stat-value {
   font-size: 22px;
   font-weight: 700;
-  color: var(--dark);
+  color: var(--metric-fg);
   line-height: 1.2;
 }
 .stat-label {
   font-size: 12px;
-  color: var(--gray-500);
+  color: var(--metric-fg);
+  opacity: 0.75;
   margin-top: 2px;
 }
 
@@ -883,8 +893,8 @@ tbody tr:hover { background: var(--gray-50); }
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--primary-light);
-  color: var(--primary);
+  background: var(--secondary);
+  color: #fff;
   font-weight: 700;
   font-size: 14px;
   display: inline-flex;
@@ -1054,6 +1064,26 @@ tbody tr:hover { background: var(--gray-50); }
 /* Evita o zoom automático do iOS ao focar campos: fonte mínima de 16px no mobile */
 @media (max-width: 768px) {
   input, select, textarea { font-size: 16px !important; }
+}
+
+/* ===== FILTROS DE RELATÓRIOS (responsivo) ===== */
+/* Desktop: campos e botão "Buscar" lado a lado, alinhados pela base. */
+.report-filters {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.report-filters .form-group { margin: 0; min-width: 140px; }
+/* Mobile: empilha tudo em coluna e o botão ocupa a largura total. */
+@media (max-width: 768px) {
+  .report-filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .report-filters .form-group { min-width: 0; width: 100%; }
+  .report-filters .btn { width: 100%; margin-top: 4px; }
 }
 
 /* ===== UTILS ===== */
