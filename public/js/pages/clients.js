@@ -357,7 +357,11 @@ function openAccessSentModal(name, phone, senha) {
     `${emojiChave} Senha: ${senha}\n\n` +
     `Guarde essa senha para acessar seu painel sempre que precisar!`;
 
-  const link = whatsappLink(phone, msg);
+  // Usa EXATAMENTE o mesmo formato da mensagem de aniversario (que funciona no
+  // WhatsApp do usuario): api.whatsapp.com/send direto, sem redirect do wa.me.
+  const phoneDigits = String(phone).replace(/\D/g, '');
+  const phoneBr = phoneDigits.startsWith('55') ? phoneDigits : '55' + phoneDigits;
+  const link = `https://api.whatsapp.com/send?phone=${phoneBr}&text=${encodeURIComponent(msg)}`;
 
   openModal('Cliente cadastrada! ' + String.fromCodePoint(0x1F389), `
     <p style="color:var(--gray-600);line-height:1.6;margin-bottom:14px">
