@@ -3,6 +3,12 @@ const router  = express.Router();
 const { query, getOne, getAll, withTransaction } = require('../database/db');
 const { authenticateToken }                      = require('../middleware/auth');
 
+// Dias fechados: 0=Domingo, 1=Segunda. Usa meio-dia para não sofrer com fuso.
+function isClosedDay(dateStr) {
+  const dow = new Date(`${dateStr}T12:00:00`).getDay();
+  return dow === 0 || dow === 1;
+}
+
 function calcEndTime(start, mins) {
   const [h, m] = start.split(':').map(Number);
   const t = h * 60 + m + mins;
@@ -238,6 +244,8 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Não é possível agendar em uma data que já passou' });
     if (date === today && startMin <= nowMin)
       return res.status(400).json({ error: 'Não é possível agendar em um horário que já passou hoje' });
+    if (isClosedDay(date))
+      return res.status(400).json({ error: 'O salão não atende aos domingos e segundas-feiras' });
 
     const svc = await getOne('SELECT * FROM services WHERE id = $1 AND active = TRUE', [service_id]);
     if (!svc) return res.status(404).json({ error: 'Serviço não encontrado ou inativo' });
@@ -300,6 +308,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       const startMin = sh * 60 + sm;
       if (newDate < today || (newDate === today && startMin <= nowMin))
         return res.status(400).json({ error: 'Não é possível remarcar para uma data ou horário que já passou' });
+      if (isClosedDay(newDate))
+        return res.status(400).json({ error: 'O salão não atende aos domingos e segundas-feiras' });
     }
     const svc       = await getOne('SELECT * FROM services WHERE id = $1', [newSvcId]);
     const newEnd    = calcEndTime(String(newStart).slice(0,5), svc.duration);

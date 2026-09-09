@@ -240,17 +240,22 @@ function renderCalendar() {
   for (let d = 1; d <= daysInMonth; d++) {
     const dateObj = new Date(year, month, d);
     const dateStr = toDateStr(dateObj);
+    const dow       = dateObj.getDay();       // 0=Domingo, 1=Segunda
+    const isClosed  = (dow === 0 || dow === 1); // salão fecha dom e seg
     const isPast    = dateStr < todayStr;
     const isFuture  = dateStr > maxDateStr;  // além dos 14 dias
     const isToday   = dateStr === todayStr;
     const isSelected = dateStr === state.date;
+    const disabled  = isPast || isFuture || isClosed;
     const cls = ['pub-cal-day'];
-    if (isPast || isFuture) cls.push('disabled');
+    if (disabled) cls.push('disabled');
     else cls.push('selectable');
+    if (isClosed)   cls.push('closed');
     if (isToday)    cls.push('today');
     if (isSelected) cls.push('selected');
-    const onclick = (isPast || isFuture) ? '' : `onclick="selectDate('${dateStr}')"`;
-    cells += `<div class="${cls.join(' ')}" ${onclick}>${d}</div>`;
+    const onclick = disabled ? '' : `onclick="selectDate('${dateStr}')"`;
+    const title   = isClosed ? ' title="Fechado (domingo/segunda)"' : '';
+    cells += `<div class="${cls.join(' ')}"${title} ${onclick}>${d}</div>`;
   }
   grid.innerHTML = cells;
 

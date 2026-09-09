@@ -30,6 +30,15 @@ const OPEN_HOUR  = 8;
 const CLOSE_MINS = 18 * 60 + 30; // 18:30
 const SLOT_STEP  = 30;
 
+// Dias em que o salão está fechado: 0=Domingo, 1=Segunda
+const CLOSED_DOW = [0, 1];
+// Recebe uma data 'YYYY-MM-DD' e diz se cai em dia fechado (usa meio-dia UTC
+// para evitar deslocamento de fuso ao interpretar a string).
+function isClosedDay(dateStr) {
+  const dow = new Date(`${dateStr}T12:00:00`).getDay();
+  return CLOSED_DOW.includes(dow);
+}
+
 function toMinutes(hhmm) {
   const [h, m] = String(hhmm).slice(0, 5).split(':').map(Number);
   return h * 60 + m;
@@ -71,6 +80,10 @@ router.get('/available-slots', async (req, res) => {
       return res.status(400).json({ error: 'Data, profissional e serviço são obrigatórios' });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
       return res.status(400).json({ error: 'Data inválida' });
+
+    // Salão fechado aos domingos e segundas: sem horários nesses dias.
+    if (isClosedDay(date))
+      return res.json({ date, duration: 0, slots: [] });
 
     const svc = await getOne('SELECT * FROM services WHERE id = $1 AND active = TRUE', [service_id]);
     if (!svc) return res.status(404).json({ error: 'Serviço não encontrado' });
@@ -162,6 +175,9 @@ router.post('/appointments', async (req, res) => {
     const todayStr  = nowLocal.toLocaleDateString('en-CA');
     if (date < todayStr || (date === todayStr && startMin <= nowLocal.getHours() * 60 + nowLocal.getMinutes()))
       return res.status(400).json({ error: 'Não é possível agendar em um horário que já passou' });
+
+    if (isClosedDay(date))
+      return res.status(400).json({ error: 'O salão não atende aos domingos e segundas-feiras.' });
 
     const duration = svc.duration || 60;
     const endMin   = startMin + duration;

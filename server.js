@@ -39,7 +39,15 @@ app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 const { sanitizeBody } = require('./src/middleware/sanitize');
 app.use(sanitizeBody);
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    // Scripts de lógica, service worker e HTML devem sempre revalidar com o
+    // servidor, evitando que versões antigas fiquem presas no cache do navegador.
+    if (/\.(js|html)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  },
+}));
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({

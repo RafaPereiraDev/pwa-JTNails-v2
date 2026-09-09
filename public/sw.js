@@ -1,5 +1,5 @@
 // ===== SERVICE WORKER — Juliana & Tainara Atelier Nails =====
-const CACHE_NAME = 'atelier-nails-v39';
+const CACHE_NAME = 'atelier-nails-v40';
 
 // Assets estáticos que serão cacheados na instalação
 const STATIC_ASSETS = [
@@ -57,7 +57,12 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// ── FETCH: estratégia Network-First para API, Cache-First para assets ────────
+// ── FETCH ────────────────────────────────────────────────────────────────────
+// - API: sempre rede (nunca cacheia dados)
+// - Scripts de lógica (.js) e HTML: NETWORK-FIRST — pega sempre a versão nova da
+//   rede e só usa o cache como fallback offline. Isso descarta imediatamente
+//   scripts antigos (como um clients.js desatualizado) sem esperar recarregar.
+// - Demais assets (CSS, imagens, fontes): CACHE-FIRST (rápido, atualiza em bg).
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -67,17 +72,39 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Assets estáticos: Cache-First (responde do cache, atualiza em background)
+  const isLogicAsset =
+    url.origin === self.location.origin &&
+    (url.pathname.endsWith('.js') ||
+     url.pathname.endsWith('.html') ||
+     url.pathname === '/' ||
+     url.pathname === '/agendar');
+
+  if (isLogicAsset) {
+    // NETWORK-FIRST: rede primeiro (com no-cache), cache só se offline.
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .then((response) => {
+          if (response && response.status === 200 && url.origin === self.location.origin) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Demais assets: Cache-First (responde do cache, atualiza em background)
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const networkFetch = fetch(event.request).then((response) => {
-        // Só cacheia respostas válidas de mesma origem
         if (response && response.status === 200 && url.origin === self.location.origin) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      }).catch(() => cached); // se offline e não tem cache, retorna o que tiver
+      }).catch(() => cached);
 
       return cached || networkFetch;
     })

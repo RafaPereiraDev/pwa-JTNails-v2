@@ -183,6 +183,7 @@ img { max-width: 100%; display: block; }
 }
 .pub-cal-day.empty { background: transparent; }
 .pub-cal-day.disabled { color: var(--gray-300); background: transparent; }
+.pub-cal-day.closed { color: var(--gray-300); background: repeating-linear-gradient(45deg, transparent, transparent 4px, var(--gray-100) 4px, var(--gray-100) 6px); cursor: not-allowed; }
 .pub-cal-day.today { box-shadow: inset 0 0 0 1.5px var(--primary-light); }
 .pub-cal-day.selectable:active { background: var(--primary-light); }
 .pub-cal-day.selected { background: var(--primary); color: #fff; }

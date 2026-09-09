@@ -416,6 +416,12 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
         errEl.style.display = '';
         return;
       }
+      const dow = new Date(`${data.date}T12:00:00`).getDay();
+      if (dow === 0 || dow === 1) {
+        errEl.textContent = 'O salão não atende aos domingos e segundas-feiras.';
+        errEl.style.display = '';
+        return;
+      }
     }
 
     try {
