@@ -338,11 +338,19 @@ function gerarSenhaCliente() {
 // URL oficial de acesso da cliente ao app.
 const JTNAILS_APP_URL = 'https://jtnails.com.br/agendar';
 
-// Monta a URL do WhatsApp (wa.me) com o texto codificado.
+// Codificacao ESTRITA: encodeURIComponent deixa ! * ' ( ) crus, e o WhatsApp
+// reinterpreta esses caracteres na query e corrompe os emojis que vem depois.
+// Escapando todos (RFC 3986) a URL fica 100% segura — foi o que resolveu na pratica.
+function encodeStrict(str) {
+  return encodeURIComponent(str).replace(/[!*'()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+}
+
+// Monta a URL do WhatsApp. Usada por AMBAS as mensagens (cadastro e redefinicao),
+// entao a correcao de encoding vale para as duas de uma vez.
 function buildWhatsAppUrl(phone, text) {
   const digits = String(phone).replace(/\D/g, '');
   const br = digits.startsWith('55') ? digits : '55' + digits;
-  return `https://wa.me/${br}?text=${encodeURIComponent(text)}`;
+  return `https://api.whatsapp.com/send?phone=${br}&text=${encodeStrict(text)}`;
 }
 
 // Substitui os placeholders {nome} {url} {telefone} {senha} no template do banco.
