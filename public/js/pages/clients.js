@@ -338,46 +338,52 @@ function gerarSenhaCliente() {
 // URL oficial de acesso da cliente ao app.
 const JTNAILS_APP_URL = 'https://jtnails.com.br/agendar';
 
-// Monta a URL do WhatsApp (wa.me) com o texto devidamente codificado.
-// encodeURIComponent garante que emojis e formatacao nao quebrem.
+// Monta a URL do WhatsApp (wa.me) com o texto codificado.
 function buildWhatsAppUrl(phone, text) {
   const digits = String(phone).replace(/\D/g, '');
   const br = digits.startsWith('55') ? digits : '55' + digits;
   return `https://wa.me/${br}?text=${encodeURIComponent(text)}`;
 }
 
-// Emojis em escapes Unicode (ASCII puro no arquivo, imune a encoding):
-// \uD83D\uDC85 = 💅  \u2728 = ✨  \uD83D\uDCF1 = 📱  \uD83D\uDD11 = 🔑  \uD83D\uDC49 = 👉
-function welcomeMessage(name, phone, senha) {
-  const nail = '\uD83D\uDC85', spark = '\u2728', mob = '\uD83D\uDCF1', key = '\uD83D\uDD11', point = '\uD83D\uDC49';
-  return (
-    `Seja bem-vinda ao *JT Nails*, *${name}*! ${nail}${spark}\n\n` +
-    `Seu cadastro foi realizado com sucesso. Aqui est\u00e3o seus dados de acesso:\n\n` +
-    `${mob} *Telefone:* ${phone}\n` +
-    `${key} *Senha:* ${senha}\n\n` +
-    `Para fazer seus agendamentos, acesse:\n` +
-    `${point} ${JTNAILS_APP_URL}\n\n` +
-    `Aguardamos voc\u00ea!`
-  );
+// Substitui os placeholders {nome} {url} {telefone} {senha} no template do banco.
+function fillTemplate(tpl, { name, phone, senha }) {
+  return String(tpl)
+    .replace(/\{nome\}/g, name)
+    .replace(/\{url\}/g, JTNAILS_APP_URL)
+    .replace(/\{telefone\}/g, phone)
+    .replace(/\{senha\}/g, senha);
 }
 
-function resetPasswordMessage(name, phone, senha) {
-  const nail = '\uD83D\uDC85', mob = '\uD83D\uDCF1', key = '\uD83D\uDD11', point = '\uD83D\uDC49';
-  return (
-    `Ol\u00e1, *${name}*! ${nail}\n\n` +
-    `Sua senha do *JT Nails* foi redefinida com sucesso!\n\n` +
-    `${mob} *Telefone:* ${phone}\n` +
-    `${key} *Nova Senha:* ${senha}\n\n` +
-    `Acesse seu painel para agendar seus hor\u00e1rios:\n` +
-    `${point} ${JTNAILS_APP_URL}\n\n` +
-    `Se precisar de algo, estamos \u00e0 disposi\u00e7\u00e3o!`
-  );
+// MESMO MECANISMO DA MENSAGEM DE ANIVERSARIO (que funciona no WhatsApp):
+// o texto vem do BANCO via API servida com charset=utf-8 (rota /settings/*-message).
+// Fallbacks locais em escapes Unicode caso a API falhe.
+const WELCOME_FALLBACK =
+  'Seja bem-vinda ao *JT Nails*, *{nome}*! \uD83D\uDC85\u2728\n\n' +
+  'Seu cadastro foi realizado com sucesso. Aqui est\u00e3o seus dados de acesso:\n\n' +
+  '\uD83D\uDCF1 *Telefone:* {telefone}\n\uD83D\uDD11 *Senha:* {senha}\n\n' +
+  'Para fazer seus agendamentos, acesse:\n\uD83D\uDC49 {url}\n\nAguardamos voc\u00ea!';
+const RESET_FALLBACK =
+  'Ol\u00e1, *{nome}*! \uD83D\uDC85\n\nSua senha do *JT Nails* foi redefinida com sucesso!\n\n' +
+  '\uD83D\uDCF1 *Telefone:* {telefone}\n\uD83D\uDD11 *Nova Senha:* {senha}\n\n' +
+  'Acesse seu painel para agendar seus hor\u00e1rios:\n\uD83D\uDC49 {url}\n\n' +
+  'Se precisar de algo, estamos \u00e0 disposi\u00e7\u00e3o!';
+
+async function welcomeMessage(name, phone, senha) {
+  let tpl = WELCOME_FALLBACK;
+  try { const r = await api.getWelcomeMessage(); if (r && r.message) tpl = r.message; } catch (_) {}
+  return fillTemplate(tpl, { name, phone, senha });
+}
+
+async function resetPasswordMessage(name, phone, senha) {
+  let tpl = RESET_FALLBACK;
+  try { const r = await api.getResetMessage(); if (r && r.message) tpl = r.message; } catch (_) {}
+  return fillTemplate(tpl, { name, phone, senha });
 }
 
 // MODAL 1 — Confirmacao automatica de cadastro (pos-cadastro) com mensagem de boas-vindas.
-function showWelcomeModal(name, phone, senha) {
+async function showWelcomeModal(name, phone, senha) {
   const phoneMasked = maskPhone(phone);
-  const link = buildWhatsAppUrl(phone, welcomeMessage(name, phoneMasked, senha));
+  const link = buildWhatsAppUrl(phone, await welcomeMessage(name, phoneMasked, senha));
 
   openModal('Cliente cadastrada! ' + String.fromCodePoint(0x1F389), `
     <div style="text-align:center;margin-bottom:16px">
@@ -444,8 +450,8 @@ async function sendAccessWhatsApp(id) {
     try {
       await api.resetClientPassword(id, senha);
       reloadClientsListIfVisible();
-      // Abre o WhatsApp automaticamente com a mensagem de redefinicao.
-      const link = buildWhatsAppUrl(client.phone, resetPasswordMessage(client.name, maskPhone(client.phone), senha));
+      // Abre o WhatsApp automaticamente com a mensagem de redefinicao (texto do banco).
+      const link = buildWhatsAppUrl(client.phone, await resetPasswordMessage(client.name, maskPhone(client.phone), senha));
       window.open(link, '_blank', 'noopener');
       toast('Senha redefinida! Abrindo WhatsApp...', 'success');
       closeModal();

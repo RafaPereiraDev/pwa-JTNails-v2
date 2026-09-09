@@ -129,6 +129,7 @@ const api = {
   // Settings
   getBirthdayMessage: () => api.get('/settings/birthday-message'),
   getWelcomeMessage: () => api.get('/settings/welcome-message'),
+  getResetMessage: () => api.get('/settings/reset-message'),
   updateBirthdayMessage: (message) => api.put('/settings/birthday-message', { message }),
 
   // Notificações (Web Push)

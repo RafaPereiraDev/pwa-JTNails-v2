@@ -141,8 +141,14 @@ async function initDatabase() {
   await query(`
     INSERT INTO settings (key, value)
     VALUES ('welcome_message', $1)
-    ON CONFLICT (key) DO NOTHING
-  `, ['Ol\u00e1, {nome}! \u2728\n\nSeu cadastro no sal\u00e3o JT Nails foi realizado com sucesso.\n\nAcesse nosso aplicativo para agendar, consultar ou cancelar seus hor\u00e1rios:\n\n\uD83D\uDD17 {url}\n\nSeus dados de acesso:\n\n\uD83D\uDCF1 WhatsApp: {telefone}\n\uD83D\uDD11 Senha: {senha}\n\nGuarde essa senha para acessar seu painel sempre que precisar!']);
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `, ['Seja bem-vinda ao *JT Nails*, *{nome}*! \uD83D\uDC85\u2728\n\nSeu cadastro foi realizado com sucesso. Aqui est\u00e3o seus dados de acesso:\n\n\uD83D\uDCF1 *Telefone:* {telefone}\n\uD83D\uDD11 *Senha:* {senha}\n\nPara fazer seus agendamentos, acesse:\n\uD83D\uDC49 {url}\n\nAguardamos voc\u00ea!']);
+
+  await query(`
+    INSERT INTO settings (key, value)
+    VALUES ('reset_message', $1)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `, ['Ol\u00e1, *{nome}*! \uD83D\uDC85\n\nSua senha do *JT Nails* foi redefinida com sucesso!\n\n\uD83D\uDCF1 *Telefone:* {telefone}\n\uD83D\uDD11 *Nova Senha:* {senha}\n\nAcesse seu painel para agendar seus hor\u00e1rios:\n\uD83D\uDC49 {url}\n\nSe precisar de algo, estamos \u00e0 disposi\u00e7\u00e3o!']);
 
   // ── Seed (só se o banco estiver vazio) ──────────────────────────────────────
   const { count } = await getOne('SELECT COUNT(*) as count FROM users');

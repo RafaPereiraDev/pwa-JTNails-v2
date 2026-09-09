@@ -12,16 +12,25 @@ const DEFAULT_BIRTHDAY_MSG =
 // Mensagem de acesso enviada no cadastro de cliente. Mesmo padrao do aniversario:
 // texto no banco + escapes Unicode + resposta com charset=utf-8 (preserva emojis).
 // Placeholders: {nome} {url} {telefone} {senha}
-// \u2728 = ✨  \uD83D\uDD17 = 🔗  \uD83D\uDCF1 = 📱  \uD83D\uDD11 = 🔑
+// \uD83D\uDC85 = 💅  \u2728 = ✨  \uD83D\uDCF1 = 📱  \uD83D\uDD11 = 🔑  \uD83D\uDC49 = 👉
 const DEFAULT_WELCOME_MSG =
-  'Ol\u00e1, {nome}! \u2728\n\n' +
-  'Seu cadastro no sal\u00e3o JT Nails foi realizado com sucesso.\n\n' +
-  'Acesse nosso aplicativo para agendar, consultar ou cancelar seus hor\u00e1rios:\n\n' +
-  '\uD83D\uDD17 {url}\n\n' +
-  'Seus dados de acesso:\n\n' +
-  '\uD83D\uDCF1 WhatsApp: {telefone}\n' +
-  '\uD83D\uDD11 Senha: {senha}\n\n' +
-  'Guarde essa senha para acessar seu painel sempre que precisar!';
+  'Seja bem-vinda ao *JT Nails*, *{nome}*! \uD83D\uDC85\u2728\n\n' +
+  'Seu cadastro foi realizado com sucesso. Aqui est\u00e3o seus dados de acesso:\n\n' +
+  '\uD83D\uDCF1 *Telefone:* {telefone}\n' +
+  '\uD83D\uDD11 *Senha:* {senha}\n\n' +
+  'Para fazer seus agendamentos, acesse:\n' +
+  '\uD83D\uDC49 {url}\n\n' +
+  'Aguardamos voc\u00ea!';
+
+// Mensagem de redefinicao de senha (mesmo mecanismo).
+const DEFAULT_RESET_MSG =
+  'Ol\u00e1, *{nome}*! \uD83D\uDC85\n\n' +
+  'Sua senha do *JT Nails* foi redefinida com sucesso!\n\n' +
+  '\uD83D\uDCF1 *Telefone:* {telefone}\n' +
+  '\uD83D\uDD11 *Nova Senha:* {senha}\n\n' +
+  'Acesse seu painel para agendar seus hor\u00e1rios:\n' +
+  '\uD83D\uDC49 {url}\n\n' +
+  'Se precisar de algo, estamos \u00e0 disposi\u00e7\u00e3o!';
 
 // GET /api/settings/birthday-message — qualquer usuário autenticado pode ler
 // (o dashboard precisa da mensagem para montar o link de WhatsApp)
@@ -68,6 +77,18 @@ router.get('/welcome-message', authenticateToken, async (req, res) => {
     res.json({ message: row ? row.value : DEFAULT_WELCOME_MSG });
   } catch (e) {
     console.error('[settings/welcome-message GET]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/settings/reset-message — mensagem de redefinicao de senha (mesmo mecanismo).
+router.get('/reset-message', authenticateToken, async (req, res) => {
+  try {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    const row = await getOne(`SELECT value FROM settings WHERE key = 'reset_message'`);
+    res.json({ message: row ? row.value : DEFAULT_RESET_MSG });
+  } catch (e) {
+    console.error('[settings/reset-message GET]', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });
