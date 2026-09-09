@@ -225,11 +225,19 @@ router.post('/', authenticateToken, async (req, res) => {
     if (!/^\d{2}:\d{2}$/.test(String(start_time).slice(0, 5)))
       return res.status(400).json({ error: 'Horário inválido. Use o formato HH:MM' });
 
-    // Não permite agendar em datas passadas (usa fuso de Brasília)
-    const nowRow = await getOne(`SELECT (NOW() AT TIME ZONE 'America/Sao_Paulo')::date::text AS today`);
-    const today  = nowRow.today;
+    // Não permite agendar em datas/horários que já passaram (usa fuso de Brasília)
+    const nowRow    = await getOne(`SELECT NOW() AT TIME ZONE 'America/Sao_Paulo' AS now_local`);
+    const nowLocal  = new Date(nowRow.now_local);
+    const today     = nowLocal.toLocaleDateString('en-CA');
+    const nowMin    = nowLocal.getHours() * 60 + nowLocal.getMinutes();
+    const startMin  = (() => {
+      const [h, m] = String(start_time).slice(0, 5).split(':').map(Number);
+      return h * 60 + m;
+    })();
     if (date < today)
       return res.status(400).json({ error: 'Não é possível agendar em uma data que já passou' });
+    if (date === today && startMin <= nowMin)
+      return res.status(400).json({ error: 'Não é possível agendar em um horário que já passou hoje' });
 
     const svc = await getOne('SELECT * FROM services WHERE id = $1 AND active = TRUE', [service_id]);
     if (!svc) return res.status(404).json({ error: 'Serviço não encontrado ou inativo' });
@@ -278,6 +286,21 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const newDate   = date       || appt.date;
     const newStart  = start_time || String(appt.start_time).slice(0, 5);
     const newSvcId  = service_id || appt.service_id;
+
+    // Se a data/horário estiver sendo ALTERADA, não permite mover para o passado.
+    // Mudanças que mantêm a data/hora original (ex.: só trocar status) são permitidas.
+    const dateOrTimeChanged = (date && date !== appt.date) ||
+      (start_time && start_time !== String(appt.start_time).slice(0, 5));
+    if (dateOrTimeChanged) {
+      const nowRow   = await getOne(`SELECT NOW() AT TIME ZONE 'America/Sao_Paulo' AS now_local`);
+      const nowLocal = new Date(nowRow.now_local);
+      const today    = nowLocal.toLocaleDateString('en-CA');
+      const nowMin   = nowLocal.getHours() * 60 + nowLocal.getMinutes();
+      const [sh, sm] = String(newStart).slice(0, 5).split(':').map(Number);
+      const startMin = sh * 60 + sm;
+      if (newDate < today || (newDate === today && startMin <= nowMin))
+        return res.status(400).json({ error: 'Não é possível remarcar para uma data ou horário que já passou' });
+    }
     const svc       = await getOne('SELECT * FROM services WHERE id = $1', [newSvcId]);
     const newEnd    = calcEndTime(String(newStart).slice(0,5), svc.duration);
     const newPrice  = price !== undefined ? parseFloat(price) : parseFloat(appt.price);

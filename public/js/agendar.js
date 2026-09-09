@@ -673,3 +673,20 @@ if ('serviceWorker' in navigator) {
     }
   });
 })();
+
+// ===== "Esqueci minha senha" =====
+// Sem canal de auto-reset (SMS/e-mail); a redefinicao e feita pela profissional
+// (botao "Redefinir senha e enviar por WhatsApp" no painel). Informa a cliente.
+(function () {
+  const link = document.getElementById('forgot-password-link');
+  if (!link) return;
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    alert(
+      'Redefinição de senha\n\n' +
+      'Por segurança, a sua senha é redefinida pela profissional do salão.\n\n' +
+      'Chame o salão pelo WhatsApp pedindo a redefinição. Você receberá uma nova senha ' +
+      'em uma mensagem e poderá acessar normalmente.'
+    );
+  });
+})();

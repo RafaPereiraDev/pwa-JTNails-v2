@@ -313,8 +313,9 @@ async function runInactiveReport() {
             <tbody>
               ${clients.map(c => {
                 const phone = String(c.phone || '').replace(/\D/g, '');
+                // Emojis em escapes Unicode (imune a corrupcao de encoding): \uD83D\uDC85=💅 \uD83C\uDF38=🌸
                 const msg   = encodeURIComponent(
-                  `Olá, ${c.name}! 💅 Faz um tempinho que não te vemos por aqui no Juliana & Tainara Atelier Nails. Que tal agendar um horário? Temos novidades esperando por você! 🌸`
+                  `Ol\u00e1, ${c.name}! \uD83D\uDC85 Faz um tempinho que n\u00e3o te vemos por aqui no Juliana & Tainara Atelier Nails. Que tal agendar um hor\u00e1rio? Temos novidades esperando por voc\u00ea! \uD83C\uDF38`
                 );
                 const wpp = `https://wa.me/55${phone}?text=${msg}`;
                 const daysSince = parseInt(c.days_since) || 0;

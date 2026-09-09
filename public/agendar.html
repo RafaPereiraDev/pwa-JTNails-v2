@@ -125,7 +125,7 @@
           <label for="login-password">Senha</label>
           <input type="password" id="login-password" autocomplete="current-password" placeholder="Sua senha" required />
         </div>
-        <p class="pub-cancel-help">Esqueceu a senha? Solicite a redefinição à profissional.</p>
+        <p class="pub-cancel-help">Esqueceu a senha? <a href="#" id="forgot-password-link" style="color:var(--primary);font-weight:700">Redefinir senha</a></p>
         <div id="login-error" class="pub-error" hidden></div>
         <button type="submit" class="pub-btn pub-btn-primary pub-btn-block" id="login-btn">
           <i class="fa fa-right-to-bracket"></i> Entrar
@@ -206,7 +206,7 @@
   </div>
 
   <script src="js/password-policy.js?v=1"></script>
-  <script src="js/agendar.js?v=10"></script>
+  <script src="js/agendar.js?v=11"></script>
 
   <!-- Botão discreto de instalação do PWA (aparece só quando disponível) -->
   <div id="pwa-install-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;

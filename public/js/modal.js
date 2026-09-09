@@ -334,7 +334,7 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       <div class="form-row mb-4">
         <div class="form-group">
           <label>Data *</label>
-          <input type="date" id="appt-date" value="${appt ? appt.date : (prefillDate || today)}" required />
+          <input type="date" id="appt-date" value="${appt ? appt.date : (prefillDate || today)}" ${isEdit ? '' : `min="${today}"`} required />
         </div>
         <div class="form-group">
           <label>Horário *</label>
@@ -393,12 +393,29 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       notes: document.getElementById('appt-notes').value || null
     };
 
-    // Não permite agendar em datas passadas
-    const todayStr = new Date().toLocaleDateString('en-CA');
-    if (!isEdit && data.date < todayStr) {
-      errEl.textContent = 'Não é possível agendar em uma data que já passou.';
-      errEl.style.display = '';
-      return;
+    // Não permite agendar em datas/horários que já passaram (usa fuso local).
+    // Aplica também ao concluir/reagendar, mas não bloqueia editar um agendamento
+    // que permanece no mesmo dia/horário já existente.
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('en-CA');
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const startMinutes = (() => {
+      const m = String(data.start_time || '').match(/^(\d{1,2}):(\d{2})/);
+      return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    })();
+    const isSameAsSaved = isEdit && appt && data.date === appt.date &&
+      String(data.start_time) === String(appt.start_time).slice(0, 5);
+    if (!isSameAsSaved) {
+      if (data.date < todayStr) {
+        errEl.textContent = 'Não é possível agendar em uma data que já passou.';
+        errEl.style.display = '';
+        return;
+      }
+      if (data.date === todayStr && startMinutes !== null && startMinutes <= nowMinutes) {
+        errEl.textContent = 'Não é possível agendar em um horário que já passou hoje.';
+        errEl.style.display = '';
+        return;
+      }
     }
 
     try {
