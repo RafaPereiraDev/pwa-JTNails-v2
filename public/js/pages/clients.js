@@ -102,7 +102,7 @@ async function renderClientsTable(search = '') {
                         <i class="fa fa-calendar-plus"></i>
                       </button>
                       ${isAdminLevel() ? `
-                      <button class="btn btn-xs" style="background:#25d366;color:#fff" onclick="sendAccessWhatsApp(${c.id})" title="Enviar acesso por WhatsApp">
+                      <button class="btn btn-xs" style="background:#25d366;color:#fff" onclick="sendAccessWhatsApp(${c.id})" title="Redefinir senha e enviar por WhatsApp">
                         <i class="fab fa-whatsapp"></i>
                       </button>` : ''}
                       ${isAdminLevel() ? (inativo ? `
@@ -308,10 +308,13 @@ async function openClientModal(id = null) {
       } else {
         await api.createClient(data);
         toast('Cliente cadastrado com sucesso!', 'success');
-        // Nao abre WhatsApp/modal automaticamente. O envio do acesso passou a ser
-        // feito sob demanda pelo botao de WhatsApp na tabela de clientes.
-        closeModal();
         reloadClientsListIfVisible();
+        // Modal automatico pos-cadastro com o acesso (so se uma senha foi definida).
+        if (senha) {
+          showWelcomeModal(data.name, data.phone, senha);
+        } else {
+          closeModal();
+        }
       }
     } catch(err) {
       errEl.textContent = err.message;
@@ -332,10 +335,76 @@ function gerarSenhaCliente() {
   if (el) el.value = pwd;
 }
 
-// Fluxo do botao de WhatsApp na tabela: define/redefine a senha da cliente e,
-// em seguida, abre a mensagem de acesso com essa senha (Opcao A).
-// A senha nao fica guardada em texto no banco (apenas hash), por isso precisamos
-// que a admin a defina no momento do envio.
+// URL oficial de acesso da cliente ao app.
+const JTNAILS_APP_URL = 'https://jtnails.com.br/agendar';
+
+// Monta a URL do WhatsApp (wa.me) com o texto devidamente codificado.
+// encodeURIComponent garante que emojis e formatacao nao quebrem.
+function buildWhatsAppUrl(phone, text) {
+  const digits = String(phone).replace(/\D/g, '');
+  const br = digits.startsWith('55') ? digits : '55' + digits;
+  return `https://wa.me/${br}?text=${encodeURIComponent(text)}`;
+}
+
+// Emojis em escapes Unicode (ASCII puro no arquivo, imune a encoding):
+// \uD83D\uDC85 = 💅  \u2728 = ✨  \uD83D\uDCF1 = 📱  \uD83D\uDD11 = 🔑  \uD83D\uDC49 = 👉
+function welcomeMessage(name, phone, senha) {
+  const nail = '\uD83D\uDC85', spark = '\u2728', mob = '\uD83D\uDCF1', key = '\uD83D\uDD11', point = '\uD83D\uDC49';
+  return (
+    `Seja bem-vinda ao *JT Nails*, *${name}*! ${nail}${spark}\n\n` +
+    `Seu cadastro foi realizado com sucesso. Aqui est\u00e3o seus dados de acesso:\n\n` +
+    `${mob} *Telefone:* ${phone}\n` +
+    `${key} *Senha:* ${senha}\n\n` +
+    `Para fazer seus agendamentos, acesse:\n` +
+    `${point} ${JTNAILS_APP_URL}\n\n` +
+    `Aguardamos voc\u00ea!`
+  );
+}
+
+function resetPasswordMessage(name, phone, senha) {
+  const nail = '\uD83D\uDC85', mob = '\uD83D\uDCF1', key = '\uD83D\uDD11', point = '\uD83D\uDC49';
+  return (
+    `Ol\u00e1, *${name}*! ${nail}\n\n` +
+    `Sua senha do *JT Nails* foi redefinida com sucesso!\n\n` +
+    `${mob} *Telefone:* ${phone}\n` +
+    `${key} *Nova Senha:* ${senha}\n\n` +
+    `Acesse seu painel para agendar seus hor\u00e1rios:\n` +
+    `${point} ${JTNAILS_APP_URL}\n\n` +
+    `Se precisar de algo, estamos \u00e0 disposi\u00e7\u00e3o!`
+  );
+}
+
+// MODAL 1 — Confirmacao automatica de cadastro (pos-cadastro) com mensagem de boas-vindas.
+function showWelcomeModal(name, phone, senha) {
+  const phoneMasked = maskPhone(phone);
+  const link = buildWhatsAppUrl(phone, welcomeMessage(name, phoneMasked, senha));
+
+  openModal('Cliente cadastrada! ' + String.fromCodePoint(0x1F389), `
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:44px;line-height:1;color:#4E6754">
+        <i class="fa fa-circle-check"></i>
+      </div>
+      <p style="color:var(--gray-600);line-height:1.5;margin-top:8px">
+        Cadastro de <strong>${esc(name)}</strong> concluído com sucesso.
+      </p>
+    </div>
+    <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.8">
+      <div><i class="fa fa-user text-muted"></i> <strong>Nome:</strong> ${esc(name)}</div>
+      <div>&#128241; <strong>Telefone:</strong> ${esc(phoneMasked)}</div>
+      <div>&#128273; <strong>Senha:</strong> ${esc(senha)}</div>
+    </div>
+    <div class="modal-footer" style="padding:0">
+      <button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
+      <a class="btn btn-primary whatsapp-btn" href="${link}" target="_blank" rel="noopener" onclick="setTimeout(closeModal, 300)" style="background:#25d366;border:none">
+        <i class="fab fa-whatsapp"></i> Enviar Acesso via WhatsApp
+      </a>
+    </div>
+  `, 'modal-sm');
+}
+
+// ACAO NA TABELA — Redefinir senha e enviar via WhatsApp.
+// A senha nao fica guardada em texto no banco (apenas hash), entao a admin define
+// a nova senha aqui; ao confirmar, salva e abre o WhatsApp com a mensagem de redefinicao.
 async function sendAccessWhatsApp(id) {
   let client = null;
   try {
@@ -345,15 +414,15 @@ async function sendAccessWhatsApp(id) {
     return;
   }
 
-  openModal('Enviar acesso por WhatsApp', `
+  openModal('Redefinir senha e enviar', `
     <p style="color:var(--gray-600);line-height:1.6;margin-bottom:14px">
-      Defina a senha de acesso de <strong>${esc(client.name)}</strong>. Ela será enviada na
-      mensagem do WhatsApp junto com o link do aplicativo.
+      Defina a nova senha de acesso de <strong>${esc(client.name)}</strong>. Ela será enviada
+      pelo WhatsApp junto com o link do aplicativo.
       ${client.has_password ? '<br><span class="text-xs text-muted">Esta cliente já tem uma senha. Confirmar irá substituí-la pela nova.</span>' : ''}
     </p>
     <form id="access-wpp-form">
       <div class="form-group">
-        <label>Senha de acesso (mínimo 8 caracteres)</label>
+        <label>Nova senha (mínimo 8 caracteres)</label>
         <div style="display:flex;gap:8px">
           <input type="text" id="aw-password" placeholder="Ex.: atelier azul 27" minlength="8" required style="flex:1" />
           <button type="button" class="btn btn-secondary btn-sm" onclick="gerarSenhaAcesso()" title="Gerar senha"><i class="fa fa-dice"></i></button>
@@ -362,7 +431,7 @@ async function sendAccessWhatsApp(id) {
       <div id="aw-error" class="alert alert-error" style="display:none"></div>
       <div class="modal-footer" style="padding:0;margin-top:16px">
         <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        <button type="submit" class="btn btn-primary"><i class="fab fa-whatsapp"></i> Definir e enviar</button>
+        <button type="submit" class="btn btn-primary"><i class="fab fa-whatsapp"></i> Redefinir e enviar</button>
       </div>
     </form>
   `, 'modal-sm');
@@ -374,8 +443,12 @@ async function sendAccessWhatsApp(id) {
     const senha = document.getElementById('aw-password').value;
     try {
       await api.resetClientPassword(id, senha);
-      showAccessLinkModal(client.name, client.phone, senha);
       reloadClientsListIfVisible();
+      // Abre o WhatsApp automaticamente com a mensagem de redefinicao.
+      const link = buildWhatsAppUrl(client.phone, resetPasswordMessage(client.name, maskPhone(client.phone), senha));
+      window.open(link, '_blank', 'noopener');
+      toast('Senha redefinida! Abrindo WhatsApp...', 'success');
+      closeModal();
     } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
@@ -393,59 +466,6 @@ function gerarSenhaAcesso() {
   for (let i = 0; i < 10; i++) pwd += chars[arr[i] % chars.length];
   const el = document.getElementById('aw-password');
   if (el) el.value = pwd;
-}
-
-// Modal com o botão "Enviar Acesso via WhatsApp" (mensagem do banco + senha em memoria)
-async function showAccessLinkModal(name, phone, senha) {
-  const APP_URL = 'https://jt-nails.up.railway.app/agendar';
-  const primeiroNome = String(name).trim().split(' ')[0];
-  const phoneMasked = maskPhone(phone);
-
-  // MESMO MECANISMO DA MENSAGEM DE ANIVERSARIO (que funciona no WhatsApp):
-  // o texto vem do BANCO (rota /settings/welcome-message servida com charset=utf-8),
-  // com placeholders {nome} {url} {telefone} {senha}. Fallback local em escapes Unicode.
-  const FALLBACK =
-    'Ol\u00e1, {nome}! \u2728\n\n' +
-    'Seu cadastro no sal\u00e3o JT Nails foi realizado com sucesso.\n\n' +
-    'Acesse nosso aplicativo para agendar, consultar ou cancelar seus hor\u00e1rios:\n\n' +
-    '\uD83D\uDD17 {url}\n\n' +
-    'Seus dados de acesso:\n\n' +
-    '\uD83D\uDCF1 WhatsApp: {telefone}\n' +
-    '\uD83D\uDD11 Senha: {senha}\n\n' +
-    'Guarde essa senha para acessar seu painel sempre que precisar!';
-
-  let template = FALLBACK;
-  try {
-    const resp = await api.getWelcomeMessage();
-    if (resp && resp.message) template = resp.message;
-  } catch (_) { /* usa fallback */ }
-
-  const msg = template
-    .replace(/\{nome\}/g, primeiroNome)
-    .replace(/\{url\}/g, APP_URL)
-    .replace(/\{telefone\}/g, phoneMasked)
-    .replace(/\{senha\}/g, senha);
-
-  // Mesmo formato de link da mensagem de aniversario: api.whatsapp.com/send direto.
-  const phoneDigits = String(phone).replace(/\D/g, '');
-  const phoneBr = phoneDigits.startsWith('55') ? phoneDigits : '55' + phoneDigits;
-  const link = `https://api.whatsapp.com/send?phone=${phoneBr}&text=${encodeURIComponent(msg)}`;
-
-  openModal('Enviar acesso via WhatsApp', `
-    <p style="color:var(--gray-600);line-height:1.6;margin-bottom:14px">
-      Senha de <strong>${esc(name)}</strong> definida. Envie os dados de acesso pelo WhatsApp:
-    </p>
-    <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.6">
-      <div>&#128241; <strong>WhatsApp:</strong> ${esc(phoneMasked)}</div>
-      <div>&#128273; <strong>Senha:</strong> ${esc(senha)}</div>
-    </div>
-    <div class="modal-footer" style="padding:0">
-      <button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
-      <a class="btn btn-primary whatsapp-btn" href="${link}" target="_blank" rel="noopener" onclick="setTimeout(closeModal, 300)" style="background:#25d366;border:none">
-        <i class="fab fa-whatsapp"></i> Enviar Acesso via WhatsApp
-      </a>
-    </div>
-  `, 'modal-sm');
 }
 
 // Calcula a idade a partir de birth_date (YYYY-MM-DD). Retorna null se inválida.
