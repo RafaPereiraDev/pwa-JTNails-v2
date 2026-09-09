@@ -9,6 +9,20 @@ const { PUBLIC_KEY: VAPID_PUBLIC }        = require('../push');
 const DEFAULT_BIRTHDAY_MSG =
   'Parab\u00e9ns, {nome}! \uD83C\uDF89\uD83C\uDF82 O Sal\u00e3o Tainara Nails deseja a voc\u00ea um dia maravilhoso, repleto de alegria e momentos especiais! \u2728\uD83D\uDC96';
 
+// Mensagem de acesso enviada no cadastro de cliente. Mesmo padrao do aniversario:
+// texto no banco + escapes Unicode + resposta com charset=utf-8 (preserva emojis).
+// Placeholders: {nome} {url} {telefone} {senha}
+// \u2728 = ✨  \uD83D\uDD17 = 🔗  \uD83D\uDCF1 = 📱  \uD83D\uDD11 = 🔑
+const DEFAULT_WELCOME_MSG =
+  'Ol\u00e1, {nome}! \u2728\n\n' +
+  'Seu cadastro no sal\u00e3o JT Nails foi realizado com sucesso.\n\n' +
+  'Acesse nosso aplicativo para agendar, consultar ou cancelar seus hor\u00e1rios:\n\n' +
+  '\uD83D\uDD17 {url}\n\n' +
+  'Seus dados de acesso:\n\n' +
+  '\uD83D\uDCF1 WhatsApp: {telefone}\n' +
+  '\uD83D\uDD11 Senha: {senha}\n\n' +
+  'Guarde essa senha para acessar seu painel sempre que precisar!';
+
 // GET /api/settings/birthday-message — qualquer usuário autenticado pode ler
 // (o dashboard precisa da mensagem para montar o link de WhatsApp)
 router.get('/birthday-message', authenticateToken, async (req, res) => {
@@ -41,6 +55,19 @@ router.put('/birthday-message', authenticateToken, requireAdmin, async (req, res
     res.json({ message: 'Mensagem de aniversário salva com sucesso', value: message });
   } catch (e) {
     console.error('[settings/birthday-message PUT]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/settings/welcome-message — mensagem de acesso do cadastro de cliente.
+// Mesmo mecanismo do aniversario: texto do banco servido com charset=utf-8.
+router.get('/welcome-message', authenticateToken, async (req, res) => {
+  try {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    const row = await getOne(`SELECT value FROM settings WHERE key = 'welcome_message'`);
+    res.json({ message: row ? row.value : DEFAULT_WELCOME_MSG });
+  } catch (e) {
+    console.error('[settings/welcome-message GET]', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

@@ -135,6 +135,15 @@ async function initDatabase() {
     ON CONFLICT (key) DO NOTHING
   `, ['Parab\u00e9ns, {nome}! \uD83C\uDF89\uD83C\uDF82 O Sal\u00e3o Tainara Nails deseja a voc\u00ea um dia maravilhoso, repleto de alegria e momentos especiais! \u2728\uD83D\uDC96']);
 
+  // Mensagem de acesso do cadastro de cliente (mesmo padrao do aniversario).
+  // Placeholders: {nome} {url} {telefone} {senha}
+  // \u2728=✨ \uD83D\uDD17=🔗 \uD83D\uDCF1=📱 \uD83D\uDD11=🔑
+  await query(`
+    INSERT INTO settings (key, value)
+    VALUES ('welcome_message', $1)
+    ON CONFLICT (key) DO NOTHING
+  `, ['Ol\u00e1, {nome}! \u2728\n\nSeu cadastro no sal\u00e3o JT Nails foi realizado com sucesso.\n\nAcesse nosso aplicativo para agendar, consultar ou cancelar seus hor\u00e1rios:\n\n\uD83D\uDD17 {url}\n\nSeus dados de acesso:\n\n\uD83D\uDCF1 WhatsApp: {telefone}\n\uD83D\uDD11 Senha: {senha}\n\nGuarde essa senha para acessar seu painel sempre que precisar!']);
+
   // ── Seed (só se o banco estiver vazio) ──────────────────────────────────────
   const { count } = await getOne('SELECT COUNT(*) as count FROM users');
   if (parseInt(count) > 0) {

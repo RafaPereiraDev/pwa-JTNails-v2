@@ -335,30 +335,37 @@ function gerarSenhaCliente() {
 }
 
 // Modal de confirmação pós-cadastro com botão "Enviar Acesso via WhatsApp"
-function openAccessSentModal(name, phone, senha) {
+async function openAccessSentModal(name, phone, senha) {
   const APP_URL = 'https://jt-nails.up.railway.app/agendar';
   const primeiroNome = String(name).trim().split(' ')[0];
   const phoneMasked = maskPhone(phone);
 
-  // Emojis e acentos como sequencias de escape Unicode (ASCII puro no arquivo).
-  // Assim nenhum encoding de arquivo/SO pode corromper a mensagem antes do encodeURIComponent.
-  const emojiEstrela = '\u2728';        // sparkles
-  const emojiLink    = '\uD83D\uDD17';  // link
-  const emojiWhats   = '\uD83D\uDCF1';  // celular
-  const emojiChave   = '\uD83D\uDD11';  // chave
+  // MESMO MECANISMO DA MENSAGEM DE ANIVERSARIO (que funciona no WhatsApp):
+  // o texto vem do BANCO (rota /settings/welcome-message servida com charset=utf-8),
+  // com placeholders {nome} {url} {telefone} {senha}. Fallback local em escapes Unicode.
+  const FALLBACK =
+    'Ol\u00e1, {nome}! \u2728\n\n' +
+    'Seu cadastro no sal\u00e3o JT Nails foi realizado com sucesso.\n\n' +
+    'Acesse nosso aplicativo para agendar, consultar ou cancelar seus hor\u00e1rios:\n\n' +
+    '\uD83D\uDD17 {url}\n\n' +
+    'Seus dados de acesso:\n\n' +
+    '\uD83D\uDCF1 WhatsApp: {telefone}\n' +
+    '\uD83D\uDD11 Senha: {senha}\n\n' +
+    'Guarde essa senha para acessar seu painel sempre que precisar!';
 
-  const msg =
-    `Ol\u00E1, ${primeiroNome}! ${emojiEstrela}\n\n` +
-    `Seu cadastro no sal\u00E3o JT Nails foi realizado com sucesso.\n\n` +
-    `Acesse nosso aplicativo para agendar, consultar ou cancelar seus hor\u00E1rios:\n\n` +
-    `${emojiLink} ${APP_URL}\n\n` +
-    `Seus dados de acesso:\n\n` +
-    `${emojiWhats} WhatsApp: ${phoneMasked}\n` +
-    `${emojiChave} Senha: ${senha}\n\n` +
-    `Guarde essa senha para acessar seu painel sempre que precisar!`;
+  let template = FALLBACK;
+  try {
+    const resp = await api.getWelcomeMessage();
+    if (resp && resp.message) template = resp.message;
+  } catch (_) { /* usa fallback */ }
 
-  // Usa EXATAMENTE o mesmo formato da mensagem de aniversario (que funciona no
-  // WhatsApp do usuario): api.whatsapp.com/send direto, sem redirect do wa.me.
+  const msg = template
+    .replace(/\{nome\}/g, primeiroNome)
+    .replace(/\{url\}/g, APP_URL)
+    .replace(/\{telefone\}/g, phoneMasked)
+    .replace(/\{senha\}/g, senha);
+
+  // Mesmo formato de link da mensagem de aniversario: api.whatsapp.com/send direto.
   const phoneDigits = String(phone).replace(/\D/g, '');
   const phoneBr = phoneDigits.startsWith('55') ? phoneDigits : '55' + phoneDigits;
   const link = `https://api.whatsapp.com/send?phone=${phoneBr}&text=${encodeURIComponent(msg)}`;
