@@ -5,10 +5,11 @@ async function loadDashboard() {
   try {
     // Carrega dashboard, aniversários e mensagem de aniversário em paralelo
     const podeVerAniversarios = (currentUser.role !== 'professional' || currentUser.professional_id);
-    const [data, birthdays, bMsgResp] = await Promise.all([
+    const [data, birthdays, bMsgResp, plansEnding] = await Promise.all([
       api.getDashboard(),
       podeVerAniversarios ? api.getClientBirthdays().catch(() => [])          : Promise.resolve([]),
       podeVerAniversarios ? api.getBirthdayMessage().catch(() => ({}))        : Promise.resolve({}),
+      api.getPlansEnding().catch(() => []),
     ]);
     const { today, month, next_appointments, professionals } = data;
     const birthdayMsgTemplate = bMsgResp.message ||
@@ -188,6 +189,32 @@ async function loadDashboard() {
               }).join('')}
             </tbody>
           </table>
+        </div>
+      </div>` : ''}
+
+      ${plansEnding && plansEnding.length > 0 ? `
+      <div class="card mt-4" style="border-left:4px solid #C19B53">
+        <div class="card-header" style="background:linear-gradient(135deg,#f3ecdd,#fff)">
+          <div class="card-title" style="color:#8a6d2f">
+            <i class="fa fa-rotate-right"></i> Planos anuais terminando
+          </div>
+          <span class="badge" style="background:#f3ecdd;color:#8a6d2f">${plansEnding.length}</span>
+        </div>
+        <div class="card-body">
+          <p class="text-sm text-muted" style="margin-bottom:12px">
+            ${plansEnding.length === 1 ? 'Uma cliente está' : 'Estas clientes estão'} no último agendamento do Plano Anual. Que tal renovar por mais 1 ano?
+          </p>
+          ${plansEnding.map(p => `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--gray-100)">
+              <div>
+                <div class="font-semibold">${esc(p.client_name)}</div>
+                <div class="text-xs text-muted">Resta apenas 1 agendamento do plano.</div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="openNewAppointment(null, ${p.professional_id})" title="Renovar plano">
+                <i class="fa fa-rotate-right"></i> Renovar
+              </button>
+            </div>
+          `).join('')}
         </div>
       </div>` : ''}
     `;

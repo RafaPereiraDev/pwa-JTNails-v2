@@ -351,6 +351,26 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
           <select id="appt-payment">${payOptions}</select>
         </div>
       </div>
+      ${!isEdit ? `
+      <div class="form-row mb-4">
+        <div class="form-group">
+          <label>Plano Anual <span class="text-xs text-muted">(recorrência por 12 meses)</span></label>
+          <select id="appt-plan">
+            <option value="">Sem recorrência (agendamento único)</option>
+            <option value="weekly">Semanal (52 sessões / 1 ano)</option>
+            <option value="biweekly">Quinzenal (a cada 14 dias / 26 sessões)</option>
+            <option value="every21">A cada 21 dias (~17 sessões)</option>
+            <option value="monthly">Mensal (12 sessões / 1x por mês)</option>
+          </select>
+          <div class="text-xs text-muted" style="margin-top:4px">Gera os agendamentos futuros mantendo o mesmo dia da semana e horário.</div>
+        </div>
+      </div>` : ''}
+      <div class="form-group mb-4">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="appt-encaixe" style="width:auto" />
+          Permitir encaixe (sobrepor a um horário já ocupado)
+        </label>
+      </div>
       <div class="form-group mb-4">
         <label>Observações</label>
         <textarea id="appt-notes" rows="2">${appt ? esc(appt.notes || '') : ''}</textarea>
@@ -381,6 +401,8 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       return;
     }
 
+    const planEl = document.getElementById('appt-plan');
+    const encaixeEl = document.getElementById('appt-encaixe');
     const data = {
       client_id: parseInt(clientId),
       professional_id: parseInt(document.getElementById('appt-professional').value),
@@ -390,7 +412,9 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       price: parseFloat(document.getElementById('appt-price').value),
       status: document.getElementById('appt-status').value,
       payment_method: document.getElementById('appt-payment').value || null,
-      notes: document.getElementById('appt-notes').value || null
+      notes: document.getElementById('appt-notes').value || null,
+      plan: planEl ? (planEl.value || null) : null,
+      allow_overlap: encaixeEl ? encaixeEl.checked : false,
     };
 
     // Não permite agendar em datas/horários que já passaram (usa fuso local).
@@ -428,6 +452,13 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       if (isEdit) {
         await api.updateAppointment(appt.id, data);
         toast('Agendamento atualizado!', 'success');
+      } else if (data.plan) {
+        const r = await api.createAppointment(data);
+        const skipped = (r && r.skipped) ? r.skipped.length : 0;
+        toast(
+          `Plano criado: ${r.created} agendamento(s)` + (skipped ? `, ${skipped} pulado(s) por conflito.` : '.'),
+          'success'
+        );
       } else {
         await api.createAppointment(data);
         toast('Agendamento criado!', 'success');
@@ -435,6 +466,20 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       closeModal();
       refreshCurrentPage();
     } catch (err) {
+      // Conflito de horário: oferece o encaixe explícito (não vale para planos).
+      if (err.status === 409 && !data.plan && !data.allow_overlap) {
+        errEl.innerHTML =
+          'Este horário já está ocupado. ' +
+          '<a href="#" id="do-encaixe" style="font-weight:700;color:var(--primary)">Encaixar mesmo assim?</a>';
+        errEl.style.display = '';
+        const link = document.getElementById('do-encaixe');
+        if (link) link.onclick = (ev) => {
+          ev.preventDefault();
+          if (encaixeEl) encaixeEl.checked = true;
+          document.getElementById('appt-form').requestSubmit();
+        };
+        return;
+      }
       errEl.textContent = err.message;
       errEl.style.display = '';
     }

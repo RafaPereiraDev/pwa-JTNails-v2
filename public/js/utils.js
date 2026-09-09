@@ -263,6 +263,26 @@ function maskPhone(value) {
   return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
 }
 
+// Autocorreção do 9º dígito: se vier DDD + 8 dígitos e o primeiro deles for de
+// celular (6-9), insere o "9" na frente → (XX) 9XXXX-XXXX. Retorna só dígitos.
+function normalizeBRPhone(value) {
+  let d = (value || '').replace(/\D/g, '');
+  if (d.length === 10 && /[6-9]/.test(d[2])) {
+    d = d.slice(0, 2) + '9' + d.slice(2);
+  }
+  return d.slice(0, 11);
+}
+
+// Valida celular BR completo: 11 dígitos, DDD válido e 9 na 3ª posição.
+function isValidBRMobile(value) {
+  const d = (value || '').replace(/\D/g, '');
+  return d.length === 11 && d[2] === '9';
+}
+
+// Mensagem padrão de telefone inválido (reaproveitada nos formulários).
+const PHONE_INVALID_MSG =
+  'Número de WhatsApp inválido. Certifique-se de incluir o DDD e o dígito 9 (ex: 47 9XXXX-XXXX).';
+
 /** Aplica máscara de CPF XXX.XXX.XXX-XX enquanto o usuário digita */
 function maskCPF(value) {
   const d = (value || '').replace(/\D/g, '').slice(0, 11);

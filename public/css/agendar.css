@@ -222,6 +222,16 @@ img { max-width: 100%; display: block; }
   background: var(--white);
 }
 .pub-field textarea { min-height: 80px; resize: vertical; }
+/* Campo de senha com botão de mostrar/ocultar */
+.pub-pass-wrap { position: relative; }
+.pub-pass-wrap input { padding-right: 46px; }
+.pub-pass-toggle {
+  position: absolute; top: 0; right: 0; height: 100%;
+  width: 44px; display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer; color: var(--gray-400);
+  font-size: 16px;
+}
+.pub-pass-toggle:active { color: var(--primary); }
 .pub-field input:focus, .pub-field textarea:focus {
   outline: none; border-color: var(--primary);
 }

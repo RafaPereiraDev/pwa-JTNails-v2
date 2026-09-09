@@ -125,6 +125,11 @@ async function initDatabase() {
 
     -- Status ativo/inativo da cliente (inativar preserva o histórico financeiro)
     ALTER TABLE clients ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE;
+
+    -- Plano Anual (série de agendamentos recorrentes) e encaixe (permite sobreposição)
+    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS series_id  TEXT;
+    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS is_encaixe BOOLEAN DEFAULT FALSE;
+    CREATE INDEX IF NOT EXISTS idx_appointments_series ON appointments(series_id);
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)

@@ -88,6 +88,7 @@ const api = {
   deleteAppointment: (id) => api.delete(`/appointments/${id}`),
 
   getPendingConfirmation: () => api.get('/appointments/pending-confirmation'),
+  getPlansEnding: () => api.get('/appointments/plans-ending'),
   bulkConfirmAppointments: (updates) => api.post('/appointments/bulk-confirm', updates),
 
   // Transactions

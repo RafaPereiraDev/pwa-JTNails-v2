@@ -132,11 +132,17 @@ router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
 
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { name, phone, email, birth_date, notes, password } = req.body;
-    if (!name || !phone)
+    const { name, email, birth_date, notes, password } = req.body;
+    if (!name || !req.body.phone)
       return res.status(400).json({ error: 'Nome e telefone são obrigatórios' });
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       return res.status(400).json({ error: 'E-mail inválido' });
+
+    // Autocorreção do 9º dígito + validação de celular completo (11 dígitos).
+    let phone = String(req.body.phone).replace(/\D/g, '');
+    if (phone.length === 10 && /[6-9]/.test(phone[2])) phone = phone.slice(0, 2) + '9' + phone.slice(2);
+    if (phone.length !== 11 || phone[2] !== '9')
+      return res.status(400).json({ error: 'Número de WhatsApp inválido. Inclua o DDD e o dígito 9 (ex: 47 9XXXX-XXXX).' });
 
     // Senha é opcional no cadastro. Se informada, valida a política e guarda o hash
     // (é a senha de acesso da cliente à área pública de agendamento).
@@ -149,7 +155,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
 
     const result = await getOne(
       'INSERT INTO clients (name, phone, email, birth_date, notes, password) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-      [name.trim(), phone.trim(), email || null, birth_date || null, notes || null, passwordHash]
+      [name.trim(), phone, email || null, birth_date || null, notes || null, passwordHash]
     );
     res.status(201).json(await getOne('SELECT * FROM clients WHERE id = $1', [result.id]));
   } catch (e) {

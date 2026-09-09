@@ -15,6 +15,43 @@ function calcEndTime(start, mins) {
   return `${String(Math.floor(t / 60) % 24).padStart(2,'0')}:${String(t % 60).padStart(2,'0')}`;
 }
 
+// ── PLANO ANUAL ───────────────────────────────────────────────────────────────
+// Frequências suportadas: cada uma define o passo (em dias, ou 'month') e o total
+// de sessões que cobrem 12 meses.
+const PLAN_FREQUENCIES = {
+  weekly:     { stepDays: 7,  count: 52 }, // Semanal (52 semanas)
+  biweekly:   { stepDays: 14, count: 26 }, // Quinzenal (a cada 14 dias)
+  every21:    { stepDays: 21, count: 17 }, // A cada 21 dias
+  monthly:    { stepMonth: true, count: 12 }, // Mensal (1x por mês)
+};
+
+// Soma dias a uma data 'YYYY-MM-DD' e devolve 'YYYY-MM-DD' (sem fuso: usa UTC).
+function addDaysStr(dateStr, days) {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+// Soma meses mantendo o dia (com clamp no fim do mês).
+function addMonthsStr(dateStr, months) {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, lastDay));
+  return d.toISOString().slice(0, 10);
+}
+// Gera as datas da série a partir da data inicial (inclusive), conforme a frequência.
+function generatePlanDates(startDate, plan) {
+  const freq = PLAN_FREQUENCIES[plan];
+  if (!freq) return [startDate];
+  const dates = [];
+  for (let i = 0; i < freq.count; i++) {
+    dates.push(freq.stepMonth ? addMonthsStr(startDate, i) : addDaysStr(startDate, i * freq.stepDays));
+  }
+  return dates;
+}
+
 async function recalculateClientReliability(client_id) {
   const stats = await getOne(`
     SELECT
@@ -90,6 +127,33 @@ router.get('/pending-confirmation', authenticateToken, async (req, res) => {
     res.json(await getAll(sql, params));
   } catch (e) {
     console.error('[appointments pending-confirmation]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/appointments/plans-ending — planos anuais em que resta apenas 1
+// agendamento futuro pendente (penúltimo já passou). Serve para avisar a renovação.
+router.get('/plans-ending', authenticateToken, async (req, res) => {
+  try {
+    const rows = await getAll(`
+      SELECT a.series_id,
+             MIN(c.name)               AS client_name,
+             MIN(a.client_id)          AS client_id,
+             MIN(a.professional_id)    AS professional_id,
+             COUNT(*)                  AS restantes
+      FROM appointments a
+      JOIN clients c ON c.id = a.client_id
+      WHERE a.series_id IS NOT NULL
+        AND a.status IN ('scheduled','confirmed')
+        AND (a.date::text || ' ' || a.start_time::text)::timestamp
+              >= (NOW() AT TIME ZONE 'America/Sao_Paulo')
+      GROUP BY a.series_id
+      HAVING COUNT(*) = 1
+      ORDER BY MIN(c.name)
+    `);
+    res.json(rows);
+  } catch (e) {
+    console.error('[appointments plans-ending]', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });
@@ -220,7 +284,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { client_id, professional_id, service_id, date, start_time,
-            price, payment_method, notes, status } = req.body;
+            price, payment_method, notes, status, plan, allow_overlap } = req.body;
 
     if (!client_id || !professional_id || !service_id || !date || !start_time)
       return res.status(400).json({ error: 'Cliente, profissional, serviço, data e horário são obrigatórios' });
@@ -252,17 +316,55 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const finalPrice = price !== undefined ? parseFloat(price) : parseFloat(svc.price);
     const end_time   = calcEndTime(start_time, svc.duration);
+    const overlap    = allow_overlap === true || allow_overlap === 'true';
 
-    if (await hasConflict(professional_id, date, start_time, end_time))
+    // ── PLANO ANUAL: cria a série inteira numa transação ─────────────────────
+    if (plan && PLAN_FREQUENCIES[plan]) {
+      const allDates = generatePlanDates(date, plan);
+      // Filtra ocorrências que caem em dia fechado (dom/seg) — o plano pula esses dias.
+      const dates = allDates.filter(d => !isClosedDay(d));
+      const seriesId = `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      const created = await withTransaction(async (client) => {
+        const skipped = [];
+        const insertedIds = [];
+        for (const d of dates) {
+          if (!overlap && await hasConflict(professional_id, d, start_time, end_time)) {
+            skipped.push(d);
+            continue; // pula a data conflitante (a menos que seja encaixe)
+          }
+          const r = await client.query(`
+            INSERT INTO appointments
+              (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes,series_id,is_encaixe)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            RETURNING id
+          `, [client_id, professional_id, service_id, d, start_time, end_time,
+              finalPrice, status || 'scheduled', payment_method || null, notes || null,
+              seriesId, overlap]);
+          insertedIds.push(r.rows[0].id);
+        }
+        return { insertedIds, skipped };
+      });
+
+      return res.status(201).json({
+        message: `Plano criado: ${created.insertedIds.length} agendamento(s).`,
+        series_id: seriesId,
+        created: created.insertedIds.length,
+        skipped: created.skipped,
+      });
+    }
+
+    // ── Agendamento único ────────────────────────────────────────────────────
+    if (!overlap && await hasConflict(professional_id, date, start_time, end_time))
       return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
 
     const result = await getOne(`
       INSERT INTO appointments
-        (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes,is_encaixe)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       RETURNING id
     `, [client_id, professional_id, service_id, date, start_time, end_time,
-        finalPrice, status || 'scheduled', payment_method || null, notes || null]);
+        finalPrice, status || 'scheduled', payment_method || null, notes || null, overlap]);
 
     res.status(201).json(await getOne(APPT_SELECT + ' WHERE a.id = $1', [result.id]));
   } catch (e) {
@@ -315,7 +417,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const newEnd    = calcEndTime(String(newStart).slice(0,5), svc.duration);
     const newPrice  = price !== undefined ? parseFloat(price) : parseFloat(appt.price);
 
-    if (await hasConflict(newProfId, newDate, newStart, newEnd, appt.id))
+    const allowOverlap = req.body.allow_overlap === true || req.body.allow_overlap === 'true';
+    if (!allowOverlap && await hasConflict(newProfId, newDate, newStart, newEnd, appt.id))
       return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
 
     await query(`

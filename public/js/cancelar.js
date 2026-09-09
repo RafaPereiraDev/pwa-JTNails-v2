@@ -344,3 +344,19 @@ function closeForgotPasswordModal() {
   const m = document.getElementById('forgot-modal');
   if (m) m.remove();
 }
+
+// ===== Mostrar/ocultar senha (ícone de olho) =====
+function togglePubPassword(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const icon = btn ? btn.querySelector('i') : null;
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (icon) { icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); }
+    if (btn) btn.setAttribute('aria-label', 'Ocultar senha');
+  } else {
+    input.type = 'password';
+    if (icon) { icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }
+    if (btn) btn.setAttribute('aria-label', 'Mostrar senha');
+  }
+}

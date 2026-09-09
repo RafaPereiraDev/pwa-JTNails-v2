@@ -56,7 +56,10 @@
         </div>
         <div class="pub-field">
           <label for="login-password">Senha</label>
-          <input type="password" id="login-password" placeholder="Sua senha" autocomplete="current-password" />
+          <div class="pub-pass-wrap">
+            <input type="password" id="login-password" placeholder="Sua senha" autocomplete="current-password" />
+            <button type="button" class="pub-pass-toggle" onclick="togglePubPassword('login-password', this)" aria-label="Mostrar senha"><i class="fa fa-eye"></i></button>
+          </div>
         </div>
         <p class="pub-cancel-help">Esqueceu a senha? <a href="#" id="forgot-password-link" style="color:var(--primary);font-weight:700">Redefinir senha</a></p>
         <div id="login-error" class="pub-error" hidden></div>
@@ -92,6 +95,6 @@
     </div>
   </div>
 
-  <script src="js/cancelar.js?v=7"></script>
+  <script src="js/cancelar.js?v=8"></script>
 </body>
 </html>

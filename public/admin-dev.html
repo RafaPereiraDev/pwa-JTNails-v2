@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>DB Monitor — JT Nails Dev</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    :root{
+      --bg:#080B11; --card:#11161F; --card-2:#0E131B; --border:#1E2733;
+      --cyan:#00E5FF; --blue:#00A3FF; --green:#22e07a; --muted:#7c8798; --text:#E6EDF5;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      background:var(--bg); color:var(--text);
+      font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+      min-height:100vh; padding:16px; padding-bottom:40px;
+      background-image:radial-gradient(circle at 20% 0%, rgba(0,163,255,.08), transparent 40%),
+                       radial-gradient(circle at 90% 20%, rgba(0,229,255,.06), transparent 35%);
+    }
+    .wrap{max-width:560px;margin:0 auto}
+
+    /* Header */
+    .hdr{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+    .hdr-icon{
+      width:44px;height:44px;border-radius:12px;flex-shrink:0;
+      display:flex;align-items:center;justify-content:center;font-size:20px;
+      background:linear-gradient(135deg,#0a2a3a,#06131c);
+      color:var(--cyan);border:1px solid var(--border);
+      box-shadow:0 0 18px rgba(0,229,255,.35);
+    }
+    .hdr h1{font-size:16px;font-weight:700;letter-spacing:.3px;line-height:1.2}
+    .hdr .sub{font-size:11px;color:var(--muted)}
+    .status-tag{
+      margin-left:auto;display:inline-flex;align-items:center;gap:6px;
+      font-size:11px;font-weight:700;color:var(--green);
+      background:rgba(34,224,122,.1);border:1px solid rgba(34,224,122,.3);
+      padding:5px 10px;border-radius:20px;
+    }
+    .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 1.6s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+    .card{
+      background:var(--card);border:1px solid var(--border);border-radius:16px;
+      padding:18px;margin-bottom:14px;
+    }
+    .card-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:7px}
+    .card-title i{color:var(--cyan)}
+
+    /* Gauge */
+    .gauge-wrap{display:flex;flex-direction:column;align-items:center}
+    .gauge{position:relative;width:240px;max-width:100%}
+    .gauge svg{display:block;width:100%;height:auto;overflow:visible}
+    .gauge-center{position:absolute;left:0;right:0;bottom:6px;text-align:center}
+    .gauge-pct{font-size:40px;font-weight:800;line-height:1;
+      background:linear-gradient(90deg,var(--cyan),var(--blue));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+    .gauge-sub{font-size:12px;color:var(--muted);margin-top:6px}
+    .gauge-cap{font-size:11px;color:var(--muted);margin-top:2px}
+
+    /* Metric grid */
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .metric{background:var(--card-2);border:1px solid var(--border);border-radius:14px;padding:14px}
+    .metric .lbl{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:8px}
+    .metric .lbl i{color:var(--cyan)}
+    .metric .val{font-size:22px;font-weight:800}
+    .metric .val small{font-size:12px;font-weight:600;color:var(--muted)}
+    .bar{height:5px;border-radius:5px;background:#0a0e15;margin-top:10px;overflow:hidden}
+    .bar > span{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--blue),var(--cyan));box-shadow:0 0 10px rgba(0,229,255,.5);transition:width .8s ease}
+
+    /* Ping */
+    .ping-row{display:flex;align-items:center;gap:16px}
+    .ping-val{font-size:34px;font-weight:800;color:var(--cyan);line-height:1}
+    .ping-val small{font-size:14px;color:var(--muted);font-weight:600}
+    .ping-online{font-size:11px;color:var(--green);font-weight:700;display:flex;align-items:center;gap:6px;margin-top:6px}
+    .spark{flex:1;height:44px}
+
+    /* Tables */
+    .tbl{margin-bottom:14px}
+    .tbl:last-child{margin-bottom:0}
+    .tbl-head{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+    .tbl-name{font-weight:700;display:flex;align-items:center;gap:8px}
+    .tbl-name .pct{color:var(--cyan);font-size:11px}
+    .tbl-size{color:var(--muted);font-size:12px}
+    .tbl-bar{height:8px;border-radius:6px;background:#0a0e15;overflow:hidden}
+    .tbl-bar > span{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--cyan));box-shadow:0 0 10px rgba(0,229,255,.45);border-radius:6px;transition:width .8s ease}
+
+    .loading,.error{text-align:center;padding:40px 16px;color:var(--muted)}
+    .error{color:#ff6b6b}
+    .refresh{
+      position:fixed;right:16px;bottom:16px;width:52px;height:52px;border-radius:50%;
+      background:linear-gradient(135deg,var(--blue),var(--cyan));border:none;color:#04121a;
+      font-size:20px;box-shadow:0 6px 20px rgba(0,163,255,.5);cursor:pointer;
+    }
+    .footer{text-align:center;font-size:10px;color:var(--muted);margin-top:16px}
+    .fade{animation:fade .5s ease}
+    @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hdr">
+      <div class="hdr-icon"><i class="fa-solid fa-database"></i></div>
+      <div>
+        <h1>DB Monitor — JT Nails Dev</h1>
+        <div class="sub">PostgreSQL · Railway</div>
+      </div>
+      <span class="status-tag" id="status-tag" hidden><span class="dot"></span> Online</span>
+    </div>
+
+    <div id="content">
+      <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Coletando métricas...</div>
+    </div>
+
+    <div class="footer" id="footer"></div>
+  </div>
+
+  <button class="refresh" id="refresh-btn" title="Atualizar"><i class="fa-solid fa-rotate-right"></i></button>
+
+  <script>
+  const fmtMB = v => (v >= 1 ? v.toFixed(1) + ' MB' : (v * 1024).toFixed(0) + ' KB');
+  const tableSize = t => t.mb >= 1 ? t.mb.toFixed(2) + ' MB' : t.kb.toFixed(1) + ' KB';
+  const ICONS = {
+    appointments:'fa-calendar-check', clients:'fa-user-group', annual_plans:'fa-star',
+    users:'fa-user-shield', logs:'fa-scroll', services:'fa-scissors',
+    transactions:'fa-money-bill', professionals:'fa-hand-sparkles',
+    settings:'fa-gear', blocked_times:'fa-ban'
+  };
+
+  // Gauge em meia-lua (arco de 180°). value = 0..100
+  function gaugeSVG(pct){
+    const p = Math.max(0, Math.min(100, pct));
+    const R = 90, CX = 110, CY = 110;
+    const toXY = (deg) => {
+      const rad = (Math.PI * deg) / 180;
+      return [CX + R * Math.cos(rad), CY - R * Math.sin(rad)];
+    };
+    // Arco de 180° (esquerda) até 0° (direita)
+    const [x0,y0] = toXY(180);
+    const [x1,y1] = toXY(180 - (180 * p / 100));
+    const large = 0; // sempre <= 180
+    const bg = `M ${toXY(180)[0]} ${toXY(180)[1]} A ${R} ${R} 0 0 1 ${toXY(0)[0]} ${toXY(0)[1]}`;
+    const fg = `M ${x0} ${y0} A ${R} ${R} 0 ${large} 1 ${x1} ${y1}`;
+    return `
+      <svg viewBox="0 0 220 130">
+        <defs>
+          <linearGradient id="gg" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#00A3FF"/><stop offset="100%" stop-color="#00E5FF"/>
+          </linearGradient>
+        </defs>
+        <path d="${bg}" fill="none" stroke="#0a0e15" stroke-width="16" stroke-linecap="round"/>
+        <path d="${fg}" fill="none" stroke="url(#gg)" stroke-width="16" stroke-linecap="round"
+              style="filter:drop-shadow(0 0 6px rgba(0,229,255,.6))"/>
+      </svg>`;
+  }
+
+  // Mini gráfico de oscilação (sparkline) para o ping
+  function sparkSVG(){
+    const pts = Array.from({length:20}, (_,i) => {
+      const y = 22 + Math.sin(i*0.9)*10 + (Math.random()*6-3);
+      return `${i*(200/19)},${y.toFixed(1)}`;
+    }).join(' ');
+    return `<svg class="spark" viewBox="0 0 200 44" preserveAspectRatio="none">
+      <polyline points="${pts}" fill="none" stroke="#00E5FF" stroke-width="2"
+        style="filter:drop-shadow(0 0 4px rgba(0,229,255,.7))"/></svg>`;
+  }
+
+  function render(m){
+    document.getElementById('status-tag').hidden = false;
+    const t = m.total;
+    const tablesHtml = m.tables.map(tb => `
+      <div class="tbl">
+        <div class="tbl-head">
+          <span class="tbl-name"><i class="fa-solid ${ICONS[tb.name] || 'fa-table'}" style="color:var(--cyan)"></i> ${tb.name} <span class="pct">${tb.percent}%</span></span>
+          <span class="tbl-size">${tableSize(tb)} · ${tb.rows.toLocaleString('pt-BR')} reg.</span>
+        </div>
+        <div class="tbl-bar"><span style="width:${Math.max(2, tb.percent)}%"></span></div>
+      </div>`).join('');
+
+    document.getElementById('content').innerHTML = `
+      <div class="card fade gauge-wrap">
+        <div class="card-title" style="align-self:flex-start"><i class="fa-solid fa-gauge-high"></i> Uso do Banco</div>
+        <div class="gauge">
+          ${gaugeSVG(t.percent)}
+          <div class="gauge-center">
+            <div class="gauge-pct">${t.percent}%</div>
+            <div class="gauge-sub">${fmtMB(t.mb)} / ${t.limit_mb} MB</div>
+            <div class="gauge-cap">Limite do plano</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid fade">
+        <div class="metric">
+          <div class="lbl"><i class="fa-solid fa-hard-drive"></i> Total de Dados</div>
+          <div class="val">${t.mb.toFixed(1)}<small> MB</small></div>
+          <div class="bar"><span style="width:${Math.max(2, t.percent)}%"></span></div>
+        </div>
+        <div class="metric">
+          <div class="lbl"><i class="fa-solid fa-table-list"></i> Tabelas</div>
+          <div class="val">${m.table_count}</div>
+        </div>
+        <div class="metric">
+          <div class="lbl"><i class="fa-solid fa-list-ol"></i> Registros</div>
+          <div class="val">${m.total_records.toLocaleString('pt-BR')}</div>
+        </div>
+        <div class="metric">
+          <div class="lbl"><i class="fa-solid fa-calendar-check"></i> Agend. do Mês</div>
+          <div class="val">${m.month_appointments.toLocaleString('pt-BR')}</div>
+        </div>
+      </div>
+
+      <div class="card fade">
+        <div class="card-title"><i class="fa-solid fa-heart-pulse"></i> Latência / Health</div>
+        <div class="ping-row">
+          <div>
+            <div class="ping-val">${m.ping_ms}<small> ms</small></div>
+            <div class="ping-online"><span class="dot"></span> Server Ping · Online</div>
+          </div>
+          ${sparkSVG()}
+        </div>
+      </div>
+
+      <div class="card fade">
+        <div class="card-title"><i class="fa-solid fa-layer-group"></i> Armazenamento por Tabela</div>
+        ${tablesHtml || '<div class="loading">Sem tabelas.</div>'}
+      </div>
+    `;
+
+    const d = new Date(m.generated_at);
+    document.getElementById('footer').textContent =
+      `Banco: ${m.database} · Atualizado ${d.toLocaleTimeString('pt-BR')}`;
+  }
+
+  async function load(){
+    const token = localStorage.getItem('token');
+    const content = document.getElementById('content');
+    if (!token){
+      content.innerHTML = `<div class="error"><i class="fa-solid fa-lock"></i><br>Você precisa estar logada como administradora mestre.<br><br>
+        <a href="/" style="color:var(--cyan)">Ir para o login</a></div>`;
+      return;
+    }
+    content.innerHTML = `<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Coletando métricas...</div>`;
+    try{
+      const resp = await fetch('/api/dev/db-metrics', { headers:{ Authorization:'Bearer '+token } });
+      if (resp.status === 401 || resp.status === 403){
+        content.innerHTML = `<div class="error"><i class="fa-solid fa-shield-halved"></i><br>Acesso restrito ao administrador mestre.</div>`;
+        return;
+      }
+      if (!resp.ok) throw new Error('Falha ao carregar métricas');
+      render(await resp.json());
+    }catch(e){
+      content.innerHTML = `<div class="error"><i class="fa-solid fa-triangle-exclamation"></i><br>${e.message}</div>`;
+    }
+  }
+
+  document.getElementById('refresh-btn').addEventListener('click', load);
+  load();
+  </script>
+</body>
+</html>

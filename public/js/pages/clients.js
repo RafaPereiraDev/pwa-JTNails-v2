@@ -291,9 +291,16 @@ async function openClientModal(id = null) {
     errEl.style.display = 'none';
     const senhaEl = document.getElementById('cf-password');
     const senha = senhaEl ? senhaEl.value.trim() : '';
+    // Autocorreção do 9º dígito + validação de celular completo (11 dígitos)
+    const phoneDigits = normalizeBRPhone(document.getElementById('cf-phone').value);
+    if (!isValidBRMobile(phoneDigits)) {
+      errEl.textContent = PHONE_INVALID_MSG;
+      errEl.style.display = '';
+      return;
+    }
     const data = {
       name: document.getElementById('cf-name').value,
-      phone: document.getElementById('cf-phone').value,
+      phone: phoneDigits,
       email: document.getElementById('cf-email').value || null,
       birth_date: document.getElementById('cf-birth').value || null,
       notes: document.getElementById('cf-notes').value || null

@@ -19,6 +19,12 @@ function signClientToken(c) {
 // Normaliza telefone para só dígitos (10-11)
 function onlyDigits(v) { return String(v || '').replace(/\D/g, ''); }
 function validPhone(d) { return d.length >= 10 && d.length <= 11; }
+// Autocorreção do 9º dígito para celular (DDD + 8 dígitos iniciados por 6-9).
+function normalizeBRPhone(v) {
+  let d = onlyDigits(v);
+  if (d.length === 10 && /[6-9]/.test(d[2])) d = d.slice(0, 2) + '9' + d.slice(2);
+  return d.slice(0, 11);
+}
 
 // Formata YYYY-MM-DD para DD/MM
 function formatDateBR(iso) {
@@ -178,6 +184,13 @@ router.post('/appointments', async (req, res) => {
 
     if (isClosedDay(date))
       return res.status(400).json({ error: 'O salão não atende aos domingos e segundas-feiras.' });
+
+    // Janela máxima de agendamento para a cliente: 30 dias a partir de hoje.
+    const maxLocal = new Date(nowLocal);
+    maxLocal.setDate(maxLocal.getDate() + 30);
+    const maxStr = maxLocal.toLocaleDateString('en-CA');
+    if (date > maxStr)
+      return res.status(400).json({ error: 'Agendamentos podem ser feitos com no máximo 30 dias de antecedência.' });
 
     const duration = svc.duration || 60;
     const endMin   = startMin + duration;
@@ -449,11 +462,12 @@ router.post('/client/register', async (req, res) => {
   try {
     let { name, birth_date, phone, password } = req.body;
     name = String(name || '').trim();
-    const phoneDigits = onlyDigits(phone);
+    const phoneDigits = normalizeBRPhone(phone);
     password = String(password || '');
 
     if (name.length < 2)       return res.status(400).json({ error: 'Informe seu nome completo' });
-    if (!validPhone(phoneDigits)) return res.status(400).json({ error: 'WhatsApp/telefone inválido' });
+    if (phoneDigits.length !== 11 || phoneDigits[2] !== '9')
+      return res.status(400).json({ error: 'Número de WhatsApp inválido. Inclua o DDD e o dígito 9 (ex: 47 9XXXX-XXXX).' });
     if (birth_date && !/^\d{4}-\d{2}-\d{2}$/.test(birth_date))
       return res.status(400).json({ error: 'Data de nascimento inválida' });
 

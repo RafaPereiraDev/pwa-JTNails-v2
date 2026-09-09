@@ -63,6 +63,16 @@ function maskPhone(v) {
   if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
   return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
 }
+// Autocorreção do 9º dígito e validação de celular BR (fluxo público).
+function normalizeBRPhonePub(v) {
+  let d = (v || '').replace(/\D/g, '');
+  if (d.length === 10 && /[6-9]/.test(d[2])) d = d.slice(0, 2) + '9' + d.slice(2);
+  return d.slice(0, 11);
+}
+function isValidBRMobilePub(v) {
+  const d = (v || '').replace(/\D/g, '');
+  return d.length === 11 && d[2] === '9';
+}
 function toDateStr(dateObj) { return dateObj.toLocaleDateString('en-CA'); }
 
 function authHeaders() {
@@ -229,9 +239,9 @@ function renderCalendar() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const todayStr = toDateStr(new Date());
 
-  // Limite máximo: 14 dias a partir de hoje
+  // Limite máximo: 30 dias a partir de hoje
   const maxDate = new Date();
-  maxDate.setDate(maxDate.getDate() + 14);
+  maxDate.setDate(maxDate.getDate() + 30);
   const maxDateStr = toDateStr(maxDate);
 
   const grid = document.getElementById('cal-grid');
@@ -243,7 +253,7 @@ function renderCalendar() {
     const dow       = dateObj.getDay();       // 0=Domingo, 1=Segunda
     const isClosed  = (dow === 0 || dow === 1); // salão fecha dom e seg
     const isPast    = dateStr < todayStr;
-    const isFuture  = dateStr > maxDateStr;  // além dos 14 dias
+    const isFuture  = dateStr > maxDateStr;  // além dos 30 dias
     const isToday   = dateStr === todayStr;
     const isSelected = dateStr === state.date;
     const disabled  = isPast || isFuture || isClosed;
@@ -259,7 +269,7 @@ function renderCalendar() {
   }
   grid.innerHTML = cells;
 
-  // Limita navegação: não deixa voltar para meses passados nem avançar além dos 14 dias
+  // Limita navegação: não deixa voltar para meses passados nem avançar além dos 30 dias
   const now = new Date();
   const prevBtn = document.getElementById('cal-prev');
   const nextBtn = document.getElementById('cal-next');
@@ -367,10 +377,13 @@ document.getElementById('phone-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const err = document.getElementById('phone-error');
   err.hidden = true;
-  const digits = document.getElementById('cli-phone').value.replace(/\D/g, '');
-  if (digits.length < 10 || digits.length > 11) {
-    err.textContent = 'Informe um WhatsApp/telefone válido com DDD.'; err.hidden = false; return;
+  const digits = normalizeBRPhonePub(document.getElementById('cli-phone').value);
+  if (!isValidBRMobilePub(digits)) {
+    err.textContent = 'Número de WhatsApp inválido. Certifique-se de incluir o DDD e o dígito 9 (ex: 47 9XXXX-XXXX).';
+    err.hidden = false; return;
   }
+  // Reflete a autocorreção no campo (ex.: inseriu o 9)
+  document.getElementById('cli-phone').value = maskPhone(digits);
   state.client.phone = digits;
 
   const btn = document.getElementById('phone-next-btn');
@@ -722,4 +735,20 @@ function showForgotPasswordModal() {
 function closeForgotPasswordModal() {
   const m = document.getElementById('forgot-modal');
   if (m) m.remove();
+}
+
+// ===== Mostrar/ocultar senha (ícone de olho) =====
+function togglePubPassword(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const icon = btn ? btn.querySelector('i') : null;
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (icon) { icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); }
+    if (btn) btn.setAttribute('aria-label', 'Ocultar senha');
+  } else {
+    input.type = 'password';
+    if (icon) { icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }
+    if (btn) btn.setAttribute('aria-label', 'Mostrar senha');
+  }
 }

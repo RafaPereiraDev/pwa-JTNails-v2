@@ -83,6 +83,13 @@ app.use('/api/transactions',  require('./src/routes/transactions'));
 app.use('/api/reports',       require('./src/routes/reports'));
 app.use('/api/blocked-times', require('./src/routes/blockedTimes'));
 app.use('/api/settings',      require('./src/routes/settings'));
+app.use('/api/dev',           require('./src/routes/dev'));
+
+// Painel secreto do desenvolvedor (a autenticação é feita no front via token;
+// a API de métricas exige master).
+app.get(['/admin-dev', '/admin-dev/'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin-dev.html'));
+});
 
 app.get(['/agendar', '/agendar/'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'agendar.html'));

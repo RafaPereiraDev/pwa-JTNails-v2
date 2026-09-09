@@ -123,7 +123,10 @@
         </div>
         <div class="pub-field">
           <label for="login-password">Senha</label>
-          <input type="password" id="login-password" autocomplete="current-password" placeholder="Sua senha" required />
+          <div class="pub-pass-wrap">
+            <input type="password" id="login-password" autocomplete="current-password" placeholder="Sua senha" required />
+            <button type="button" class="pub-pass-toggle" onclick="togglePubPassword('login-password', this)" aria-label="Mostrar senha"><i class="fa fa-eye"></i></button>
+          </div>
         </div>
         <p class="pub-cancel-help">Esqueceu a senha? <a href="#" id="forgot-password-link" style="color:var(--primary);font-weight:700">Redefinir senha</a></p>
         <div id="login-error" class="pub-error" hidden></div>
@@ -150,7 +153,10 @@
         </div>
         <div class="pub-field">
           <label for="reg-password">Crie uma senha <span class="pub-optional">(mínimo 8 caracteres)</span></label>
-          <input type="password" id="reg-password" autocomplete="new-password" placeholder="Escolha uma senha" required />
+          <div class="pub-pass-wrap">
+            <input type="password" id="reg-password" autocomplete="new-password" placeholder="Escolha uma senha" required />
+            <button type="button" class="pub-pass-toggle" onclick="togglePubPassword('reg-password', this)" aria-label="Mostrar senha"><i class="fa fa-eye"></i></button>
+          </div>
           <div id="reg-pass-bar" class="pub-pass-bar" hidden><span></span></div>
           <div id="reg-pass-hint" class="pub-pass-hint" hidden></div>
         </div>
@@ -206,7 +212,7 @@
   </div>
 
   <script src="js/password-policy.js?v=1"></script>
-  <script src="js/agendar.js?v=12"></script>
+  <script src="js/agendar.js?v=13"></script>
 
   <!-- Botão discreto de instalação do PWA (aparece só quando disponível) -->
   <div id="pwa-install-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;
