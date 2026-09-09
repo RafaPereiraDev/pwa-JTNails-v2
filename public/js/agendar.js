@@ -681,17 +681,45 @@ if ('serviceWorker' in navigator) {
 
 // ===== "Esqueci minha senha" =====
 // Sem canal de auto-reset (SMS/e-mail); a redefinicao e feita pela profissional
-// (botao "Redefinir senha e enviar por WhatsApp" no painel). Informa a cliente.
+// (botao "Redefinir senha e enviar por WhatsApp" no painel). Abre um modal claro.
 (function () {
   const link = document.getElementById('forgot-password-link');
   if (!link) return;
   link.addEventListener('click', (e) => {
     e.preventDefault();
-    alert(
-      'Redefinição de senha\n\n' +
-      'Por segurança, a sua senha é redefinida pela profissional do salão.\n\n' +
-      'Chame o salão pelo WhatsApp pedindo a redefinição. Você receberá uma nova senha ' +
-      'em uma mensagem e poderá acessar normalmente.'
-    );
+    showForgotPasswordModal();
   });
 })();
+
+function showForgotPasswordModal() {
+  // Remove eventual modal anterior
+  const prev = document.getElementById('forgot-modal');
+  if (prev) prev.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'pub-modal-overlay';
+  overlay.id = 'forgot-modal';
+  overlay.innerHTML = `
+    <div class="pub-modal pub-center">
+      <div class="pub-success-icon" style="background:#f3ecdd;color:#8a6d2f"><i class="fa fa-key"></i></div>
+      <h2 class="pub-modal-name">Redefinir senha</h2>
+      <p class="pub-modal-bio" style="text-align:left">
+        Por segurança, sua senha é redefinida pela profissional do salão.
+        <br><br>
+        Basta chamar o salão no WhatsApp e pedir a redefinição. Você vai receber
+        uma <strong>nova senha</strong> em uma mensagem e poderá acessar normalmente.
+      </p>
+      <button class="pub-btn pub-btn-primary pub-btn-block" onclick="closeForgotPasswordModal()">
+        <i class="fa fa-check"></i> Entendi
+      </button>
+    </div>`;
+  overlay.addEventListener('click', (ev) => {
+    if (ev.target === overlay) closeForgotPasswordModal();
+  });
+  document.body.appendChild(overlay);
+}
+
+function closeForgotPasswordModal() {
+  const m = document.getElementById('forgot-modal');
+  if (m) m.remove();
+}
