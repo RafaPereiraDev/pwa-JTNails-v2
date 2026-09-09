@@ -86,9 +86,6 @@ async function renderClientsTable(search = '') {
                   </td>
                   <td>
                     <a href="tel:${c.phone}" style="color:var(--gray-700)">${formatPhone(c.phone)}</a>
-                    <button class="btn btn-xs whatsapp-btn" style="margin-left:4px" onclick="sendWhatsApp('${esc(c.phone)}', '${esc(c.name).replace(/'/g,'&#39;')}')" title="WhatsApp">
-                      <i class="fab fa-whatsapp"></i>
-                    </button>
                   </td>
                   <td>${c.last_appointment ? formatDate(c.last_appointment) : '<span class="text-muted">-</span>'}</td>
                   <td><span class="font-semibold">${c.total_appointments || 0}</span></td>
@@ -104,6 +101,10 @@ async function renderClientsTable(search = '') {
                       <button class="btn btn-secondary btn-xs" onclick="openNewAppointment(null, null, ${c.id})" title="Novo agendamento">
                         <i class="fa fa-calendar-plus"></i>
                       </button>
+                      ${isAdminLevel() ? `
+                      <button class="btn btn-xs" style="background:#25d366;color:#fff" onclick="sendAccessWhatsApp(${c.id})" title="Enviar acesso por WhatsApp">
+                        <i class="fab fa-whatsapp"></i>
+                      </button>` : ''}
                       ${isAdminLevel() ? (inativo ? `
                       <button class="btn btn-xs" style="background:#4B6651;color:#fff" onclick="reactivateClient(${c.id})" title="Reativar Cliente">
                         <i class="fa fa-rotate-left"></i>
@@ -306,13 +307,10 @@ async function openClientModal(id = null) {
         reloadClientsListIfVisible();
       } else {
         await api.createClient(data);
-        toast('Cliente criado!', 'success');
-        // Se definiu senha, oferece o envio do acesso por WhatsApp
-        if (senha) {
-          openAccessSentModal(data.name, data.phone, senha);
-        } else {
-          closeModal();
-        }
+        toast('Cliente cadastrado com sucesso!', 'success');
+        // Nao abre WhatsApp/modal automaticamente. O envio do acesso passou a ser
+        // feito sob demanda pelo botao de WhatsApp na tabela de clientes.
+        closeModal();
         reloadClientsListIfVisible();
       }
     } catch(err) {
@@ -334,8 +332,71 @@ function gerarSenhaCliente() {
   if (el) el.value = pwd;
 }
 
-// Modal de confirmação pós-cadastro com botão "Enviar Acesso via WhatsApp"
-async function openAccessSentModal(name, phone, senha) {
+// Fluxo do botao de WhatsApp na tabela: define/redefine a senha da cliente e,
+// em seguida, abre a mensagem de acesso com essa senha (Opcao A).
+// A senha nao fica guardada em texto no banco (apenas hash), por isso precisamos
+// que a admin a defina no momento do envio.
+async function sendAccessWhatsApp(id) {
+  let client = null;
+  try {
+    client = await api.getClient(id);
+  } catch (_) {
+    toast('Não foi possível carregar a cliente.', 'error');
+    return;
+  }
+
+  openModal('Enviar acesso por WhatsApp', `
+    <p style="color:var(--gray-600);line-height:1.6;margin-bottom:14px">
+      Defina a senha de acesso de <strong>${esc(client.name)}</strong>. Ela será enviada na
+      mensagem do WhatsApp junto com o link do aplicativo.
+      ${client.has_password ? '<br><span class="text-xs text-muted">Esta cliente já tem uma senha. Confirmar irá substituí-la pela nova.</span>' : ''}
+    </p>
+    <form id="access-wpp-form">
+      <div class="form-group">
+        <label>Senha de acesso (mínimo 8 caracteres)</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="aw-password" placeholder="Ex.: atelier azul 27" minlength="8" required style="flex:1" />
+          <button type="button" class="btn btn-secondary btn-sm" onclick="gerarSenhaAcesso()" title="Gerar senha"><i class="fa fa-dice"></i></button>
+        </div>
+      </div>
+      <div id="aw-error" class="alert alert-error" style="display:none"></div>
+      <div class="modal-footer" style="padding:0;margin-top:16px">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="fab fa-whatsapp"></i> Definir e enviar</button>
+      </div>
+    </form>
+  `, 'modal-sm');
+
+  document.getElementById('access-wpp-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('aw-error');
+    errEl.style.display = 'none';
+    const senha = document.getElementById('aw-password').value;
+    try {
+      await api.resetClientPassword(id, senha);
+      showAccessLinkModal(client.name, client.phone, senha);
+      reloadClientsListIfVisible();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = '';
+    }
+  });
+}
+
+// Gera uma senha aleatoria forte no campo de envio de acesso
+function gerarSenhaAcesso() {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let pwd = '';
+  const arr = (window.crypto && window.crypto.getRandomValues)
+    ? window.crypto.getRandomValues(new Uint32Array(10))
+    : Array.from({ length: 10 }, () => Math.floor(Math.random() * 1e9));
+  for (let i = 0; i < 10; i++) pwd += chars[arr[i] % chars.length];
+  const el = document.getElementById('aw-password');
+  if (el) el.value = pwd;
+}
+
+// Modal com o botão "Enviar Acesso via WhatsApp" (mensagem do banco + senha em memoria)
+async function showAccessLinkModal(name, phone, senha) {
   const APP_URL = 'https://jt-nails.up.railway.app/agendar';
   const primeiroNome = String(name).trim().split(' ')[0];
   const phoneMasked = maskPhone(phone);
@@ -370,9 +431,9 @@ async function openAccessSentModal(name, phone, senha) {
   const phoneBr = phoneDigits.startsWith('55') ? phoneDigits : '55' + phoneDigits;
   const link = `https://api.whatsapp.com/send?phone=${phoneBr}&text=${encodeURIComponent(msg)}`;
 
-  openModal('Cliente cadastrada! ' + String.fromCodePoint(0x1F389), `
+  openModal('Enviar acesso via WhatsApp', `
     <p style="color:var(--gray-600);line-height:1.6;margin-bottom:14px">
-      Cadastro de <strong>${esc(name)}</strong> concluído. Envie os dados de acesso pelo WhatsApp:
+      Senha de <strong>${esc(name)}</strong> definida. Envie os dados de acesso pelo WhatsApp:
     </p>
     <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.6">
       <div>&#128241; <strong>WhatsApp:</strong> ${esc(phoneMasked)}</div>
