@@ -13,7 +13,7 @@ function authenticateToken(req, res, next) {
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ error: 'Você precisa estar logada para acessar esta área' });
+    return res.status(401).json({ error: 'Você precisa estar autenticado para acessar esta área' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {

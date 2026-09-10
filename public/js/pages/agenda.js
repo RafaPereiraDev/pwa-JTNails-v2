@@ -155,6 +155,36 @@ const TIME_START = 7;
 const TIME_END = 23;
 const SLOT_HEIGHT = 52; // px per hour
 
+// Minuto atual do dia (0..1439) no relógio local. Usado para desabilitar
+// horários que já passaram no dia de HOJE.
+function nowMinutesLocal() {
+  const n = new Date();
+  return n.getHours() * 60 + n.getMinutes();
+}
+
+// Um horário (date 'YYYY-MM-DD' + 'HH:MM') já passou?
+// - Data anterior a hoje: sempre passou.
+// - Hoje: passou se o slot (arredondado p/ baixo em 30min) for <= agora.
+// - Data futura: nunca passou.
+function isSlotPast(date, hhmm) {
+  const today = getTodayStr();
+  if (date < today) return true;
+  if (date > today) return false;
+  const [h, m] = String(hhmm).split(':').map(Number);
+  return (h * 60 + m) <= nowMinutesLocal();
+}
+
+// Altura (px) da faixa "passada" do dia de hoje dentro da grade, para o overlay
+// cinza. Retorna 0 se a data não for hoje. Limita ao intervalo visível da grade.
+function pastOverlayHeight(date) {
+  if (date !== getTodayStr()) return 0;
+  const nowMin = nowMinutesLocal();
+  const startMin = TIME_START * 60;
+  const endMin = TIME_END * 60;
+  const clamped = Math.max(startMin, Math.min(endMin, nowMin));
+  return ((clamped - startMin) / 60) * SLOT_HEIGHT;
+}
+
 
 
 // Calcula o posicionamento lado a lado para agendamentos que se sobrepõem no tempo.
@@ -272,6 +302,7 @@ function renderDayView(container, date, appointments, blocked) {
         <div style="position:relative;height:${totalHeight}px;border-left:1px solid var(--gray-200);cursor:pointer"
           onclick="handleDayClick(event, '${date}')">
           ${hours.map(() => `<div style="height:${SLOT_HEIGHT}px;border-bottom:1px solid var(--gray-100)"></div>`).join('')}
+          ${pastOverlayHeight(date) > 0 ? `<div class="agenda-past-overlay" style="position:absolute;top:0;left:0;right:0;height:${pastOverlayHeight(date)}px;z-index:2" title="Horário já passado"></div>` : ''}
           ${apptBlocks}
           ${blockedBlocks}
         </div>
@@ -307,6 +338,16 @@ function completeAppointmentFromCalendar(id, event) {
   openCompleteModal(id);
 }
 
+// Calcula o horário (HH:MM, em passos de 30min) a partir da posição Y do clique na coluna.
+function timeFromClickY(colEl, clientY) {
+  const rect = colEl.getBoundingClientRect();
+  const y = clientY - rect.top;
+  const hourOffset = y / SLOT_HEIGHT;
+  const h = Math.floor(TIME_START + hourOffset);
+  const m = Math.floor((hourOffset % 1) * 60 / 30) * 30;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+
 function handleWeekColClick(e, day) {
   // só dispara se clicou direto na coluna (área vazia), não em bloco
   if (e.target.closest('.appt-block') || e.target.closest('.blocked-block')) return;
@@ -314,7 +355,21 @@ function handleWeekColClick(e, day) {
   if (!canCreateInCurrentAgenda()) return;
   // Dia passado: não cria agendamento (mas agendamentos existentes ainda abrem detalhes)
   if (day < getTodayStr()) return;
+
+  const time = timeFromClickY(e.currentTarget, e.clientY);
+  // Horário que já passou hoje: não permite criar novo agendamento
+  if (isSlotPast(day, time)) {
+    toast('Esse horário já passou. Escolha um horário futuro.', 'warning');
+    return;
+  }
+
   openNewAppointment(day);
+  setTimeout(() => {
+    const timeInput = document.getElementById('appt-time');
+    if (timeInput) timeInput.value = time;
+    const dateInput = document.getElementById('appt-date');
+    if (dateInput) dateInput.value = day;
+  }, 300);
 }
 
 function handleDayClick(e, date) {
@@ -322,13 +377,18 @@ function handleDayClick(e, date) {
   if (e.target.closest('.appt-block') || e.target.closest('.blocked-block')) return;
   // Na agenda de outra profissional, clicar em horário vazio não faz nada
   if (!canCreateInCurrentAgenda()) return;
-  const col = e.currentTarget;
-  const rect = col.getBoundingClientRect();
-  const y = e.clientY - rect.top;
-  const hourOffset = y / SLOT_HEIGHT;
-  const h = Math.floor(TIME_START + hourOffset);
-  const m = Math.floor((hourOffset % 1) * 60 / 30) * 30;
-  const time = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  // Dia inteiro no passado: não cria (agendamentos existentes ainda abrem detalhes)
+  if (date < getTodayStr()) {
+    toast('Esse dia já passou. Não é possível criar novos agendamentos.', 'warning');
+    return;
+  }
+
+  const time = timeFromClickY(e.currentTarget, e.clientY);
+  // Horário que já passou hoje: bloqueia a criação
+  if (isSlotPast(date, time)) {
+    toast('Esse horário já passou. Escolha um horário futuro.', 'warning');
+    return;
+  }
 
   openNewAppointment(date);
   setTimeout(() => {
@@ -396,10 +456,12 @@ function renderWeekView(container, range, appointments, blocked) {
           const dayAppts = appointments.filter(a => a.date === day);
           const dayBlocked = blocked.filter(b => b.date === day);
           const dayLayout = computeOverlapLayout(dayAppts);
+          const pastH = pastOverlayHeight(day);
           return `
             <div style="position:relative;height:${totalH}px;border-left:1px solid var(--gray-200);${isPast ? 'background:var(--gray-50);cursor:default;opacity:0.6' : 'cursor:pointer'}"
               onclick="handleWeekColClick(event, '${day}')">
               ${hours.map(() => `<div style="height:${SLOT_HEIGHT}px;border-bottom:1px solid var(--gray-100)"></div>`).join('')}
+              ${pastH > 0 ? `<div class="agenda-past-overlay" style="position:absolute;top:0;left:0;right:0;height:${pastH}px;z-index:2" title="Horário já passado"></div>` : ''}
               ${dayAppts.map(a => `
                 <div class="appt-block"
                   style="background:${a.professional_color || '#3B5848'};position:absolute;top:${getTop(a.start_time)}px;height:${getHeight(a.start_time,a.end_time)}px;${overlapStyle(dayLayout, a.id)}font-size:11px;z-index:5"

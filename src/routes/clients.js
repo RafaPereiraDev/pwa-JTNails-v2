@@ -144,6 +144,15 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     if (phone.length !== 11 || phone[2] !== '9')
       return res.status(400).json({ error: 'Número de WhatsApp inválido. Inclua o DDD e o dígito 9 (ex: 47 9XXXX-XXXX).' });
 
+    // Impede cadastro duplicado: já existe cliente com este mesmo telefone?
+    // Compara apenas os dígitos, ignorando formatação salva no banco.
+    const dup = await getOne(
+      `SELECT id, name FROM clients WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = $1`,
+      [phone]
+    );
+    if (dup)
+      return res.status(409).json({ error: `Já existe uma cliente cadastrada com este WhatsApp (${dup.name}).` });
+
     // Senha é opcional no cadastro. Se informada, valida a política e guarda o hash
     // (é a senha de acesso da cliente à área pública de agendamento).
     let passwordHash = null;
@@ -171,6 +180,18 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     if (!c) return res.status(404).json({ error: 'Cliente não encontrada' });
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       return res.status(400).json({ error: 'E-mail inválido' });
+
+    // Se o telefone mudou, não permite usar o de outra cliente já cadastrada.
+    if (phone) {
+      const phoneDigits = String(phone).replace(/\D/g, '');
+      const dup = await getOne(
+        `SELECT id, name FROM clients
+         WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = $1 AND id <> $2`,
+        [phoneDigits, req.params.id]
+      );
+      if (dup)
+        return res.status(409).json({ error: `Já existe outra cliente com este WhatsApp (${dup.name}).` });
+    }
 
     await query(
       'UPDATE clients SET name=$1, phone=$2, email=$3, birth_date=$4, notes=$5 WHERE id=$6',

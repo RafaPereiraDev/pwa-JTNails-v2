@@ -121,7 +121,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     setCurrentUser(user);
     showApp();
     navigateTo('dashboard');
-    toast(`Bem-vinda, ${user.name}!`, 'success');
+    toast(`Bem-vindo(a), ${user.name}!`, 'success');
   } catch (err) {
     errEl.textContent = err.message;
     errEl.style.display = '';
