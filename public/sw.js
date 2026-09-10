@@ -1,5 +1,5 @@
 // ===== SERVICE WORKER — Juliana & Tainara Atelier Nails =====
-const CACHE_NAME = 'atelier-nails-v49';
+const CACHE_NAME = 'atelier-nails-v52';
 
 // Assets estáticos que serão cacheados na instalação
 const STATIC_ASSETS = [
