@@ -74,6 +74,7 @@ const api = {
   getService: (id) => api.get(`/services/${id}`),
   createService: (data) => api.post('/services', data),
   updateService: (id, data) => api.put(`/services/${id}`, data),
+  activateService: (id) => api.patch(`/services/${id}/activate`).catch(() => api.updateService(id, { active: true })),
   deleteService: (id) => api.delete(`/services/${id}`),
 
   // Appointments

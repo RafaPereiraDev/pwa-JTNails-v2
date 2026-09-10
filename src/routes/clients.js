@@ -80,8 +80,8 @@ router.get('/inactive', authenticateToken, requireAdmin, async (req, res) => {
         MAX(a.date)::text                                            AS last_appointment,
         COUNT(a.id)                                                  AS total_appointments,
         (NOW() AT TIME ZONE 'America/Sao_Paulo')::date - MAX(a.date) AS days_since,
-        (SELECT s.name FROM appointments sa
-         JOIN services s ON sa.service_id = s.id
+        (SELECT COALESCE(s.name, 'Serviço Removido') FROM appointments sa
+         LEFT JOIN services s ON sa.service_id = s.id
          WHERE sa.client_id = c.id AND sa.status = 'completed'
          ORDER BY sa.date DESC LIMIT 1)                             AS last_service
       FROM clients c
@@ -116,9 +116,9 @@ router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
       SELECT a.id, a.client_id, a.professional_id, a.service_id,
         a.date::text AS date, a.start_time::text AS start_time, a.end_time::text AS end_time,
         a.price, a.status, a.payment_method, a.notes,
-        s.name as service_name, p.name as professional_name
+        COALESCE(s.name, 'Serviço Removido') as service_name, p.name as professional_name
       FROM appointments a
-      JOIN services s ON a.service_id = s.id
+      LEFT JOIN services s ON a.service_id = s.id
       JOIN professionals p ON a.professional_id = p.id
       WHERE a.client_id = $1 ORDER BY a.date DESC, a.start_time DESC LIMIT 50
     `, [req.params.id]);

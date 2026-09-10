@@ -329,10 +329,10 @@ router.get('/my-appointments', authenticateClient, async (req, res) => {
         a.start_time::text AS start_time,
         a.end_time::text   AS end_time,
         a.status, a.cancel_token,
-        s.name AS service_name, s.price,
+        COALESCE(s.name, 'Serviço Removido') AS service_name, COALESCE(s.price, a.price) AS price,
         p.name AS professional_name, p.color AS professional_color
       FROM appointments a
-      JOIN services s      ON a.service_id = s.id
+      LEFT JOIN services s ON a.service_id = s.id
       JOIN professionals p ON a.professional_id = p.id
       WHERE a.client_id = $1
       ORDER BY a.date DESC, a.start_time DESC
@@ -393,10 +393,10 @@ router.post('/cancel-appointment', async (req, res) => {
       appt = await getOne(`
         SELECT a.id, a.status, a.professional_id,
           a.date::text AS date, a.start_time::text AS start_time,
-          c.name AS client_name, s.name AS service_name
+          c.name AS client_name, COALESCE(s.name, 'Serviço') AS service_name
         FROM appointments a
-        JOIN clients c  ON a.client_id = c.id
-        JOIN services s ON a.service_id = s.id
+        JOIN clients c       ON a.client_id = c.id
+        LEFT JOIN services s ON a.service_id = s.id
         WHERE a.id = $1 AND a.client_id = $2
       `, [appointment_id, authedClientId]);
       if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
@@ -405,10 +405,10 @@ router.post('/cancel-appointment', async (req, res) => {
       appt = await getOne(`
         SELECT a.id, a.status, a.professional_id,
           a.date::text AS date, a.start_time::text AS start_time,
-          c.name AS client_name, s.name AS service_name
+          c.name AS client_name, COALESCE(s.name, 'Serviço') AS service_name
         FROM appointments a
-        JOIN clients c  ON a.client_id = c.id
-        JOIN services s ON a.service_id = s.id
+        JOIN clients c       ON a.client_id = c.id
+        LEFT JOIN services s ON a.service_id = s.id
         WHERE a.cancel_token = $1
       `, [token]);
       if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado ou token inválido' });

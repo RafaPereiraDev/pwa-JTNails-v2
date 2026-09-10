@@ -130,6 +130,32 @@ async function initDatabase() {
     ALTER TABLE appointments ADD COLUMN IF NOT EXISTS series_id  TEXT;
     ALTER TABLE appointments ADD COLUMN IF NOT EXISTS is_encaixe BOOLEAN DEFAULT FALSE;
     CREATE INDEX IF NOT EXISTS idx_appointments_series ON appointments(series_id);
+
+    -- Migração: appointments.service_id aceita NULL e chave estrangeira usa ON DELETE SET NULL
+    ALTER TABLE appointments ALTER COLUMN service_id DROP NOT NULL;
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'appointments_service_id_fkey' AND table_name = 'appointments'
+      ) THEN
+        ALTER TABLE appointments DROP CONSTRAINT appointments_service_id_fkey;
+        ALTER TABLE appointments ADD CONSTRAINT appointments_service_id_fkey
+          FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE SET NULL;
+      END IF;
+    END $$;
+
+    -- Desvincula agendamentos associados a "Mão + Pé" para preservar histórico
+    UPDATE appointments
+    SET service_id = NULL
+    WHERE service_id IN (
+      SELECT id FROM services WHERE name ILIKE '%Mão + Pé%' OR name ILIKE '%Mao + Pe%'
+    );
+
+    -- Exclusão definitiva específica de "Mão + Pé"
+    DELETE FROM services
+    WHERE name ILIKE '%Mão + Pé%' OR name ILIKE '%Mao + Pe%';
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)
@@ -147,7 +173,7 @@ async function initDatabase() {
     INSERT INTO settings (key, value)
     VALUES ('welcome_message', $1)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-  `, ['Seja bem-vinda ao *JT Nails*, *{nome}*! \uD83D\uDC85\u2728\n\nSeu cadastro foi realizado com sucesso. Aqui est\u00e3o seus dados de acesso:\n\n\uD83D\uDCF1 *Telefone:* {telefone}\n\uD83D\uDD11 *Senha:* {senha}\n\nPara fazer seus agendamentos, acesse:\n\uD83D\uDC49 {url}\n\nAguardamos voc\u00ea!']);
+  `, ['Seja bem-vinda ao *JT Nails*, *{nome}*! \uD83D\uDC85\u2728\n\nSeu cadastro foi realizado com sucesso. Aqui est\u00e3o seus dados de acesso:\n\n\uD83D\uDCF1 *Telefone:* {telefone}\n\uD83D\uDD11 *Nova Senha:* {senha}\n\nAguardamos voc\u00ea!']);
 
   await query(`
     INSERT INTO settings (key, value)
@@ -213,7 +239,6 @@ async function initDatabase() {
     const services = [
       ['Manicure',           'Esmaltação nas mãos',              35,  45],
       ['Pedicure',           'Esmaltação nos pés',               45,  60],
-      ['Mão + Pé',           'Manicure e pedicure completo',     75, 100],
       ['Alongamento em Gel', 'Extensão de unhas em gel',        180, 120],
       ['Manutenção de Gel',  'Manutenção das unhas em gel',     120,  90],
       ['Nail Art',           'Arte nas unhas',                   60,  60],

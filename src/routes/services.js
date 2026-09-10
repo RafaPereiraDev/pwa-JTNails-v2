@@ -73,19 +73,53 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
 
 router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { c } = await getOne(
-      'SELECT COUNT(*) as c FROM appointments WHERE service_id = $1',
-      [req.params.id]
-    );
-    if (parseInt(c) > 0) {
-      await query('UPDATE services SET active = FALSE WHERE id = $1', [req.params.id]);
-      return res.json({ message: 'Serviço desativado (possui agendamentos vinculados)' });
-    }
-    await query('DELETE FROM services WHERE id = $1', [req.params.id]);
-    res.json({ message: 'Serviço excluído com sucesso' });
+    const s = await getOne('SELECT id, name, active FROM services WHERE id = $1', [req.params.id]);
+    if (!s) return res.status(404).json({ error: 'Serviço não encontrado' });
+
+    // Regra geral: Soft delete obrigatório (nunca remove fisicamente da tabela)
+    await query('UPDATE services SET active = FALSE WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Serviço desativado com sucesso', id: s.id, active: false });
   } catch (e) {
     console.error('[services DELETE]', e.message);
     res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+router.patch('/:id/activate', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const s = await getOne('SELECT id, name, active FROM services WHERE id = $1', [req.params.id]);
+    if (!s) return res.status(404).json({ error: 'Serviço não encontrado' });
+
+    await query('UPDATE services SET active = TRUE WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Serviço reativado com sucesso', id: s.id, active: true });
+  } catch (e) {
+    console.error('[services PATCH /:id/activate]', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// Rota pontual para purgar especificamente "Mão + Pé" e desvincular agendamentos
+router.post('/purge-mao-pe', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    await query('ALTER TABLE appointments ALTER COLUMN service_id DROP NOT NULL');
+
+    const unlinked = await query(
+      `UPDATE appointments SET service_id = NULL
+       WHERE service_id IN (SELECT id FROM services WHERE name ILIKE '%Mão + Pé%' OR name ILIKE '%Mao + Pe%')`
+    );
+
+    const deleted = await query(
+      `DELETE FROM services WHERE name ILIKE '%Mão + Pé%' OR name ILIKE '%Mao + Pe%'`
+    );
+
+    res.json({
+      message: 'Serviço Mão + Pé removido definitivamente',
+      unlinked_appointments: unlinked.rowCount || 0,
+      deleted_services: deleted.rowCount || 0,
+    });
+  } catch (e) {
+    console.error('[services POST /purge-mao-pe]', e.message);
+    res.status(500).json({ error: 'Erro ao remover serviço Mão + Pé: ' + e.message });
   }
 });
 

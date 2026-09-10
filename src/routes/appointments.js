@@ -102,11 +102,11 @@ const APPT_SELECT = `
     a.price, a.status, a.payment_method, a.notes, a.created_at,
     a.series_id, a.is_encaixe,
     c.name  AS client_name,  c.phone AS client_phone,
-    s.name  AS service_name, s.duration AS service_duration,
+    COALESCE(s.name, 'Serviço Removido') AS service_name, COALESCE(s.duration, 60) AS service_duration,
     p.name  AS professional_name, p.color AS professional_color
   FROM appointments a
   JOIN clients      c ON a.client_id       = c.id
-  JOIN services     s ON a.service_id      = s.id
+  LEFT JOIN services s ON a.service_id     = s.id
   JOIN professionals p ON a.professional_id = p.id
 `;
 
@@ -188,12 +188,14 @@ router.post('/bulk-confirm', authenticateToken, async (req, res) => {
           )).rows[0];
           if (!existing) {
             const cl = (await client.query('SELECT name FROM clients WHERE id=$1', [appt.client_id])).rows[0];
-            const sv = (await client.query('SELECT name FROM services WHERE id=$1', [appt.service_id])).rows[0];
+            const sv = appt.service_id ? (await client.query('SELECT name FROM services WHERE id=$1', [appt.service_id])).rows[0] : null;
+            const svcTitle = sv?.name || 'Serviço';
+            const clTitle  = cl?.name || 'Cliente';
             await client.query(
               `INSERT INTO transactions
                  (type,appointment_id,professional_id,description,category,amount,payment_method,date)
                VALUES ('income',$1,$2,$3,'Serviço',$4,$5,$6)`,
-              [id, appt.professional_id, `${sv.name} - ${cl.name}`,
+              [id, appt.professional_id, `${svcTitle} - ${clTitle}`,
                appt.price, payment_method || appt.payment_method || null, appt.date]
             );
           }
@@ -452,12 +454,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
           [req.params.id]
         );
         const cl = await getOne('SELECT name FROM clients  WHERE id = $1', [updated.client_id]);
-        const sv = await getOne('SELECT name FROM services WHERE id = $1', [updated.service_id]);
+        const sv = updated.service_id ? await getOne('SELECT name FROM services WHERE id = $1', [updated.service_id]) : null;
+        const svcTitle = sv?.name || 'Serviço';
+        const clTitle  = cl?.name || 'Cliente';
         await query(`
           INSERT INTO transactions
             (type,appointment_id,professional_id,description,category,amount,payment_method,date)
           VALUES ('income',$1,$2,$3,'Serviço',$4,$5,$6)
-        `, [req.params.id, updated.professional_id, `${sv.name} - ${cl.name}`,
+        `, [req.params.id, updated.professional_id, `${svcTitle} - ${clTitle}`,
             updated.price, updated.payment_method || payment_method || null, updated.date]);
       }
     }

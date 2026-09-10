@@ -52,10 +52,10 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
         a.date::text AS date, a.start_time::text AS start_time, a.end_time::text AS end_time,
         a.price, a.status, a.payment_method, a.notes,
         c.name AS client_name, c.phone AS client_phone,
-        s.name AS service_name, p.name AS professional_name, p.color AS professional_color
+        COALESCE(s.name, 'Serviço Removido') AS service_name, p.name AS professional_name, p.color AS professional_color
       FROM appointments a
       JOIN clients      c ON a.client_id       = c.id
-      JOIN services     s ON a.service_id      = s.id
+      LEFT JOIN services s ON a.service_id     = s.id
       JOIN professionals p ON a.professional_id = p.id
       WHERE a.date = $1 AND a.status IN ('scheduled','confirmed','in_progress')
       ${profWhere}
@@ -101,10 +101,10 @@ router.get('/appointments', authenticateToken, async (req, res) => {
         a.date::text AS date, a.start_time::text AS start_time, a.end_time::text AS end_time,
         a.price, a.status, a.payment_method, a.notes,
         c.name AS client_name, c.phone AS client_phone,
-        s.name AS service_name, p.name AS professional_name
+        COALESCE(s.name, 'Serviço Removido') AS service_name, p.name AS professional_name
       FROM appointments a
       JOIN clients      c ON a.client_id       = c.id
-      JOIN services     s ON a.service_id      = s.id
+      LEFT JOIN services s ON a.service_id     = s.id
       JOIN professionals p ON a.professional_id = p.id
       WHERE 1=1
     `;
