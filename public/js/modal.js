@@ -25,7 +25,13 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ===== APPOINTMENT FORM =====
-async function openNewAppointment(prefillDate = null, prefillProfId = null) {
+async function openNewAppointment(prefillDate = null, prefillProfId = null, prefillClientId = null, prefillTime = null) {
+  // Se não foi informada profissional explicitamente, herda a profissional ativa no filtro da Agenda (se não for "Todas")
+  if (!prefillProfId && typeof agendaProfFilter !== 'undefined' && agendaProfFilter && agendaProfFilter !== 'all') {
+    const parsed = parseInt(agendaProfFilter, 10);
+    if (!isNaN(parsed)) prefillProfId = parsed;
+  }
+
   openModal('Novo Agendamento', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-appt');
   try {
     const [clients, professionals, services] = await Promise.all([
@@ -33,7 +39,7 @@ async function openNewAppointment(prefillDate = null, prefillProfId = null) {
       api.getProfessionals(true),
       api.getServices(true)
     ]);
-    renderAppointmentForm(null, { clients, professionals, services, prefillDate, prefillProfId });
+    renderAppointmentForm(null, { clients, professionals, services, prefillDate, prefillProfId, prefillClientId, prefillTime });
   } catch (e) {
     document.getElementById('modal-body').innerHTML = `<div class="alert alert-error">${e.message}</div>`;
   }
@@ -198,22 +204,30 @@ async function cancelAppointmentFlow(id, seriesId, onSuccess) {
 
       const overlay = document.createElement('div');
       overlay.id = 'cancel-series-overlay';
-      overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
       overlay.innerHTML = `
-        <div style="background:#fff;border-radius:16px;width:100%;max-width:420px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+        <div class="cancel-series-card" style="background:#fff;border-radius:16px;width:100%;max-width:420px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25);box-sizing:border-box;overflow:hidden">
           <h3 style="font-size:17px;font-weight:700;margin-bottom:8px">Cancelar agendamento</h3>
-          <p style="font-size:14px;color:#6b7280;margin-bottom:20px">
+          <p style="font-size:14px;color:#6b7280;margin-bottom:20px;line-height:1.4">
             Este agendamento faz parte de uma série. O que deseja cancelar?
           </p>
-          <button id="cs-only" class="btn btn-secondary btn-block" style="margin-bottom:10px;justify-content:flex-start;gap:10px;padding:14px 16px">
-            <i class="fa fa-calendar-xmark" style="color:var(--warning);font-size:18px"></i>
-            <span><strong>Somente este horário</strong><br><small style="color:#9ca3af">Os demais agendamentos da série continuam normais.</small></span>
-          </button>
-          <button id="cs-series" class="btn btn-danger btn-block" style="justify-content:flex-start;gap:10px;padding:14px 16px">
-            <i class="fa fa-calendar-times" style="font-size:18px"></i>
-            <span><strong>Cancelar este e todos os futuros</strong><br><small style="opacity:.8">Cancela este + todos os próximos agendamentos da série.</small></span>
-          </button>
-          <button id="cs-close" class="btn btn-ghost btn-block" style="margin-top:10px">Voltar</button>
+          <div class="cancel-series-actions" style="display:flex;flex-direction:column;gap:10px;width:100%;box-sizing:border-box">
+            <button id="cs-only" class="btn btn-secondary cancel-series-btn" style="width:100%;box-sizing:border-box;white-space:normal;word-break:break-word;overflow:hidden;padding:12px 14px;display:flex;align-items:center;justify-content:flex-start;gap:12px;text-align:left;height:auto">
+              <i class="fa fa-calendar-xmark" style="color:var(--warning);font-size:18px;flex-shrink:0"></i>
+              <span class="cancel-series-content" style="width:100%;box-sizing:border-box;white-space:normal;word-break:break-word;overflow:hidden;display:block;flex:1;min-width:0">
+                <strong class="cancel-series-title" style="display:block;font-size:0.95rem;line-height:1.25">Somente este horário</strong>
+                <small class="cancel-series-sub" style="display:block;font-size:0.8rem;color:#6b7280;line-height:1.35;margin-top:3px">Os demais agendamentos da série continuam normais.</small>
+              </span>
+            </button>
+            <button id="cs-series" class="btn btn-danger cancel-series-btn" style="width:100%;box-sizing:border-box;white-space:normal;word-break:break-word;overflow:hidden;padding:12px 14px;display:flex;align-items:center;justify-content:flex-start;gap:12px;text-align:left;height:auto">
+              <i class="fa fa-calendar-times" style="font-size:18px;flex-shrink:0"></i>
+              <span class="cancel-series-content" style="width:100%;box-sizing:border-box;white-space:normal;word-break:break-word;overflow:hidden;display:block;flex:1;min-width:0">
+                <strong class="cancel-series-title" style="display:block;font-size:0.95rem;line-height:1.25">Cancelar este e todos os futuros</strong>
+                <small class="cancel-series-sub" style="display:block;font-size:0.8rem;opacity:.85;line-height:1.35;margin-top:3px">Cancela este + todos os próximos agendamentos da série.</small>
+              </span>
+            </button>
+            <button id="cs-close" class="btn btn-ghost btn-block" style="margin-top:6px;width:100%;box-sizing:border-box">Voltar</button>
+          </div>
         </div>`;
       document.body.appendChild(overlay);
 
@@ -314,24 +328,41 @@ async function openEditForm(id) {
   }
 }
 
-function renderAppointmentForm(appt, { clients, professionals, services, prefillDate, prefillProfId }) {
+function renderAppointmentForm(appt, { clients, professionals, services, prefillDate, prefillProfId, prefillClientId, prefillTime }) {
   const isEdit = !!appt;
   const today = getTodayStr();
 
   // Lista de clientes disponível para o autocomplete de busca
   window._apptClients = clients;
-  const preSelected = appt ? clients.find(c => c.id === appt.client_id) : null;
+  const preSelected = appt
+    ? clients.find(c => c.id === appt.client_id)
+    : (prefillClientId ? clients.find(c => c.id === parseInt(prefillClientId, 10)) : null);
 
   // Agenda compartilhada: o select mostra TODAS as profissionais, para qualquer usuária.
   const profList = professionals;
 
+  // Define qual profissional virá selecionada no select:
+  // 1. Se editando agendamento existente: a profissional do agendamento
+  // 2. Se prefillProfId veio definido: a profissional correspondente
+  // 3. Se filtro da agenda estiver ativo e não for 'all': a profissional do filtro
+  // 4. Se a usuária logada for uma profissional: ela mesma
+  // 5. Caso contrário: a primeira profissional da lista
+  let targetProfId = null;
+  if (appt) {
+    targetProfId = appt.professional_id;
+  } else if (prefillProfId) {
+    targetProfId = parseInt(prefillProfId, 10);
+  } else if (typeof agendaProfFilter !== 'undefined' && agendaProfFilter && agendaProfFilter !== 'all') {
+    const parsed = parseInt(agendaProfFilter, 10);
+    if (!isNaN(parsed)) targetProfId = parsed;
+  } else if (currentUser && currentUser.professional_id) {
+    targetProfId = currentUser.professional_id;
+  } else if (profList.length > 0) {
+    targetProfId = profList[0].id;
+  }
+
   const profOptions = profList.map(p =>
-    `<option value="${p.id}" ${
-      (appt && appt.professional_id === p.id) ||
-      (!appt && prefillProfId && parseInt(prefillProfId) === p.id) ||
-      (!appt && !prefillProfId && currentUser.professional_id === p.id)
-        ? 'selected' : ''
-    }>${esc(p.name)}</option>`
+    `<option value="${p.id}" ${targetProfId === p.id ? 'selected' : ''}>${esc(p.name)}</option>`
   ).join('');
 
   const svcOptions = services.map(s =>
@@ -417,7 +448,7 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
 
             <div class="form-group" style="min-width:0;width:100%">
               <label>Horário de Início *</label>
-              <input type="time" id="appt-time" value="${appt ? appt.start_time : ''}" required
+              <input type="time" id="appt-time" value="${appt ? appt.start_time : (prefillTime || '')}" required
                 style="-webkit-appearance:none;appearance:none;-webkit-min-logical-width:0;min-width:0;width:100%;box-sizing:border-box;display:block;height:46px;line-height:normal;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;background:#ffffff" />
             </div>
           </div>

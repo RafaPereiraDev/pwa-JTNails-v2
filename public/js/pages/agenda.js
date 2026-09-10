@@ -5,12 +5,20 @@ let agendaProfFilter = 'all';
 let agendaProfessionals = [];
 let agendaFilterInitialized = false; // define o filtro padrão só na primeira abertura
 
+function getActiveAgendaProfId() {
+  if (typeof agendaProfFilter !== 'undefined' && agendaProfFilter && agendaProfFilter !== 'all') {
+    const id = parseInt(agendaProfFilter, 10);
+    return isNaN(id) ? null : id;
+  }
+  return null;
+}
+
 async function loadAgenda() {
   const container = document.getElementById('page-agenda');
 
   try {
     agendaProfessionals = await api.getProfessionals(true);
-  } catch(e) {
+  } catch (e) {
     agendaProfessionals = [];
   }
 
@@ -49,7 +57,7 @@ function renderAgendaShell(container) {
         <button class="btn btn-secondary btn-sm" onclick="openBlockTimeModal()">
           <i class="fa fa-ban"></i> Bloquear Horário
         </button>
-        <button class="btn btn-primary" onclick="openNewAppointment()">
+        <button class="btn btn-primary" onclick="openNewAppointment(null, getActiveAgendaProfId())">
           <i class="fa fa-plus"></i> Novo Agendamento
         </button>
       </div>
@@ -142,11 +150,11 @@ async function loadAgendaView() {
       const lastDay = new Date(y, d.getMonth() + 1, 0).getDate();
       if (label) label.textContent = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       params.start_date = `${y}-${m}-01`;
-      params.end_date   = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+      params.end_date = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
       const appointments = await api.getAppointments(params);
       renderMonthView(container, d.getFullYear(), d.getMonth(), appointments);
     }
-  } catch(e) {
+  } catch (e) {
     container.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
   }
 }
@@ -241,7 +249,7 @@ function renderDayView(container, date, appointments, blocked) {
   // Group events by slot
   function getTop(time) {
     const [h, m] = time.split(':').map(Number);
-    return ((h - TIME_START) + m/60) * SLOT_HEIGHT;
+    return ((h - TIME_START) + m / 60) * SLOT_HEIGHT;
   }
   function getHeight(start, end) {
     const [sh, sm] = start.split(':').map(Number);
@@ -295,7 +303,7 @@ function renderDayView(container, date, appointments, blocked) {
         <div>
           ${hours.map(h => `
             <div style="height:${SLOT_HEIGHT}px;padding:4px 6px 0 6px;font-size:11px;color:var(--gray-400);border-bottom:1px solid var(--gray-100)">
-              ${String(h).padStart(2,'0')}:00
+              ${String(h).padStart(2, '0')}:00
             </div>`).join('')}
         </div>
         <!-- Events column -->
@@ -310,8 +318,8 @@ function renderDayView(container, date, appointments, blocked) {
     </div>
     <div style="margin-top:12px;font-size:12px;color:var(--gray-400)">
       ${canCreateInCurrentAgenda()
-        ? '💡 Clique em um horário vazio para criar agendamento. Clique em um agendamento para ver detalhes.'
-        : '👀 Você está vendo a agenda de outra profissional. Clique em um agendamento para ver os detalhes.'}
+      ? '💡 Clique em um horário vazio para criar agendamento. Clique em um agendamento para ver detalhes.'
+      : '👀 Você está vendo a agenda de outra profissional. Clique em um agendamento para ver os detalhes.'}
     </div>
   `;
 }
@@ -329,7 +337,7 @@ function canModifyAppt(appt) {
 
 // Só faz sentido concluir um atendimento que ainda está ativo (não cancelado/concluído/faltou).
 function canCompleteAppt(appt) {
-  return canModifyAppt(appt) && ['scheduled','confirmed','in_progress'].includes(appt.status);
+  return canModifyAppt(appt) && ['scheduled', 'confirmed', 'in_progress'].includes(appt.status);
 }
 
 // Botão rápido de "Concluído" na agenda: abre o modal de conclusão (registra o pagamento).
@@ -345,7 +353,7 @@ function timeFromClickY(colEl, clientY) {
   const hourOffset = y / SLOT_HEIGHT;
   const h = Math.floor(TIME_START + hourOffset);
   const m = Math.floor((hourOffset % 1) * 60 / 30) * 30;
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 function handleWeekColClick(e, day) {
@@ -363,12 +371,13 @@ function handleWeekColClick(e, day) {
     return;
   }
 
-  openNewAppointment(day);
+  const profId = getActiveAgendaProfId();
+  openNewAppointment(day, profId, null, time);
   setTimeout(() => {
     const timeInput = document.getElementById('appt-time');
-    if (timeInput) timeInput.value = time;
+    if (timeInput && !timeInput.value) timeInput.value = time;
     const dateInput = document.getElementById('appt-date');
-    if (dateInput) dateInput.value = day;
+    if (dateInput && !dateInput.value) dateInput.value = day;
   }, 300);
 }
 
@@ -390,12 +399,13 @@ function handleDayClick(e, date) {
     return;
   }
 
-  openNewAppointment(date);
+  const profId = getActiveAgendaProfId();
+  openNewAppointment(date, profId, null, time);
   setTimeout(() => {
     const timeInput = document.getElementById('appt-time');
-    if (timeInput) timeInput.value = time;
+    if (timeInput && !timeInput.value) timeInput.value = time;
     const dateInput = document.getElementById('appt-date');
-    if (dateInput) dateInput.value = date;
+    if (dateInput && !dateInput.value) dateInput.value = date;
   }, 300);
 }
 
@@ -413,7 +423,7 @@ function renderWeekView(container, range, appointments, blocked) {
 
   function getTop(time) {
     const [h, m] = time.split(':').map(Number);
-    return ((h - TIME_START) + m/60) * SLOT_HEIGHT;
+    return ((h - TIME_START) + m / 60) * SLOT_HEIGHT;
   }
   function getHeight(start, end) {
     const [sh, sm] = start.split(':').map(Number);
@@ -431,15 +441,15 @@ function renderWeekView(container, range, appointments, blocked) {
       <div style="display:grid;grid-template-columns:56px repeat(${cols},1fr);border-bottom:1px solid var(--gray-200);background:var(--gray-50)">
         <div></div>
         ${days.map(day => {
-          const isPast = day < today;
-          const isToday = day === today;
-          return `
+    const isPast = day < today;
+    const isToday = day === today;
+    return `
           <div style="padding:10px 6px;text-align:center;border-left:1px solid var(--gray-200);${isToday ? 'background:var(--primary-light)' : ''}${isPast ? 'opacity:0.45' : ''}">
-            <div style="font-size:11px;font-weight:700;color:${isToday ? 'var(--primary)' : 'var(--gray-500)'};text-transform:uppercase">${new Date(day+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'short'})}</div>
+            <div style="font-size:11px;font-weight:700;color:${isToday ? 'var(--primary)' : 'var(--gray-500)'};text-transform:uppercase">${new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short' })}</div>
             <div style="font-size:20px;font-weight:700;color:${isToday ? 'var(--primary)' : 'var(--dark)'}">${parseInt(day.split('-')[2])}</div>
             ${isToday ? `<div style="font-size:9px;font-weight:800;color:var(--primary);letter-spacing:.5px;text-transform:uppercase;margin-top:1px">Hoje</div>` : ''}
           </div>`;
-        }).join('')}
+  }).join('')}
       </div>
       <!-- Time grid -->
       <div style="display:grid;grid-template-columns:56px repeat(${cols},1fr)">
@@ -447,24 +457,24 @@ function renderWeekView(container, range, appointments, blocked) {
         <div>
           ${hours.map(h => `
             <div style="height:${SLOT_HEIGHT}px;padding:3px 6px 0;font-size:11px;color:var(--gray-400);border-bottom:1px solid var(--gray-100)">
-              ${String(h).padStart(2,'0')}:00
+              ${String(h).padStart(2, '0')}:00
             </div>`).join('')}
         </div>
         <!-- Day cols -->
         ${days.map(day => {
-          const isPast = day < today;
-          const dayAppts = appointments.filter(a => a.date === day);
-          const dayBlocked = blocked.filter(b => b.date === day);
-          const dayLayout = computeOverlapLayout(dayAppts);
-          const pastH = pastOverlayHeight(day);
-          return `
+    const isPast = day < today;
+    const dayAppts = appointments.filter(a => a.date === day);
+    const dayBlocked = blocked.filter(b => b.date === day);
+    const dayLayout = computeOverlapLayout(dayAppts);
+    const pastH = pastOverlayHeight(day);
+    return `
             <div style="position:relative;height:${totalH}px;border-left:1px solid var(--gray-200);${isPast ? 'background:var(--gray-50);cursor:default;opacity:0.6' : 'cursor:pointer'}"
               onclick="handleWeekColClick(event, '${day}')">
               ${hours.map(() => `<div style="height:${SLOT_HEIGHT}px;border-bottom:1px solid var(--gray-100)"></div>`).join('')}
               ${pastH > 0 ? `<div class="agenda-past-overlay" style="position:absolute;top:0;left:0;right:0;height:${pastH}px;z-index:2" title="Horário já passado"></div>` : ''}
               ${dayAppts.map(a => `
                 <div class="appt-block"
-                  style="background:${a.professional_color || '#3B5848'};position:absolute;top:${getTop(a.start_time)}px;height:${getHeight(a.start_time,a.end_time)}px;${overlapStyle(dayLayout, a.id)}font-size:11px;z-index:5"
+                  style="background:${a.professional_color || '#3B5848'};position:absolute;top:${getTop(a.start_time)}px;height:${getHeight(a.start_time, a.end_time)}px;${overlapStyle(dayLayout, a.id)}font-size:11px;z-index:5"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
                   ${canCompleteAppt(a) ? `<button class="appt-done-btn appt-done-btn-sm" onclick="completeAppointmentFromCalendar(${a.id}, event)" title="Marcar como concluído">
                     <i class="fa fa-check"></i>
@@ -477,12 +487,12 @@ function renderWeekView(container, range, appointments, blocked) {
                 </div>`).join('')}
               ${dayBlocked.map(b => `
                 <div class="blocked-block"
-                  style="position:absolute;top:${getTop(b.start_time)}px;height:${getHeight(b.start_time,b.end_time)}px;left:2px;right:2px;font-size:11px;z-index:5"
+                  style="position:absolute;top:${getTop(b.start_time)}px;height:${getHeight(b.start_time, b.end_time)}px;left:2px;right:2px;font-size:11px;z-index:5"
                   onclick="event.stopPropagation();${canModifyAppt(b) ? `deleteBlockedTime(${b.id})` : ''}">
                   <div class="blocked-block-title"><i class="fa fa-ban"></i> ${esc(b.reason || 'Bloqueado')}</div>
                 </div>`).join('')}
             </div>`;
-        }).join('')}
+  }).join('')}
       </div>
      </div>
     </div>
@@ -521,11 +531,11 @@ function renderMonthView(container, year, month, appointments) {
       <div style="display:grid;grid-template-columns:repeat(7,1fr)">
         ${days.map(d => `<div class="month-day-header">${d}</div>`).join('')}
         ${cells.map(cell => {
-          const cellAppts = apptMap[cell.date] || [];
-          const shown = cellAppts.slice(0, 3);
-          const more = cellAppts.length - 3;
-          const isPast = cell.date < today;
-          return `
+    const cellAppts = apptMap[cell.date] || [];
+    const shown = cellAppts.slice(0, 3);
+    const more = cellAppts.length - 3;
+    const isPast = cell.date < today;
+    return `
             <div class="month-day ${cell.otherMonth ? 'other-month' : ''} ${cell.date === today ? 'today' : ''} ${isPast ? 'past-day' : ''}"
               ${!isPast ? `onclick="goToDayView('${cell.date}')"` : ''}>
               <div class="day-num">${parseInt(cell.date.split('-')[2])}</div>
@@ -539,7 +549,7 @@ function renderMonthView(container, year, month, appointments) {
                 </div>`).join('')}
               ${more > 0 ? `<div class="month-more">+${more} mais</div>` : ''}
             </div>`;
-        }).join('')}
+  }).join('')}
       </div>
     </div>
   `;
@@ -555,7 +565,7 @@ async function deleteAppointmentFromCalendar(id, event) {
   event.stopPropagation(); // não abre o modal de edição
   // Busca o series_id para oferecer cancelamento parcial vs série.
   let seriesId = null;
-  try { const a = await api.getAppointment(id); seriesId = a.series_id || null; } catch (_) {}
+  try { const a = await api.getAppointment(id); seriesId = a.series_id || null; } catch (_) { }
   await cancelAppointmentFlow(id, seriesId, () => loadAgendaView());
 }
 
@@ -566,14 +576,15 @@ async function deleteBlockedTime(id) {
     await api.deleteBlockedTime(id);
     toast('Bloqueio removido', 'success');
     loadAgendaView();
-  } catch(e) {
+  } catch (e) {
     toast(e.message, 'error');
   }
 }
 
 function openBlockTimeModal() {
+  const activeProfId = getActiveAgendaProfId() || (currentUser && currentUser.professional_id);
   const profOptions = agendaProfessionals.map(p =>
-    `<option value="${p.id}" ${currentUser.professional_id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`
+    `<option value="${p.id}" ${activeProfId === p.id ? 'selected' : ''}>${esc(p.name)}</option>`
   ).join('');
 
   const timeSlots = generateTimeSlots('07:00', '23:00', 30);
@@ -631,7 +642,7 @@ function openBlockTimeModal() {
       toast('Horário bloqueado com sucesso', 'success');
       closeModal();
       loadAgendaView();
-    } catch(err) {
+    } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
     }

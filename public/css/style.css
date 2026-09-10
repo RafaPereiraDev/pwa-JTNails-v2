@@ -1868,3 +1868,55 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ===== MODAL CANCELAR AGENDAMENTO DE SÉRIE ===== */
+.cancel-series-card {
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.cancel-series-btn {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow: hidden !important;
+  padding: 12px 14px !important;
+  height: auto !important;
+  min-height: 52px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  gap: 12px !important;
+}
+
+.cancel-series-content {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow: hidden !important;
+  display: block !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+.cancel-series-title {
+  display: block !important;
+  font-size: 0.95rem !important;
+  line-height: 1.3 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+}
+
+.cancel-series-sub {
+  display: block !important;
+  font-size: 0.8rem !important;
+  line-height: 1.35 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  margin-top: 3px !important;
+}
