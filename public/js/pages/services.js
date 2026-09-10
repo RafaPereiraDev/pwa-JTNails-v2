@@ -149,7 +149,7 @@ async function renderServicesTable() {
         `}
       </div>
     `;
-  } catch(e) {
+  } catch (e) {
     container.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
   }
 }
@@ -158,7 +158,7 @@ async function openServiceModal(id = null) {
   openModal(id ? 'Editar Serviço' : 'Novo Serviço', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-sm');
   let service = null;
   if (id) {
-    try { service = await api.getService(id); } catch(e) {}
+    try { service = await api.getService(id); } catch (e) { }
   }
 
   document.getElementById('modal-body').innerHTML = `
@@ -205,7 +205,7 @@ async function openServiceModal(id = null) {
       toast(id ? 'Serviço atualizado!' : 'Serviço criado!', 'success');
       closeModal();
       renderServicesTable();
-    } catch(err) {
+    } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
     }
@@ -217,7 +217,7 @@ async function reactivateService(id) {
     await api.activateService(id);
     toast('Serviço ativado com sucesso!', 'success');
     renderServicesTable();
-  } catch(e) {
+  } catch (e) {
     toast(e.message, 'error');
   }
 }
@@ -231,7 +231,7 @@ async function toggleService(id, active) {
     }
     toast(active ? 'Serviço ativado' : 'Serviço desativado', 'success');
     renderServicesTable();
-  } catch(e) {
+  } catch (e) {
     toast(e.message, 'error');
   }
 }
@@ -243,7 +243,7 @@ async function deleteServiceConfirm(id) {
     await api.deleteService(id);
     toast('Serviço desativado com sucesso!', 'success');
     renderServicesTable();
-  } catch(e) {
+  } catch (e) {
     toast(e.message, 'error');
   }
 }

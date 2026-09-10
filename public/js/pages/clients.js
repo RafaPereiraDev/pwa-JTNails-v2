@@ -234,7 +234,7 @@ async function openClientDetail(id) {
 }
 
 async function openClientModal(id = null) {
-  openModal(id ? 'Editar Cliente' : 'Novo Cliente', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-sm');
+  openModal(id ? 'Editar Cliente' : 'Novo Cliente', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-client');
 
   let client = null;
   if (id) {
@@ -243,42 +243,66 @@ async function openClientModal(id = null) {
 
   document.getElementById('modal-body').innerHTML = `
     <form id="client-form">
-      <div class="form-group">
-        <label>Nome completo *</label>
-        <input type="text" id="cf-name" value="${client ? esc(client.name) : ''}" required placeholder="Nome da cliente" />
-      </div>
-      <div class="form-group">
-        <label>Telefone *</label>
-        <input type="tel" id="cf-phone" value="${client ? esc(client.phone) : ''}" required placeholder="(11) 99999-9999" />
-      </div>
-      <div class="form-group">
-        <label>E-mail</label>
-        <input type="email" id="cf-email" value="${client ? esc(client.email || '') : ''}" placeholder="email@exemplo.com" />
-      </div>
-      <div class="form-group">
-        <label>Data de nascimento</label>
-        <input type="date" id="cf-birth" value="${client ? esc(client.birth_date || '') : ''}" />
-      </div>
-      ${!id ? `
-      <div class="form-group">
-        <label>Senha de acesso <span class="text-xs text-muted">(para a cliente entrar no app)</span></label>
-        <div style="display:flex;gap:8px">
-          <input type="text" id="cf-password" placeholder="Mínimo 8 caracteres" style="flex:1" />
-          <button type="button" class="btn btn-secondary btn-sm" onclick="gerarSenhaCliente()" title="Gerar senha aleatória">
-            <i class="fa fa-dice"></i> Gerar
-          </button>
+      <div class="modal-form-body">
+        <div class="client-form-grid">
+        <!-- Linha 1: Nome Completo (largura total) -->
+        <div class="form-group col-span-2">
+          <label>Nome completo *</label>
+          <input type="text" id="cf-name" value="${client ? esc(client.name) : ''}" required placeholder="Ex: Ana Clara Silva" />
         </div>
-        <div class="text-xs text-muted" style="margin-top:4px">Opcional. Você poderá enviar o acesso por WhatsApp após salvar.</div>
-      </div>` : ''}
-      <div class="form-group">
-        <label>Observações</label>
-        <textarea id="cf-notes">${client ? esc(client.notes || '') : ''}</textarea>
+
+        <!-- Linha 2: Telefone / WhatsApp (esq) | E-mail (dir) -->
+        <div class="form-group">
+          <label>Telefone / WhatsApp *</label>
+          <input type="tel" id="cf-phone" value="${client ? esc(client.phone) : ''}" required placeholder="(11) 99999-9999" />
+        </div>
+
+        <div class="form-group">
+          <label>E-mail</label>
+          <input type="email" id="cf-email" value="${client ? esc(client.email || '') : ''}" placeholder="email@exemplo.com" />
+        </div>
+
+        <!-- Linha 3: Data de Nascimento (esq) | Senha de acesso (dir) -->
+        <div class="form-group">
+          <label>Data de nascimento</label>
+          <input type="date" id="cf-birth" value="${client ? esc(client.birth_date || '') : ''}" />
+        </div>
+
+        <div class="form-group">
+          <label>Senha de acesso ao app <span class="text-xs text-muted">(opcional)</span></label>
+          ${!id ? `
+          <div class="client-pwd-group" style="display:flex;gap:8px;align-items:center;width:100%">
+            <input type="text" id="cf-password" placeholder="Definir senha..." style="flex:1;min-width:0" />
+            <button type="button" class="btn btn-secondary btn-sm btn-generate" onclick="gerarSenhaCliente()" title="Gerar senha aleatória" style="white-space:nowrap;padding:0 14px;border-radius:10px;flex-shrink:0;height:42px">
+              <i class="fa fa-dice"></i> Gerar
+            </button>
+          </div>
+          <div style="font-size:11.5px;color:var(--gray-500);margin-top:3px;display:flex;align-items:center;gap:4px">
+            <i class="fab fa-whatsapp" style="color:#16a34a"></i>
+            <span>Poderá ser enviada por WhatsApp após salvar.</span>
+          </div>` : `
+          <div style="display:flex;align-items:center;gap:8px;padding-top:6px">
+            <span class="badge ${client && client.has_password ? 'badge-active' : 'badge-inactive'}">
+              ${client && client.has_password ? 'Senha cadastrada' : 'Sem senha'}
+            </span>
+            <span class="text-xs text-muted">Redefina via WhatsApp na ficha.</span>
+          </div>`}
+        </div>
+
+        <!-- Linha 4: Ficha & Observações (largura total) -->
+        <div class="form-group col-span-2">
+          <label>Ficha / Observações (Preferências, Alergias, Cuidados)</label>
+          <textarea id="cf-notes" rows="2" placeholder="Ex: Prefere cutícula funda, alérgica a esmalte com tolueno...">${client ? esc(client.notes || '') : ''}</textarea>
+        </div>
       </div>
-      <div id="cf-error" class="alert alert-error" style="display:none"></div>
-      <div class="modal-footer" style="padding:0;margin-top:16px">
-        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        ${id && isAdminLevel() ? `<button type="button" class="btn btn-danger btn-sm" onclick="deleteClientConfirm(${id})"><i class="fa fa-trash"></i></button>` : ''}
-        <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar</button>
+
+        <div id="cf-error" class="alert alert-error" style="display:none;margin-top:12px"></div>
+      </div>
+
+      <div class="modal-footer">
+        ${id && isAdminLevel() ? `<button type="button" class="btn btn-danger btn-sm" onclick="deleteClientConfirm(${id})" title="Excluir cliente" style="border-radius:10px;margin-right:auto"><i class="fa fa-trash"></i></button>` : ''}
+        <button type="button" class="btn btn-secondary btn-cancel" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-appt-confirm"><i class="fa fa-check"></i> ${id ? 'Salvar Alterações' : 'Salvar Cliente'}</button>
       </div>
     </form>
   `;
@@ -340,6 +364,11 @@ function gerarSenhaCliente() {
   for (let i = 0; i < 10; i++) pwd += chars[arr[i] % chars.length];
   const el = document.getElementById('cf-password');
   if (el) el.value = pwd;
+}
+
+function toggleClientAppCard() {
+  const card = document.getElementById('client-app-card');
+  if (card) card.classList.toggle('collapsed');
 }
 
 // URL oficial de acesso da cliente ao app.

@@ -26,7 +26,7 @@ document.addEventListener('keydown', (e) => {
 
 // ===== APPOINTMENT FORM =====
 async function openNewAppointment(prefillDate = null, prefillProfId = null) {
-  openModal('Novo Agendamento', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-lg');
+  openModal('Novo Agendamento', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-appt');
   try {
     const [clients, professionals, services] = await Promise.all([
       api.getClients(),
@@ -300,7 +300,7 @@ function sendReminderWpp(phone, name, date, time, service) {
 }
 
 async function openEditForm(id) {
-  openModal('Editar Agendamento', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-lg');
+  openModal('Editar Agendamento', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-appt');
   try {
     const [appt, clients, professionals, services] = await Promise.all([
       api.getAppointment(id),
@@ -351,90 +351,134 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
 
   document.getElementById('modal-body').innerHTML = `
     <form id="appt-form">
-      <div class="form-row mb-4">
-        <div class="form-group">
-          <label>Cliente *</label>
-          <div style="display:flex;gap:8px;align-items:flex-start;flex-direction:column">
-            <div style="display:flex;gap:8px;width:100%;position:relative">
-              <div style="flex:1;position:relative">
-                <input type="text" id="appt-client-search" autocomplete="off"
-                  placeholder="Buscar por nome ou telefone..."
-                  value="${preSelected ? esc(preSelected.name) + ' - ' + formatPhone(preSelected.phone) : ''}"
-                  oninput="onClientSearch()" onfocus="onClientSearch()" style="width:100%" />
-                <input type="hidden" id="appt-client" value="${preSelected ? preSelected.id : ''}" required />
-                <div id="client-suggestions" class="client-suggestions" style="display:none"></div>
+      <div class="modal-form-body">
+        <div class="appt-layout">
+          <!-- BLOCO 1: Cliente & Serviço -->
+        <div class="appt-block">
+          <div class="appt-block-header">
+            <i class="fa fa-user-circle"></i>
+            <span>Cliente & Serviço</span>
+          </div>
+
+          <div class="form-group appt-client-group" style="margin-top:8px">
+            <label>Cliente *</label>
+            <div style="display:flex;gap:8px;align-items:flex-start;flex-direction:column;width:100%">
+              <div style="display:flex;gap:8px;width:100%;position:relative">
+                <div style="flex:1;position:relative">
+                  <input type="text" id="appt-client-search" autocomplete="off"
+                    placeholder="Buscar nome ou telefone..."
+                    value="${preSelected ? esc(preSelected.name) + ' - ' + formatPhone(preSelected.phone) : ''}"
+                    oninput="onClientSearch()" onfocus="onClientSearch()" style="width:100%" />
+                  <input type="hidden" id="appt-client" value="${preSelected ? preSelected.id : ''}" required />
+                  <div id="client-suggestions" class="client-suggestions" style="display:none"></div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="openQuickClient()" title="Cadastrar nova cliente" style="padding:9px 12px;border-radius:10px">
+                  <i class="fa fa-plus"></i>
+                </button>
               </div>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="openQuickClient()" title="Novo cliente">
-                <i class="fa fa-plus"></i>
-              </button>
+              <div id="client-reliability-hint" style="min-height:18px"></div>
             </div>
-            <div id="client-reliability-hint" style="min-height:20px"></div>
+          </div>
+
+          <div class="form-group">
+            <label>Serviço *</label>
+            <select id="appt-service" required onchange="onServiceChange()">${svcOptions}</select>
+          </div>
+
+          <div class="appt-prof-price-grid">
+            <div class="form-group">
+              <label>Profissional *</label>
+              <select id="appt-professional" required>${profOptions}</select>
+            </div>
+
+            <div class="form-group">
+              <label>Valor (R$) *</label>
+              <div style="position:relative">
+                <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-weight:600;color:var(--gray-500);font-size:13px">R$</span>
+                <input type="number" id="appt-price" step="0.01" min="0" value="${appt ? appt.price : ''}" required style="padding-left:34px;font-weight:700;color:var(--dark);width:100%" />
+              </div>
+            </div>
           </div>
         </div>
-        <div class="form-group">
-          <label>Profissional *</label>
-          <select id="appt-professional" required>${profOptions}</select>
+
+        <!-- BLOCO 2: Data & Horário -->
+        <div class="appt-block">
+          <div class="appt-block-header">
+            <i class="fa fa-calendar-alt"></i>
+            <span>Data & Horário</span>
+          </div>
+
+          <div class="appt-datetime-grid">
+            <div class="form-group" style="min-width:0;width:100%">
+              <label>Data *</label>
+              <input type="date" id="appt-date" value="${appt ? appt.date : (prefillDate || today)}" ${isEdit ? '' : `min="${today}"`} required
+                style="-webkit-appearance:none;appearance:none;-webkit-min-logical-width:0;min-width:0;width:100%;box-sizing:border-box;display:block;height:46px;line-height:normal;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;background:#ffffff" />
+            </div>
+
+            <div class="form-group" style="min-width:0;width:100%">
+              <label>Horário de Início *</label>
+              <input type="time" id="appt-time" value="${appt ? appt.start_time : ''}" required
+                style="-webkit-appearance:none;appearance:none;-webkit-min-logical-width:0;min-width:0;width:100%;box-sizing:border-box;display:block;height:46px;line-height:normal;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;background:#ffffff" />
+            </div>
+          </div>
+
+          <div class="appt-datetime-hint">
+            <i class="fa fa-info-circle"></i>
+            <span>A duração do serviço é calculada automaticamente na agenda.</span>
+          </div>
+        </div>
+
+        <!-- BLOCO 3: Opções & Pagamento -->
+        <div class="appt-block">
+          <div class="appt-block-header">
+            <i class="fa fa-sliders-h"></i>
+            <span>Opções & Pagamento</span>
+          </div>
+
+          ${!isEdit ? `
+          <div class="form-group">
+            <label>Plano Anual / Recorrência</label>
+            <select id="appt-plan">
+              <option value="">Sem recorrência (agendamento único)</option>
+              <option value="weekly">Semanal (52 sessões / 1 ano)</option>
+              <option value="biweekly">Quinzenal (a cada 14 dias / 26 sessões)</option>
+              <option value="every21">A cada 21 dias (~17 sessões)</option>
+              <option value="monthly">Mensal (12 sessões / 1x por mês)</option>
+            </select>
+          </div>` : ''}
+
+          ${isEdit ? `
+          <div class="form-group">
+            <label>Status do Agendamento</label>
+            <select id="appt-status">${statusOptions}</select>
+          </div>` : `<input type="hidden" id="appt-status" value="scheduled" />`}
+
+          <div class="form-group">
+            <label>Forma de Pagamento</label>
+            <select id="appt-payment">${payOptions}</select>
+          </div>
+
+          <div class="form-group appt-encaixe-container" style="display:flex;align-items:center;justify-content:flex-start;gap:8px;margin:10px 0">
+            <label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;font-weight:600;cursor:pointer;font-size:13px;color:var(--gray-700);margin:0">
+              <input type="checkbox" id="appt-encaixe" style="width:18px !important;height:18px !important;accent-color:#1e5631;cursor:pointer;flex-shrink:0;margin:0" />
+              <span>Permitir encaixe <span style="font-weight:400;font-size:12px;color:var(--gray-500)">(sobrepor horário)</span></span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label>Observações</label>
+            <textarea id="appt-notes" rows="2" placeholder="Ex: Preferências, observações gerais...">${appt ? esc(appt.notes || '') : ''}</textarea>
+          </div>
         </div>
       </div>
-      <div class="form-row mb-4">
-        <div class="form-group">
-          <label>Serviço *</label>
-          <select id="appt-service" required onchange="onServiceChange()">${svcOptions}</select>
-        </div>
-        <div class="form-group">
-          <label>Valor (R$) *</label>
-          <input type="number" id="appt-price" step="0.01" min="0" value="${appt ? appt.price : ''}" required />
-        </div>
+
+        <div id="appt-error" class="alert alert-error" style="display:none;margin-top:16px"></div>
       </div>
-      <div class="form-row mb-4">
-        <div class="form-group">
-          <label>Data *</label>
-          <input type="date" id="appt-date" value="${appt ? appt.date : (prefillDate || today)}" ${isEdit ? '' : `min="${today}"`} required />
-        </div>
-        <div class="form-group">
-          <label>Horário *</label>
-          <input type="time" id="appt-time" value="${appt ? appt.start_time : ''}" required />
-        </div>
-      </div>
-      <div class="form-row mb-4">
-        <div class="form-group">
-          <label>Status</label>
-          <select id="appt-status">${statusOptions}</select>
-        </div>
-        <div class="form-group">
-          <label>Forma de Pagamento</label>
-          <select id="appt-payment">${payOptions}</select>
-        </div>
-      </div>
-      ${!isEdit ? `
-      <div class="form-row mb-4">
-        <div class="form-group">
-          <label>Plano Anual <span class="text-xs text-muted">(recorrência por 12 meses)</span></label>
-          <select id="appt-plan">
-            <option value="">Sem recorrência (agendamento único)</option>
-            <option value="weekly">Semanal (52 sessões / 1 ano)</option>
-            <option value="biweekly">Quinzenal (a cada 14 dias / 26 sessões)</option>
-            <option value="every21">A cada 21 dias (~17 sessões)</option>
-            <option value="monthly">Mensal (12 sessões / 1x por mês)</option>
-          </select>
-          <div class="text-xs text-muted" style="margin-top:4px">Gera os agendamentos futuros mantendo o mesmo dia da semana e horário.</div>
-        </div>
-      </div>` : ''}
-      <div class="form-group mb-4">
-        <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer">
-          <input type="checkbox" id="appt-encaixe" style="width:auto" />
-          Permitir encaixe (sobrepor a um horário já ocupado)
-        </label>
-      </div>
-      <div class="form-group mb-4">
-        <label>Observações</label>
-        <textarea id="appt-notes" rows="2">${appt ? esc(appt.notes || '') : ''}</textarea>
-      </div>
-      <div id="appt-error" class="alert alert-error" style="display:none"></div>
-      <div class="modal-footer" style="padding:0;margin-top:8px">
-        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        ${isEdit ? `<button type="button" class="btn btn-danger" onclick="quickCancel(${appt.id}, ${appt.series_id ? `'${appt.series_id}'` : 'null'})"><i class="fa fa-trash"></i> Excluir</button>` : ''}
-        <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> ${isEdit ? 'Salvar' : 'Agendar'}</button>
+
+      <div class="modal-footer">
+        ${isEdit ? `<button type="button" class="btn btn-danger" onclick="quickCancel(${appt.id}, ${appt.series_id ? `'${appt.series_id}'` : 'null'})" style="margin-right:auto"><i class="fa fa-trash"></i> Excluir</button>` : ''}
+        <button type="button" class="btn btn-secondary btn-cancel" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-appt-confirm"><i class="fa fa-check"></i> ${isEdit ? 'Salvar Alterações' : 'Confirmar Agendamento'}</button>
       </div>
     </form>
   `;
@@ -465,7 +509,7 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       date: document.getElementById('appt-date').value,
       start_time: document.getElementById('appt-time').value,
       price: parseFloat(document.getElementById('appt-price').value),
-      status: document.getElementById('appt-status').value,
+      status: (document.getElementById('appt-status') ? document.getElementById('appt-status').value : 'scheduled') || 'scheduled',
       payment_method: document.getElementById('appt-payment').value || null,
       notes: document.getElementById('appt-notes').value || null,
       plan: planEl ? (planEl.value || null) : null,
@@ -635,17 +679,19 @@ async function openQuickClient() {
 
   openModal('Novo Cliente Rápido', `
     <form id="quick-client-form">
-      <div class="form-group">
-        <label>Nome *</label>
-        <input type="text" id="qc-name" required placeholder="Nome da cliente" />
+      <div class="modal-form-body">
+        <div class="form-group">
+          <label>Nome *</label>
+          <input type="text" id="qc-name" required placeholder="Nome da cliente" />
+        </div>
+        <div class="form-group">
+          <label>Telefone *</label>
+          <input type="tel" id="qc-phone" required placeholder="(11) 99999-9999" />
+        </div>
+        <div id="qc-error" class="alert alert-error" style="display:none"></div>
       </div>
-      <div class="form-group">
-        <label>Telefone *</label>
-        <input type="tel" id="qc-phone" required placeholder="(11) 99999-9999" />
-      </div>
-      <div id="qc-error" class="alert alert-error" style="display:none"></div>
-      <div class="modal-footer" style="padding:0;margin-top:16px">
-        <button type="button" class="btn btn-secondary" onclick="restoreAppointmentModal()">Voltar</button>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-cancel" onclick="restoreAppointmentModal()">Voltar</button>
         <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Criar</button>
       </div>
     </form>

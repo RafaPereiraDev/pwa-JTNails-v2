@@ -500,14 +500,18 @@ tbody tr:hover { background: var(--gray-50); }
   padding: 20px;
 }
 .modal-overlay.open { display: flex; }
+/* ===== MODAL BASE (ARQUITETURA FLEXBOX) ===== */
+/* 1. Estrutura do Modal */
 .modal {
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: 90vh !important; /* Não deixar o modal ultrapassar a altura da tela */
+  overflow: hidden !important; /* O modal em si não rola, quem rola é apenas o corpo */
+  position: relative !important;
   background: var(--white);
   border-radius: 16px;
   width: 100%;
   max-width: 600px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
   box-shadow: var(--shadow-lg);
   animation: modalIn 0.2s ease;
 }
@@ -519,7 +523,8 @@ tbody tr:hover { background: var(--gray-50); }
 .modal-lg { max-width: 780px; }
 .modal-xl { max-width: 960px; }
 .modal-header {
-  padding: 20px 24px;
+  flex-shrink: 0;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--gray-200);
   display: flex;
   align-items: center;
@@ -537,17 +542,616 @@ tbody tr:hover { background: var(--gray-50); }
   border-radius: 6px;
 }
 .btn-close-modal:hover { background: var(--gray-100); }
+
+/* 2. Corpo do Formulário (.modal-body ou form) */
 .modal-body {
-  padding: 24px;
-  overflow-y: auto;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto; /* Rolagem vertical exclusiva para os campos */
+  padding: 1.25rem;
+  padding-bottom: 2rem;
+  -webkit-overflow-scrolling: touch;
 }
+
+/* Quando o modal-body encapsular formulários estruturados */
+.modal-body:has(form),
+.modal-body:has(.modal-form-body),
+.modal-appt .modal-body,
+.modal-client .modal-body {
+  padding: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.modal-body form,
+#appt-form,
+#client-form,
+#quick-client-form {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Rolagem vertical exclusiva para o bloco de campos do formulário */
+.modal-form-body {
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  padding: 1.25rem !important;
+  padding-bottom: 2.5rem !important; /* Margem de segurança para que nenhum campo ou checkbox seja encoberto */
+  min-height: 0 !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 3. Barra de Rodapé Fixa (.modal-footer) */
 .modal-footer {
-  padding: 16px 24px;
-  border-top: 1px solid var(--gray-200);
+  flex-shrink: 0 !important;
+  position: static !important; /* REMOVA qualquer position absolute ou fixed dos botões */
+  width: 100% !important;
+  box-sizing: border-box !important;
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  border-top: 1px solid #f1f5f9 !important;
+  padding: 14px 20px !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 12px !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 0 16px 16px !important;
+  top: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  right: auto !important;
+}
+
+/* Garante fundo limpo e sem caixas cinzas nos elementos do rodapé */
+.modal-footer, .modal-footer * {
+  box-sizing: border-box;
+}
+
+/* Botão Cancelar: estilo neutro / outline limpo, sem nenhuma caixa residual */
+.modal-footer .btn-cancel,
+.modal-footer .btn-secondary {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #475569 !important;
+  border-radius: 10px !important;
+  padding: 10px 18px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  box-shadow: none !important;
+  transition: all 0.2s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: initial !important;
+  width: auto !important;
+}
+.modal-footer .btn-cancel:hover,
+.modal-footer .btn-secondary:hover {
+  background-color: #f8fafc !important;
+  border-color: #94a3b8 !important;
+  color: #1e293b !important;
+}
+.modal-footer .btn-cancel:active,
+.modal-footer .btn-secondary:active {
+  background-color: #f1f5f9 !important;
+}
+
+/* ===== MODAL DE AGENDAMENTO (REFORMULADO) ===== */
+.modal-appt {
+  max-width: 1060px;
+  width: 95vw;
+  border-radius: 16px;
+}
+
+/* Container dos 3 Blocos */
+.appt-layout {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Bloco individual */
+.appt-block {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+/* Cabeçalho do Bloco */
+.appt-block-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--dark, #212F27);
+  padding-bottom: 9px;
+  border-bottom: 1.5px solid var(--gray-200, #e4e4e7);
+  letter-spacing: 0.2px;
+  margin-bottom: 8px;
+}
+.appt-block-header i {
+  color: var(--primary, #4E6754);
+  font-size: 15px;
+}
+
+/* Campos do Bloco */
+.appt-block .form-group {
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.appt-client-group,
+.appt-block > .form-group:first-of-type {
+  margin-top: 8px !important;
+}
+.appt-block .form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700, #374151);
+}
+
+/* Grid para Profissional & Valor */
+.appt-prof-price-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 0.9fr;
   gap: 10px;
+  align-items: flex-start;
+}
+
+/* Grid para Data & Horário (2 colunas no mobile) */
+.appt-datetime-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: stretch;
+}
+.appt-datetime-grid > .form-group {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Garante width: 100% e box-sizing: border-box em todos os campos dos modais (exceto checkbox e radio) */
+.modal input:not([type="checkbox"]):not([type="radio"]),
+.modal select,
+.modal textarea {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  max-width: 100%;
+}
+
+.modal input[type="checkbox"],
+.modal input[type="radio"] {
+  width: 18px !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+  cursor: pointer;
+}
+
+/* Container do Checkbox 'Permitir encaixe' */
+.appt-encaixe-container {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  margin: 10px 0 !important;
+}
+.appt-encaixe-container label {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  cursor: pointer !important;
+  margin: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+}
+.appt-encaixe-container input[type="checkbox"] {
+  width: 18px !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+  accent-color: #1e5631 !important;
+  cursor: pointer !important;
+}
+
+/* Inputs com fundos claros, bordas sutis e foco destacado */
+.modal-appt input:not([type="checkbox"]):not([type="radio"]),
+.modal-appt select,
+.modal-appt textarea {
+  border-radius: 10px;
+  border: 1.5px solid var(--gray-200, #e4e4e7);
+  background: #fdfdfd;
+  font-size: 13.5px;
+  padding: 9px 12px;
+  transition: all var(--transition, 0.2s ease);
+}
+.modal-appt input:not([type="checkbox"]):not([type="radio"]):focus,
+.modal-appt select:focus,
+.modal-appt textarea:focus {
+  border-color: #1e5631;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(30, 86, 49, 0.15);
+}
+
+/* Inputs de Data e Horário com reset estrito para WebKit/iOS */
+.appt-datetime-grid input,
+.modal-appt input[type="date"],
+.modal-appt input[type="time"],
+#appt-date,
+#appt-time {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  -webkit-min-logical-width: 0 !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  display: block !important;
+  height: 46px !important;
+  line-height: normal !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 8px !important;
+  padding: 10px 12px !important;
+  background: #ffffff !important;
+  font-size: 14px !important;
+  color: var(--dark, #212F27) !important;
+  margin: 0 !important;
+  outline: none;
+}
+.appt-datetime-grid input:focus,
+.modal-appt input[type="date"]:focus,
+.modal-appt input[type="time"]:focus,
+#appt-date:focus,
+#appt-time:focus {
+  border-color: #1e5631 !important;
+  box-shadow: 0 0 0 3px rgba(30, 86, 49, 0.15) !important;
+}
+
+/* Reset interno para Safari iOS */
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+  text-align: left;
+  line-height: normal;
+  margin: 0;
+  padding: 0;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.75;
+  padding: 0;
+  margin-left: auto;
+  transition: opacity 0.2s;
+  display: block;
+  flex-shrink: 0;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* Textarea compacto */
+.modal-appt textarea#appt-notes {
+  min-height: 60px;
+  height: 60px;
+  resize: vertical;
+}
+
+/* Caixa informativa de horário e duração */
+.appt-datetime-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.appt-datetime-hint i {
+  color: #0284c7;
+  font-size: 15px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* Botão Confirmar Agendamento — Verde Escuro Moderno */
+.btn-appt-confirm {
+  background: #1e5631 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 10px 22px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  box-shadow: 0 2px 8px rgba(30, 86, 49, 0.25) !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+}
+.btn-appt-confirm:hover {
+  background: #164225 !important;
+  box-shadow: 0 4px 12px rgba(22, 66, 37, 0.35) !important;
+  transform: translateY(-1px);
+}
+.btn-appt-confirm:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(22, 66, 37, 0.2) !important;
+}
+
+/* Desktop layout (>= 768px): 3 colunas lado a lado com divisores sutis */
+@media (min-width: 768px) {
+  .modal-appt {
+    max-width: 1060px;
+  }
+  .modal-appt .modal-body {
+    max-height: calc(88vh - 70px);
+  }
+  .appt-layout {
+    display: grid;
+    grid-template-columns: 1.15fr 0.95fr 1.05fr;
+    gap: 20px;
+    align-items: stretch;
+  }
+  .appt-block {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .appt-block:not(:last-child) {
+    border-right: 1px solid #eef2f6 !important;
+    padding-right: 20px !important;
+  }
+  .appt-datetime-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+  }
+  .appt-datetime-hint {
+    margin-top: auto !important;
+    width: 100% !important;
+  }
+}
+
+/* Mobile layout (< 768px): Empilhado com rolagem nos campos e rodapé estático */
+@media (max-width: 767px) {
+  .modal {
+    max-width: 100% !important;
+    max-height: 90vh !important;
+    border-radius: 16px 16px 0 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    position: relative !important;
+  }
+  .appt-layout {
+    gap: 18px;
+  }
+  .appt-block:not(:last-child) {
+    border-right: none !important;
+    border-bottom: 1px solid #eef2f6 !important;
+    padding-right: 0 !important;
+    padding-bottom: 18px !important;
+  }
+  .appt-datetime-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    align-items: stretch !important;
+  }
+  .appt-datetime-grid > .form-group {
+    min-width: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .appt-datetime-grid input,
+  #appt-date,
+  #appt-time {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    -webkit-min-logical-width: 0 !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    height: 46px !important;
+    line-height: normal !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 8px !important;
+    padding: 10px 12px !important;
+    background: #ffffff !important;
+    margin: 0 !important;
+  }
+  .appt-client-group {
+    margin-top: 8px !important;
+  }
+  .modal-form-body {
+    padding: 20px 16px 36px 16px !important;
+  }
+  .modal-footer {
+    padding: 14px 20px !important;
+    gap: 12px !important;
+    border-top: 1px solid #f1f5f9 !important;
+  }
+  .modal-footer .btn {
+    border-radius: 10px !important;
+    white-space: nowrap;
+  }
+  .modal-footer .btn-cancel,
+  .modal-footer .btn-secondary {
+    flex: 1 !important;
+    padding: 11px 14px !important;
+    font-size: 13.5px !important;
+  }
+  .modal-footer .btn-appt-confirm {
+    flex: 1.3 !important;
+    padding: 11px 16px !important;
+    font-size: 13.5px !important;
+  }
+  .modal-footer .btn-danger {
+    flex: 0 0 auto !important;
+    padding: 11px 14px !important;
+  }
+}
+
+/* ===== MODAL DE CLIENTE (REFORMULADO E COMPACTO) ===== */
+.modal-client {
+  max-width: 680px;
+  width: 95vw;
+  border-radius: 16px;
+}
+
+.client-form-grid {
+  display: grid;
+  width: 100%;
+  box-sizing: border-box;
+}
+.client-form-grid > * {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.client-form-grid .form-group {
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.client-form-grid .form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700, #374151);
+}
+
+/* Grupo Senha + Botão Gerar */
+.client-pwd-group {
+  display: flex !important;
+  gap: 8px !important;
+  align-items: center !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+.client-pwd-group input,
+#cf-password {
+  flex: 1 !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+.client-pwd-group .btn-generate,
+.client-pwd-group button {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+  padding: 0 14px !important;
+  height: 42px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+}
+
+.modal-client input,
+.modal-client select,
+.modal-client textarea {
+  border-radius: 10px;
+  border: 1.5px solid var(--gray-200, #e4e4e7);
+  background: #fdfdfd;
+  font-size: 13.5px;
+  padding: 8px 12px;
+  transition: all var(--transition, 0.2s ease);
+  width: 100%;
+  box-sizing: border-box;
+}
+.modal-client input:focus,
+.modal-client select:focus,
+.modal-client textarea:focus {
+  border-color: #1e5631;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(30, 86, 49, 0.15);
+}
+
+.modal-client textarea#cf-notes {
+  min-height: 56px;
+  height: 56px;
+  resize: vertical;
+}
+
+/* 1. Regra Mobile Obrigatória (@media (max-width: 640px)) */
+@media (max-width: 640px) {
+  .client-form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+  .client-form-grid > * {
+    grid-column: 1 !important;
+    width: 100% !important;
+  }
+  .client-form-grid .col-span-2 {
+    grid-column: 1 !important;
+    width: 100% !important;
+  }
+  .client-pwd-group {
+    display: flex !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+  .client-pwd-group input,
+  #cf-password {
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+  .client-pwd-group .btn-generate,
+  .client-pwd-group button {
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+    padding: 0 14px !important;
+    height: 42px !important;
+  }
+}
+
+/* 3. Duas Colunas apenas no Desktop / Tablet (@media (min-width: 641px)) */
+@media (min-width: 641px) {
+  .client-form-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px 18px !important;
+  }
+  .client-form-grid .col-span-2 {
+    grid-column: 1 / -1 !important;
+  }
 }
 
 /* ===== TOAST ===== */
@@ -1052,14 +1656,16 @@ tbody tr:hover { background: var(--gray-50); }
   /* Cabeçalho de página quebra em vez de empurrar */
   .page-header { flex-wrap: wrap; gap: 10px; }
 }
+@media (max-width: 767px) {
+  .modal { border-radius: 16px 16px 0 0; }
+  .modal-overlay { align-items: flex-end; padding: 0; }
+}
 @media (max-width: 600px) {
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .month-grid { font-size: 11px; }
   .month-day { min-height: 60px; padding: 3px; }
   .hide-xs { display: none; }
   .agenda-toolbar { gap: 8px; }
-  .modal { border-radius: 16px 16px 0 0; }
-  .modal-overlay { align-items: flex-end; padding: 0; }
   /* Busca ocupa a largura toda sem forçar overflow */
   .search-input-wrap { min-width: 0; width: 100%; }
   .search-bar { flex-wrap: wrap; }
