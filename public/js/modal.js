@@ -87,7 +87,7 @@ function renderAppointmentDetail(appt) {
       <button class="appt-action-btn" style="background:#6b7280" onclick="quickStatus(${appt.id},'no_show')">
         <i class="fa fa-user-times"></i> Não apareceu
       </button>
-      <button class="appt-action-btn" style="background:#ef4444" onclick="quickCancel(${appt.id})">
+      <button class="appt-action-btn" style="background:#ef4444" onclick="quickCancel(${appt.id}, ${appt.series_id ? `'${appt.series_id}'` : 'null'})">
         <i class="fa fa-ban"></i> Cancelar
       </button>`;
   }
@@ -183,16 +183,71 @@ async function quickStatus(id, status) {
   }
 }
 
-async function quickCancel(id) {
-  const ok = await confirmDialog('Tem certeza que deseja <strong>cancelar</strong> este agendamento?');
-  if (!ok) return;
-  try {
-    await api.deleteAppointment(id);
-    toast('Agendamento cancelado', 'warning');
-    closeModal();
-    refreshCurrentPage();
-  } catch (e) {
-    toast(e.message, 'error');
+async function quickCancel(id, seriesId) {
+  await cancelAppointmentFlow(id, seriesId || null, () => { closeModal(); refreshCurrentPage(); });
+}
+
+// Fluxo central de cancelamento. Mostra modal de escolha (parcial vs série)
+// se o agendamento pertencer a uma série; senão cancela direto.
+async function cancelAppointmentFlow(id, seriesId, onSuccess) {
+  if (seriesId) {
+    // Agendamento de série: oferece cancelamento parcial ou total.
+    await new Promise((resolve) => {
+      const prev = document.getElementById('cancel-series-overlay');
+      if (prev) prev.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'cancel-series-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+      overlay.innerHTML = `
+        <div style="background:#fff;border-radius:16px;width:100%;max-width:420px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+          <h3 style="font-size:17px;font-weight:700;margin-bottom:8px">Cancelar agendamento</h3>
+          <p style="font-size:14px;color:#6b7280;margin-bottom:20px">
+            Este agendamento faz parte de uma série. O que deseja cancelar?
+          </p>
+          <button id="cs-only" class="btn btn-secondary btn-block" style="margin-bottom:10px;justify-content:flex-start;gap:10px;padding:14px 16px">
+            <i class="fa fa-calendar-xmark" style="color:var(--warning);font-size:18px"></i>
+            <span><strong>Somente este horário</strong><br><small style="color:#9ca3af">Os demais agendamentos da série continuam normais.</small></span>
+          </button>
+          <button id="cs-series" class="btn btn-danger btn-block" style="justify-content:flex-start;gap:10px;padding:14px 16px">
+            <i class="fa fa-calendar-times" style="font-size:18px"></i>
+            <span><strong>Cancelar este e todos os futuros</strong><br><small style="opacity:.8">Cancela este + todos os próximos agendamentos da série.</small></span>
+          </button>
+          <button id="cs-close" class="btn btn-ghost btn-block" style="margin-top:10px">Voltar</button>
+        </div>`;
+      document.body.appendChild(overlay);
+
+      async function doCancel(tipo) {
+        overlay.remove();
+        try {
+          const r = await api.deleteAppointment(id, tipo);
+          const msg = tipo === 'SERIE_COMPLETA'
+            ? `${r.cancelled || ''} agendamento(s) da série cancelado(s).`
+            : 'Agendamento cancelado.';
+          toast(msg, 'warning');
+          if (onSuccess) onSuccess();
+        } catch (e) {
+          toast(e.message, 'error');
+        }
+        resolve();
+      }
+
+      document.getElementById('cs-only').addEventListener('click', () => doCancel('APENAS_ESTE'));
+      document.getElementById('cs-series').addEventListener('click', () => doCancel('SERIE_COMPLETA'));
+      document.getElementById('cs-close').addEventListener('click', () => { overlay.remove(); resolve(); });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.remove(); resolve(); } });
+    });
+  } else {
+    // Agendamento avulso: confirmação simples.
+    const ok = await confirmDialog('Tem certeza que deseja <strong>cancelar</strong> este agendamento?');
+    if (!ok) return;
+    try {
+      await api.deleteAppointment(id, 'APENAS_ESTE');
+      toast('Agendamento cancelado', 'warning');
+      if (onSuccess) onSuccess();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
   }
 }
 
@@ -378,7 +433,7 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       <div id="appt-error" class="alert alert-error" style="display:none"></div>
       <div class="modal-footer" style="padding:0;margin-top:8px">
         <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        ${isEdit ? `<button type="button" class="btn btn-danger" onclick="quickCancel(${appt.id})"><i class="fa fa-trash"></i> Excluir</button>` : ''}
+        ${isEdit ? `<button type="button" class="btn btn-danger" onclick="quickCancel(${appt.id}, ${appt.series_id ? `'${appt.series_id}'` : 'null'})"><i class="fa fa-trash"></i> Excluir</button>` : ''}
         <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> ${isEdit ? 'Salvar' : 'Agendar'}</button>
       </div>
     </form>

@@ -100,6 +100,7 @@ const APPT_SELECT = `
     a.start_time::text  AS start_time,
     a.end_time::text    AS end_time,
     a.price, a.status, a.payment_method, a.notes, a.created_at,
+    a.series_id, a.is_encaixe,
     c.name  AS client_name,  c.phone AS client_phone,
     s.name  AS service_name, s.duration AS service_duration,
     p.name  AS professional_name, p.color AS professional_color
@@ -308,7 +309,10 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Não é possível agendar em uma data que já passou' });
     if (date === today && startMin <= nowMin)
       return res.status(400).json({ error: 'Não é possível agendar em um horário que já passou hoje' });
-    if (isClosedDay(date))
+    // Dom/seg fechados: bloqueia agendamento AVULSO nesses dias. Planos anuais
+    // (recorrência) são permitidos em qualquer dia, a critério do admin.
+    const isPlan = plan && PLAN_FREQUENCIES[plan];
+    if (!isPlan && isClosedDay(date))
       return res.status(400).json({ error: 'O salão não atende aos domingos e segundas-feiras' });
 
     const svc = await getOne('SELECT * FROM services WHERE id = $1 AND active = TRUE', [service_id]);
@@ -320,9 +324,10 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // ── PLANO ANUAL: cria a série inteira numa transação ─────────────────────
     if (plan && PLAN_FREQUENCIES[plan]) {
-      const allDates = generatePlanDates(date, plan);
-      // Filtra ocorrências que caem em dia fechado (dom/seg) — o plano pula esses dias.
-      const dates = allDates.filter(d => !isClosedDay(d));
+      // Usa TODAS as datas calculadas (a 1ª é a própria data selecionada).
+      // Não pula domingos/segundas/feriados: se o admin escolheu o plano, salva
+      // todos os dias da recorrência conforme calculado.
+      const dates = generatePlanDates(date, plan);
       const seriesId = `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
       const created = await withTransaction(async (client) => {
@@ -476,17 +481,48 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // DELETE /api/appointments/:id
+// Aceita ?tipo_cancelamento=APENAS_ESTE (padrão) ou SERIE_COMPLETA.
+//  - APENAS_ESTE:   cancela somente este agendamento.
+//  - SERIE_COMPLETA: cancela este E todos os agendamentos posteriores da mesma
+//                    série (series_id), a partir da data/hora deste (inclusive).
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
+    const tipo = String(req.query.tipo_cancelamento || 'APENAS_ESTE').toUpperCase();
     const appt = await getOne(
-      `SELECT id, professional_id FROM appointments WHERE id = $1`,
+      `SELECT id, professional_id, series_id,
+              date::text AS date, start_time::text AS start_time
+       FROM appointments WHERE id = $1`,
       [req.params.id]
     );
     if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
 
+    if (tipo === 'SERIE_COMPLETA' && appt.series_id) {
+      // Cancela este e todos os futuros da série (mesma série, data/hora >= a deste).
+      const result = await withTransaction(async (client) => {
+        const rows = (await client.query(
+          `SELECT id FROM appointments
+           WHERE series_id = $1
+             AND (date::text || ' ' || start_time::text) >= ($2 || ' ' || $3)`,
+          [appt.series_id, appt.date, appt.start_time]
+        )).rows;
+        const ids = rows.map(r => r.id);
+        if (ids.length) {
+          await client.query(
+            `DELETE FROM transactions WHERE appointment_id = ANY($1) AND type='income'`, [ids]
+          );
+          await client.query(
+            `UPDATE appointments SET status='cancelled' WHERE id = ANY($1)`, [ids]
+          );
+        }
+        return ids.length;
+      });
+      return res.json({ message: `${result} agendamento(s) da série cancelado(s).`, cancelled: result });
+    }
+
+    // Padrão: cancela apenas este agendamento.
     await query(`DELETE FROM transactions WHERE appointment_id=$1 AND type='income'`, [req.params.id]);
     await query(`UPDATE appointments SET status='cancelled' WHERE id=$1`, [req.params.id]);
-    res.json({ message: 'Agendamento cancelado com sucesso' });
+    res.json({ message: 'Agendamento cancelado com sucesso', cancelled: 1 });
   } catch (e) {
     console.error('[appointments DELETE]', e.message);
     res.status(500).json({ error: 'Erro interno' });

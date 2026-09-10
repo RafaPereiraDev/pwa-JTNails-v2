@@ -553,15 +553,10 @@ function goToDayView(date) {
 
 async function deleteAppointmentFromCalendar(id, event) {
   event.stopPropagation(); // não abre o modal de edição
-  const ok = await confirmDialog('Deseja <strong>excluir</strong> este agendamento?<br><small style="color:#9ca3af">O agendamento será cancelado.</small>');
-  if (!ok) return;
-  try {
-    await api.deleteAppointment(id);
-    toast('Agendamento excluído', 'warning');
-    loadAgendaView();
-  } catch(e) {
-    toast(e.message, 'error');
-  }
+  // Busca o series_id para oferecer cancelamento parcial vs série.
+  let seriesId = null;
+  try { const a = await api.getAppointment(id); seriesId = a.series_id || null; } catch (_) {}
+  await cancelAppointmentFlow(id, seriesId, () => loadAgendaView());
 }
 
 async function deleteBlockedTime(id) {

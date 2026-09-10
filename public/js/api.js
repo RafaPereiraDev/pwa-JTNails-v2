@@ -85,7 +85,7 @@ const api = {
   getAppointment: (id) => api.get(`/appointments/${id}`),
   createAppointment: (data) => api.post('/appointments', data),
   updateAppointment: (id, data) => api.put(`/appointments/${id}`, data),
-  deleteAppointment: (id) => api.delete(`/appointments/${id}`),
+  deleteAppointment: (id, tipo) => api.delete(`/appointments/${id}${tipo ? `?tipo_cancelamento=${encodeURIComponent(tipo)}` : ''}`),
 
   getPendingConfirmation: () => api.get('/appointments/pending-confirmation'),
   getPlansEnding: () => api.get('/appointments/plans-ending'),
