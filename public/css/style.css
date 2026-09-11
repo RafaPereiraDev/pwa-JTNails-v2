@@ -1070,28 +1070,40 @@ tbody tr:hover {
   align-items: flex-start;
 }
 
-/* Lista com Seleção Múltipla de Serviços */
+/* Seletor de Serviços Compacto e Moderno */
 .multi-services-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 185px;
+  max-height: 180px;
   overflow-y: auto;
   padding: 6px;
-  background: #fbfbfb;
-  border: 1.5px solid var(--gray-200, #e4e4e7);
-  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
   box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
+.multi-services-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.multi-services-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+/* Item em estilo de cards compactos / chips selecionáveis */
 .service-check-item {
   display: flex !important;
   align-items: center !important;
   gap: 10px !important;
-  padding: 8px 10px !important;
-  background: #ffffff !important;
-  border: 1.5px solid var(--gray-200, #e4e4e7) !important;
-  border-radius: 8px !important;
+  padding: 7px 10px !important;
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
   cursor: pointer !important;
   transition: all 0.15s ease !important;
   margin: 0 !important;
@@ -1101,77 +1113,84 @@ tbody tr:hover {
 }
 
 .service-check-item:hover {
-  border-color: var(--primary, #4E6754) !important;
-  background: #fdfdfd !important;
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
 }
 
+/* Destaque de cor ao ser marcado */
 .service-check-item.selected {
-  border-color: var(--primary, #4E6754) !important;
   background: rgba(78, 103, 84, 0.08) !important;
+  border-color: var(--primary, #4E6754) !important;
+  box-shadow: 0 1px 3px rgba(78, 103, 84, 0.1) !important;
 }
 
-.service-check-item input[type="checkbox"] {
-  width: 17px !important;
-  height: 17px !important;
+.service-check-item input[type="checkbox"],
+.service-checkbox {
+  width: 16px !important;
+  height: 16px !important;
   accent-color: var(--primary, #4E6754) !important;
   margin: 0 !important;
   flex-shrink: 0 !important;
   cursor: pointer !important;
 }
 
-.service-check-info {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex: 1;
-  min-width: 0;
-  gap: 8px;
-}
-
 .service-check-name {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--dark, #212F27);
+  flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.service-check-item.selected .service-check-name {
+  color: var(--primary, #4E6754);
 }
 
 .service-check-meta {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--gray-500, #64748b);
+  white-space: nowrap;
 }
 
 .service-check-duration {
   font-size: 11px;
-  color: var(--gray-500, #6b7280);
-  background: var(--gray-100, #f4f4f5);
-  padding: 2px 6px;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  color: var(--gray-500, #64748b);
+}
+
+.service-check-dot {
+  font-size: 9px;
+  color: #94a3b8;
 }
 
 .service-check-price {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 700;
+  color: var(--dark, #212F27);
+}
+
+.service-check-item.selected .service-check-price {
   color: var(--primary, #4E6754);
 }
 
-/* Card de Resumo Dinâmico em Tempo Real */
+/* Caixinha fixa no rodapé do seletor (fundo cinza suave/verde claro, pouco espaço vertical) */
 .appt-services-summary-box {
   margin-top: 6px;
-  padding: 8px 10px;
-  background: linear-gradient(135deg, #f7faf8 0%, #edf2ee 100%);
-  border: 1px solid #d2ded5;
-  border-radius: 10px;
+  padding: 6px 10px;
+  background: #f4f7f5;
+  border: 1px solid #dce5df;
+  border-radius: 8px;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 6px;
-  text-align: center;
+  align-items: center;
   box-sizing: border-box;
 }
 
@@ -1179,27 +1198,31 @@ tbody tr:hover {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  text-align: center;
+  min-width: 0;
+  gap: 1px;
 }
 
 .summary-metric .metric-label {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
-  color: var(--gray-600, #4b5563);
+  color: #5c7161;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
+  white-space: nowrap;
 }
 
 .summary-metric .metric-label i {
   color: var(--primary, #4E6754);
-  font-size: 10.5px;
+  font-size: 9.5px;
 }
 
 .summary-metric .metric-value {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--dark, #212F27);
+  white-space: nowrap;
 }
 
 /* Grid para Data & Horário (2 colunas no mobile) */
@@ -2127,38 +2150,165 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   background: rgba(78, 103, 84, 0.04);
 }
 
-.appt-block {
-  position: relative;
-  border-radius: 6px;
-  padding: 4px 7px;
-  cursor: pointer;
-  transition: opacity var(--transition), transform var(--transition);
-  overflow: hidden;
-  box-sizing: border-box;
+/* Cards de agendamento na grade do calendário */
+.appt-block.appt-card,
+.appt-block:has(.appt-block-title),
+.week-day-col .appt-block,
+div[onclick*="openEditAppointment"].appt-block {
+  border-radius: 8px !important;
+  padding: 6px 8px !important;
+  cursor: pointer !important;
+  transition: opacity var(--transition), transform var(--transition), box-shadow var(--transition);
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
 }
 
-.appt-block:hover {
-  opacity: 0.92;
+.appt-block.appt-card:hover,
+.appt-block:has(.appt-block-title):hover {
+  opacity: 0.95 !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25) !important;
 }
 
 .appt-block-title {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--white);
-  line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  line-height: 1.25 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  padding-right: 36px !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6) !important;
 }
 
 .appt-block-sub {
-  font-size: 10.5px;
-  color: rgba(255, 255, 255, 0.9);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.25;
+  font-size: 0.78rem !important;
+  font-weight: 500 !important;
+  color: #ffffff !important;
+  opacity: 0.98 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  line-height: 1.22 !important;
+  margin-top: 2px !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55) !important;
+}
+
+.appt-block .badge,
+.appt-card .badge {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  padding: 1px 5px !important;
+  border-radius: 4px !important;
+  background: rgba(255, 255, 255, 0.28) !important;
+  color: #ffffff !important;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  text-shadow: none !important;
+  display: inline-flex !important;
+}
+
+/* Seletor de data/dias no topo da Agenda (Day View) */
+.agenda-day-picker-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 12px 12px 12px;
+  -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid var(--gray-200, #e4e4e7);
+  background: #fbfcfb;
+  scrollbar-width: none;
+}
+
+.agenda-day-picker-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.agenda-day-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1.5px solid var(--gray-200, #e4e4e7);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  user-select: none;
+  text-decoration: none;
+  color: inherit;
+}
+
+.agenda-day-pill:hover {
+  border-color: var(--primary, #4E6754);
+  background: var(--primary-light, #edf3ef);
+}
+
+.agenda-day-pill.active {
+  background: var(--primary, #4E6754);
+  border-color: var(--primary, #4E6754);
+  color: #ffffff !important;
+  box-shadow: 0 3px 8px rgba(78, 103, 84, 0.28);
+  transform: translateY(-1px);
+}
+
+.agenda-day-pill.active .pill-dow,
+.agenda-day-pill.active .pill-day,
+.agenda-day-pill.active .pill-today {
+  color: #ffffff !important;
+}
+
+.agenda-day-pill .pill-dow {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gray-500, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.agenda-day-pill .pill-day {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--dark, #212F27);
+  line-height: 1.2;
+}
+
+.agenda-day-pill .pill-today {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--primary, #4E6754);
+  text-transform: uppercase;
   margin-top: 1px;
+  letter-spacing: 0.4px;
+}
+
+/* Container da Semana com Scroll Horizontal Suave e Colunas Largas */
+.agenda-week-container {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  scroll-behavior: smooth !important;
+}
+
+.agenda-week-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.agenda-week-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.week-day-col {
+  min-width: 220px !important;
+  box-sizing: border-box !important;
 }
 
 /* Faixa cinza sobre os horários já passados no dia de hoje (agenda admin).
@@ -2739,6 +2889,45 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   select,
   textarea {
     font-size: 16px !important;
+  }
+
+  /* Toolbar da Agenda no Mobile */
+  .agenda-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .agenda-toolbar .view-tabs {
+    width: 100%;
+    display: flex;
+  }
+
+  .agenda-toolbar .view-tab {
+    flex: 1;
+    text-align: center;
+    padding: 8px 12px;
+  }
+
+  .agenda-toolbar .agenda-nav {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .agenda-date-display {
+    min-width: 0;
+    width: 100%;
+    font-size: 14.5px;
+    text-align: center;
+  }
+
+  /* Botões de ação da agenda sempre visíveis no touch/mobile */
+  .appt-delete-btn,
+  .appt-done-btn,
+  .appt-delete-btn-sm,
+  .appt-done-btn-sm {
+    opacity: 0.95 !important;
   }
 }
 

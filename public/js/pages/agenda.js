@@ -28,6 +28,10 @@ async function loadAgenda() {
     if (currentUser && currentUser.professional_id) {
       agendaProfFilter = String(currentUser.professional_id);
     }
+    // No mobile (<= 768px), define a visualização padrão para 1 Único Dia ('day')
+    if (window.innerWidth <= 768) {
+      agendaView = 'day';
+    }
     agendaFilterInitialized = true;
   }
 
@@ -251,6 +255,11 @@ function overlapStyle(layout, id) {
   return `left:calc(${leftPct}% + ${gap}px);width:calc(${widthPct}% - ${gap * 2}px);`;
 }
 
+function selectDayPickerDate(selectedDate) {
+  agendaDate = selectedDate;
+  loadAgendaView();
+}
+
 function renderDayView(container, date, appointments, blocked) {
   const today = getTodayStr();
   const slots = getAgendaTimeSlots();
@@ -272,12 +281,38 @@ function renderDayView(container, date, appointments, blocked) {
   const totalHeight = slots.length * SLOT_HEIGHT_30;
   const dayLayout = computeOverlapLayout(appointments);
 
+  // Seletor de dias no topo da visualização de dia (carrossel horizontal suave)
+  const stripDays = [];
+  for (let offset = -3; offset <= 10; offset++) {
+    stripDays.push(addDays(date, offset));
+  }
+  const dayStripHtml = `
+    <div class="agenda-day-picker-strip">
+      ${stripDays.map(dStr => {
+        const isCurrent = dStr === date;
+        const isTodayDate = dStr === today;
+        const dObj = new Date(dStr + 'T12:00:00');
+        const dowName = dObj.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+        const dayNum = parseInt(dStr.split('-')[2], 10);
+        return `
+          <button type="button" class="agenda-day-pill ${isCurrent ? 'active' : ''}"
+            onclick="selectDayPickerDate('${dStr}')"
+            title="${longDate(dStr)}">
+            <span class="pill-dow">${dowName}</span>
+            <span class="pill-day">${dayNum}</span>
+            ${isTodayDate ? '<span class="pill-today">Hoje</span>' : ''}
+          </button>
+        `;
+      }).join('')}
+    </div>
+  `;
+
   const apptBlocks = appointments.map(a => {
     const top = getTop(a.start_time);
     const height = getHeight(a.start_time, a.end_time);
     const color = a.professional_color || '#3B5848';
     return `
-      <div class="appt-block" style="background:${color};position:absolute;top:${top + 1}px;height:${height}px;${overlapStyle(dayLayout, a.id)}z-index:5"
+      <div class="appt-block appt-card" style="background:${color};position:absolute;top:${top + 1}px;height:${height}px;${overlapStyle(dayLayout, a.id)}z-index:5"
         onclick="event.stopPropagation();openEditAppointment(${a.id})">
         ${canCompleteAppt(a) ? `<button class="appt-done-btn" onclick="completeAppointmentFromCalendar(${a.id}, event)" title="Marcar como concluído">
           <i class="fa fa-check"></i>
@@ -305,10 +340,11 @@ function renderDayView(container, date, appointments, blocked) {
 
   container.innerHTML = `
     <div class="card" style="overflow:visible">
-      <div class="card-header">
+      <div class="card-header" style="flex-wrap:wrap;gap:8px">
         <div class="card-title">${longDate(date)}</div>
         <span class="badge ${date === today ? 'badge-confirmed' : 'badge-scheduled'}">${date === today ? 'Hoje' : dayName(date)}</span>
       </div>
+      ${dayStripHtml}
       <div style="display:grid;grid-template-columns:56px 1fr">
         <!-- Time labels (30 em 30 min) -->
         <div>
@@ -333,6 +369,13 @@ function renderDayView(container, date, appointments, blocked) {
       : '👀 Você está vendo a agenda de outra profissional. Clique em um agendamento para ver os detalhes.'}
     </div>
   `;
+
+  setTimeout(() => {
+    const activePill = container.querySelector('.agenda-day-pill.active');
+    if (activePill) {
+      activePill.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, 60);
 }
 
 // Decide se o usuário atual pode CRIAR agendamento na visão atual da agenda.
@@ -451,16 +494,17 @@ function renderWeekView(container, range, appointments, blocked) {
   const cols = days.length;
 
   container.innerHTML = `
-    <div class="card" style="overflow-x:auto">
-     <div class="week-grid-wrap" style="min-width:650px">
+    <div class="card agenda-week-container" style="overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-behavior:smooth">
+     <div class="week-grid-wrap" style="min-width:calc(56px + ${cols} * 220px)">
       <!-- Day headers -->
-      <div style="display:grid;grid-template-columns:56px repeat(${cols},1fr);border-bottom:1px solid var(--gray-200);background:var(--gray-50)">
+      <div class="week-grid-header" style="display:grid;grid-template-columns:56px repeat(${cols}, minmax(220px, 1fr));border-bottom:1px solid var(--gray-200);background:var(--gray-50)">
         <div></div>
         ${days.map(day => {
     const isPast = day < today;
     const isToday = day === today;
     return `
-          <div style="padding:10px 6px;text-align:center;border-left:1px solid var(--gray-200);${isToday ? 'background:var(--primary-light)' : ''}${isPast ? 'opacity:0.45' : ''}">
+          <div style="padding:10px 8px;text-align:center;border-left:1px solid var(--gray-200);min-width:220px;box-sizing:border-box;${isToday ? 'background:var(--primary-light)' : ''}${isPast ? 'opacity:0.45' : ''}"
+            data-is-today="${isToday}">
             <div style="font-size:11px;font-weight:700;color:${isToday ? 'var(--primary)' : 'var(--gray-500)'};text-transform:uppercase">${new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short' })}</div>
             <div style="font-size:20px;font-weight:700;color:${isToday ? 'var(--primary)' : 'var(--dark)'}">${parseInt(day.split('-')[2])}</div>
             ${isToday ? `<div style="font-size:9px;font-weight:800;color:var(--primary);letter-spacing:.5px;text-transform:uppercase;margin-top:1px">Hoje</div>` : ''}
@@ -468,7 +512,7 @@ function renderWeekView(container, range, appointments, blocked) {
   }).join('')}
       </div>
       <!-- Time grid (30 em 30 min) -->
-      <div style="display:grid;grid-template-columns:56px repeat(${cols},1fr)">
+      <div class="week-grid-body" style="display:grid;grid-template-columns:56px repeat(${cols}, minmax(220px, 1fr))">
         <!-- Time col -->
         <div>
           ${slots.map(s => `
@@ -484,13 +528,13 @@ function renderWeekView(container, range, appointments, blocked) {
     const dayLayout = computeOverlapLayout(dayAppts);
     const pastH = pastOverlayHeight(day);
     return `
-            <div style="position:relative;height:${totalH}px;border-left:1px solid var(--gray-200);${isPast ? 'background:var(--gray-50);cursor:default;opacity:0.6' : 'cursor:pointer'}"
+            <div class="week-day-col" style="position:relative;height:${totalH}px;min-width:220px;box-sizing:border-box;border-left:1px solid var(--gray-200);${isPast ? 'background:var(--gray-50);cursor:default;opacity:0.6' : 'cursor:pointer'}"
               onclick="handleWeekColClick(event, '${day}')">
               ${slots.map(s => `<div class="agenda-grid-slot ${s.isHalf ? 'half-hour' : 'full-hour'}" data-time="${s.time}" style="height:${SLOT_HEIGHT_30}px"></div>`).join('')}
               ${pastH > 0 ? `<div class="agenda-past-overlay" style="position:absolute;top:0;left:0;right:0;height:${pastH}px;z-index:2" title="Horário já passado"></div>` : ''}
               ${dayAppts.map(a => `
-                <div class="appt-block"
-                  style="background:${a.professional_color || '#3B5848'};position:absolute;top:${getTop(a.start_time) + 1}px;height:${getHeight(a.start_time, a.end_time)}px;${overlapStyle(dayLayout, a.id)}font-size:11px;z-index:5"
+                <div class="appt-block appt-card"
+                  style="background:${a.professional_color || '#3B5848'};position:absolute;top:${getTop(a.start_time) + 1}px;height:${getHeight(a.start_time, a.end_time)}px;${overlapStyle(dayLayout, a.id)}z-index:5"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
                   ${canCompleteAppt(a) ? `<button class="appt-done-btn appt-done-btn-sm" onclick="completeAppointmentFromCalendar(${a.id}, event)" title="Marcar como concluído">
                     <i class="fa fa-check"></i>
@@ -498,8 +542,10 @@ function renderWeekView(container, range, appointments, blocked) {
                   ${canModifyAppt(a) ? `<button class="appt-delete-btn appt-delete-btn-sm" onclick="deleteAppointmentFromCalendar(${a.id}, event)" title="Excluir agendamento">
                     <i class="fa fa-trash"></i>
                   </button>` : ''}
-                  <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:18px">${formatTime(a.start_time)} ${esc(a.client_name)}</div>
-                  <div style="opacity:0.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.service_name)}</div>
+                  <div class="appt-block-title">${formatTime(a.start_time)} ${esc(a.client_name)}</div>
+                  <div class="appt-block-sub">${esc(a.service_name)} · ${formatCurrency(a.price)}</div>
+                  ${agendaProfFilter === 'all' ? `<div class="appt-block-sub">${esc(a.professional_name)}</div>` : ''}
+                  <div class="appt-block-sub">${statusBadge(a.status)}</div>
                 </div>`).join('')}
               ${dayBlocked.map(b => `
                 <div class="blocked-block"
@@ -513,6 +559,17 @@ function renderWeekView(container, range, appointments, blocked) {
      </div>
     </div>
   `;
+
+  setTimeout(() => {
+    const scrollContainer = container.querySelector('.agenda-week-container');
+    const todayCol = container.querySelector('.week-grid-header [data-is-today="true"]');
+    if (scrollContainer && todayCol) {
+      const scrollPos = todayCol.offsetLeft - 60;
+      if (scrollPos > 0) {
+        scrollContainer.scrollTo({ left: scrollPos, behavior: 'smooth' });
+      }
+    }
+  }, 60);
 }
 
 function renderMonthView(container, year, month, appointments) {

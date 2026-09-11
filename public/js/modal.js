@@ -428,13 +428,12 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
                     <input type="checkbox" class="service-checkbox" value="${s.id}"
                       data-price="${s.price}" data-duration="${s.duration}" data-name="${esc(s.name)}"
                       ${checked ? 'checked' : ''} onchange="onMultiServiceChange()" />
-                    <div class="service-check-info">
-                      <span class="service-check-name">${esc(s.name)}</span>
-                      <div class="service-check-meta">
-                        <span class="service-check-duration"><i class="fa fa-clock"></i> ${formatDurationBR(s.duration)}</span>
-                        <span class="service-check-price">${formatCurrency(s.price)}</span>
-                      </div>
-                    </div>
+                    <span class="service-check-name" title="${esc(s.name)}">${esc(s.name)}</span>
+                    <span class="service-check-meta">
+                      <span class="service-check-duration">${formatDurationBR(s.duration)}</span>
+                      <span class="service-check-dot">•</span>
+                      <span class="service-check-price">${formatCurrency(s.price)}</span>
+                    </span>
                   </label>
                 `;
               }).join('')}
