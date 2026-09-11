@@ -61,6 +61,17 @@ const loginLimiter = rateLimit({
   skipSuccessfulRequests: true,
   message: { error: 'Muitas tentativas de login. Aguarde 15 minutos e tente novamente.' },
 });
+const clientAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 10,
+  standardHeaders: true, legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: 'Muitas tentativas de acesso. Tente novamente em 15 minutos.' },
+});
+const clientCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 30,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Limite de consultas excedido. Aguarde alguns minutos.' },
+});
 const publicBookingLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, max: 30,
   standardHeaders: true, legacyHeaders: false,
@@ -69,6 +80,9 @@ const publicBookingLimiter = rateLimit({
 
 app.use('/api', apiLimiter);
 app.use('/api/auth/login', loginLimiter);
+app.use('/api/public/client/login', clientAuthLimiter);
+app.use('/api/public/client/register', clientAuthLimiter);
+app.use('/api/public/client/check', clientCheckLimiter);
 app.use('/api/public/appointments', publicBookingLimiter);
 
 // ── Rotas ─────────────────────────────────────────────────────────────────────

@@ -80,8 +80,8 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
     await query('UPDATE services SET active = FALSE WHERE id = $1', [req.params.id]);
     res.json({ message: 'Serviço desativado com sucesso', id: s.id, active: false });
   } catch (e) {
-    console.error('[services DELETE]', e.message);
-    res.status(500).json({ error: 'Erro interno' });
+    console.error('Erro ao remover serviço:', e);
+    res.status(500).json({ error: 'Erro interno ao remover serviço' });
   }
 });
 
@@ -118,8 +118,8 @@ router.post('/purge-mao-pe', authenticateToken, requireAdmin, async (req, res) =
       deleted_services: deleted.rowCount || 0,
     });
   } catch (e) {
-    console.error('[services POST /purge-mao-pe]', e.message);
-    res.status(500).json({ error: 'Erro ao remover serviço Mão + Pé: ' + e.message });
+    console.error('Erro ao remover serviço:', e);
+    res.status(500).json({ error: 'Erro interno ao remover serviço' });
   }
 });
 

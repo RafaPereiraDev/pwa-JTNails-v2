@@ -20,6 +20,11 @@ function authenticateToken(req, res, next) {
     if (err) {
       return res.status(403).json({ error: 'Sua sessão expirou. Faça login novamente.' });
     }
+
+    if (!user || user.type === 'client' || !['master', 'admin', 'professional'].includes(user.role)) {
+      return res.status(403).json({ error: 'Acesso não autorizado para este perfil' });
+    }
+
     req.user = user;
     next();
   });

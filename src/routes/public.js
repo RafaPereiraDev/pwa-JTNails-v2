@@ -520,15 +520,13 @@ router.get('/client/check', async (req, res) => {
     if (!validPhone(phoneDigits)) return res.status(400).json({ error: 'Telefone inválido' });
 
     const c = await getOne(
-      `SELECT id, name, password, birth_date FROM clients
+      `SELECT id, password FROM clients
        WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') = $1`,
       [phoneDigits]
     );
     res.json({
       exists: !!c,
       has_password: !!(c && c.password),
-      name: c ? c.name : null,
-      birth_date: c ? c.birth_date : null,
     });
   } catch (e) {
     console.error('[public/client/check]', e.message);
