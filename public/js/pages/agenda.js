@@ -161,7 +161,17 @@ async function loadAgendaView() {
 
 const TIME_START = 7;
 const TIME_END = 23;
-const SLOT_HEIGHT = 52; // px per hour
+const SLOT_HEIGHT_30 = 40; // px por slot de 30 minutos (80px por hora, confortável para toque mobile)
+
+function getAgendaTimeSlots() {
+  const slots = [];
+  for (let h = TIME_START; h < TIME_END; h++) {
+    const hh = String(h).padStart(2, '0');
+    slots.push({ h, m: 0, time: `${hh}:00`, isHalf: false });
+    slots.push({ h, m: 30, time: `${hh}:30`, isHalf: true });
+  }
+  return slots;
+}
 
 // Minuto atual do dia (0..1439) no relógio local. Usado para desabilitar
 // horários que já passaram no dia de HOJE.
@@ -190,7 +200,7 @@ function pastOverlayHeight(date) {
   const startMin = TIME_START * 60;
   const endMin = TIME_END * 60;
   const clamped = Math.max(startMin, Math.min(endMin, nowMin));
-  return ((clamped - startMin) / 60) * SLOT_HEIGHT;
+  return ((clamped - startMin) / 30) * SLOT_HEIGHT_30;
 }
 
 
@@ -243,22 +253,23 @@ function overlapStyle(layout, id) {
 
 function renderDayView(container, date, appointments, blocked) {
   const today = getTodayStr();
-  const hours = [];
-  for (let h = TIME_START; h < TIME_END; h++) hours.push(h);
+  const slots = getAgendaTimeSlots();
 
-  // Group events by slot
+  // Posicionamento vertical proporcional aos minutos em faixas de 30min
   function getTop(time) {
     const [h, m] = time.split(':').map(Number);
-    return ((h - TIME_START) + m / 60) * SLOT_HEIGHT;
+    const mins = (h - TIME_START) * 60 + m;
+    return (mins / 30) * SLOT_HEIGHT_30;
   }
   function getHeight(start, end) {
     const [sh, sm] = start.split(':').map(Number);
     const [eh, em] = end.split(':').map(Number);
     const mins = (eh * 60 + em) - (sh * 60 + sm);
-    return Math.max(24, (mins / 60) * SLOT_HEIGHT);
+    // Margem de 2px para espaçamento visual entre cards sequenciais
+    return Math.max(26, (mins / 30) * SLOT_HEIGHT_30 - 2);
   }
 
-  const totalHeight = hours.length * SLOT_HEIGHT;
+  const totalHeight = slots.length * SLOT_HEIGHT_30;
   const dayLayout = computeOverlapLayout(appointments);
 
   const apptBlocks = appointments.map(a => {
@@ -266,7 +277,7 @@ function renderDayView(container, date, appointments, blocked) {
     const height = getHeight(a.start_time, a.end_time);
     const color = a.professional_color || '#3B5848';
     return `
-      <div class="appt-block" style="background:${color};position:absolute;top:${top}px;height:${height}px;${overlapStyle(dayLayout, a.id)}z-index:5"
+      <div class="appt-block" style="background:${color};position:absolute;top:${top + 1}px;height:${height}px;${overlapStyle(dayLayout, a.id)}z-index:5"
         onclick="event.stopPropagation();openEditAppointment(${a.id})">
         ${canCompleteAppt(a) ? `<button class="appt-done-btn" onclick="completeAppointmentFromCalendar(${a.id}, event)" title="Marcar como concluído">
           <i class="fa fa-check"></i>
@@ -285,7 +296,7 @@ function renderDayView(container, date, appointments, blocked) {
     const top = getTop(b.start_time);
     const height = getHeight(b.start_time, b.end_time);
     return `
-      <div class="blocked-block" style="position:absolute;top:${top}px;height:${height}px;left:4px;right:4px;z-index:4"
+      <div class="blocked-block" style="position:absolute;top:${top + 1}px;height:${height}px;left:4px;right:4px;z-index:4"
         onclick="event.stopPropagation();${canModifyAppt(b) ? `deleteBlockedTime(${b.id})` : ''}">
         <div class="blocked-block-title"><i class="fa fa-ban"></i> ${esc(b.reason || 'Bloqueado')}</div>
         <div style="font-size:11px;color:var(--gray-500)">${formatTime(b.start_time)} - ${formatTime(b.end_time)} · ${esc(b.professional_name)}</div>
@@ -299,17 +310,17 @@ function renderDayView(container, date, appointments, blocked) {
         <span class="badge ${date === today ? 'badge-confirmed' : 'badge-scheduled'}">${date === today ? 'Hoje' : dayName(date)}</span>
       </div>
       <div style="display:grid;grid-template-columns:56px 1fr">
-        <!-- Time labels -->
+        <!-- Time labels (30 em 30 min) -->
         <div>
-          ${hours.map(h => `
-            <div style="height:${SLOT_HEIGHT}px;padding:4px 6px 0 6px;font-size:11px;color:var(--gray-400);border-bottom:1px solid var(--gray-100)">
-              ${String(h).padStart(2, '0')}:00
+          ${slots.map(s => `
+            <div class="agenda-time-label ${s.isHalf ? 'half-hour' : 'full-hour'}" style="height:${SLOT_HEIGHT_30}px">
+              ${s.isHalf ? `<span class="time-sub">${s.time}</span>` : `<span class="time-main">${s.time}</span>`}
             </div>`).join('')}
         </div>
         <!-- Events column -->
         <div style="position:relative;height:${totalHeight}px;border-left:1px solid var(--gray-200);cursor:pointer"
           onclick="handleDayClick(event, '${date}')">
-          ${hours.map(() => `<div style="height:${SLOT_HEIGHT}px;border-bottom:1px solid var(--gray-100)"></div>`).join('')}
+          ${slots.map(s => `<div class="agenda-grid-slot ${s.isHalf ? 'half-hour' : 'full-hour'}" data-time="${s.time}" style="height:${SLOT_HEIGHT_30}px"></div>`).join('')}
           ${pastOverlayHeight(date) > 0 ? `<div class="agenda-past-overlay" style="position:absolute;top:0;left:0;right:0;height:${pastOverlayHeight(date)}px;z-index:2" title="Horário já passado"></div>` : ''}
           ${apptBlocks}
           ${blockedBlocks}
@@ -349,11 +360,13 @@ function completeAppointmentFromCalendar(id, event) {
 // Calcula o horário (HH:MM, em passos de 30min) a partir da posição Y do clique na coluna.
 function timeFromClickY(colEl, clientY) {
   const rect = colEl.getBoundingClientRect();
-  const y = clientY - rect.top;
-  const hourOffset = y / SLOT_HEIGHT;
-  const h = Math.floor(TIME_START + hourOffset);
-  const m = Math.floor((hourOffset % 1) * 60 / 30) * 30;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  const y = Math.max(0, clientY - rect.top);
+  const slotIdx = Math.floor(y / SLOT_HEIGHT_30);
+  const totalMins = slotIdx * 30;
+  const h = Math.floor(TIME_START + totalMins / 60);
+  const m = totalMins % 60;
+  const clampedH = Math.min(TIME_END - 1, Math.max(TIME_START, h));
+  return `${String(clampedH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 function handleWeekColClick(e, day) {
@@ -364,7 +377,8 @@ function handleWeekColClick(e, day) {
   // Dia passado: não cria agendamento (mas agendamentos existentes ainda abrem detalhes)
   if (day < getTodayStr()) return;
 
-  const time = timeFromClickY(e.currentTarget, e.clientY);
+  const slotEl = e.target.closest('[data-time]');
+  const time = (slotEl && slotEl.dataset.time) ? slotEl.dataset.time : timeFromClickY(e.currentTarget, e.clientY);
   // Horário que já passou hoje: não permite criar novo agendamento
   if (isSlotPast(day, time)) {
     toast('Esse horário já passou. Escolha um horário futuro.', 'warning');
@@ -392,7 +406,8 @@ function handleDayClick(e, date) {
     return;
   }
 
-  const time = timeFromClickY(e.currentTarget, e.clientY);
+  const slotEl = e.target.closest('[data-time]');
+  const time = (slotEl && slotEl.dataset.time) ? slotEl.dataset.time : timeFromClickY(e.currentTarget, e.clientY);
   // Horário que já passou hoje: bloqueia a criação
   if (isSlotPast(date, time)) {
     toast('Esse horário já passou. Escolha um horário futuro.', 'warning');
@@ -418,20 +433,21 @@ function renderWeekView(container, range, appointments, blocked) {
   }
 
   const today = getTodayStr();
-  const hours = [];
-  for (let h = TIME_START; h < TIME_END; h++) hours.push(h);
+  const slots = getAgendaTimeSlots();
 
   function getTop(time) {
     const [h, m] = time.split(':').map(Number);
-    return ((h - TIME_START) + m / 60) * SLOT_HEIGHT;
+    const mins = (h - TIME_START) * 60 + m;
+    return (mins / 30) * SLOT_HEIGHT_30;
   }
   function getHeight(start, end) {
     const [sh, sm] = start.split(':').map(Number);
     const [eh, em] = end.split(':').map(Number);
-    return Math.max(20, ((eh * 60 + em - sh * 60 - sm) / 60) * SLOT_HEIGHT);
+    const mins = (eh * 60 + em) - (sh * 60 + sm);
+    return Math.max(26, (mins / 30) * SLOT_HEIGHT_30 - 2);
   }
 
-  const totalH = hours.length * SLOT_HEIGHT;
+  const totalH = slots.length * SLOT_HEIGHT_30;
   const cols = days.length;
 
   container.innerHTML = `
@@ -451,13 +467,13 @@ function renderWeekView(container, range, appointments, blocked) {
           </div>`;
   }).join('')}
       </div>
-      <!-- Time grid -->
+      <!-- Time grid (30 em 30 min) -->
       <div style="display:grid;grid-template-columns:56px repeat(${cols},1fr)">
         <!-- Time col -->
         <div>
-          ${hours.map(h => `
-            <div style="height:${SLOT_HEIGHT}px;padding:3px 6px 0;font-size:11px;color:var(--gray-400);border-bottom:1px solid var(--gray-100)">
-              ${String(h).padStart(2, '0')}:00
+          ${slots.map(s => `
+            <div class="agenda-time-label ${s.isHalf ? 'half-hour' : 'full-hour'}" style="height:${SLOT_HEIGHT_30}px">
+              ${s.isHalf ? `<span class="time-sub">${s.time}</span>` : `<span class="time-main">${s.time}</span>`}
             </div>`).join('')}
         </div>
         <!-- Day cols -->
@@ -470,11 +486,11 @@ function renderWeekView(container, range, appointments, blocked) {
     return `
             <div style="position:relative;height:${totalH}px;border-left:1px solid var(--gray-200);${isPast ? 'background:var(--gray-50);cursor:default;opacity:0.6' : 'cursor:pointer'}"
               onclick="handleWeekColClick(event, '${day}')">
-              ${hours.map(() => `<div style="height:${SLOT_HEIGHT}px;border-bottom:1px solid var(--gray-100)"></div>`).join('')}
+              ${slots.map(s => `<div class="agenda-grid-slot ${s.isHalf ? 'half-hour' : 'full-hour'}" data-time="${s.time}" style="height:${SLOT_HEIGHT_30}px"></div>`).join('')}
               ${pastH > 0 ? `<div class="agenda-past-overlay" style="position:absolute;top:0;left:0;right:0;height:${pastH}px;z-index:2" title="Horário já passado"></div>` : ''}
               ${dayAppts.map(a => `
                 <div class="appt-block"
-                  style="background:${a.professional_color || '#3B5848'};position:absolute;top:${getTop(a.start_time)}px;height:${getHeight(a.start_time, a.end_time)}px;${overlapStyle(dayLayout, a.id)}font-size:11px;z-index:5"
+                  style="background:${a.professional_color || '#3B5848'};position:absolute;top:${getTop(a.start_time) + 1}px;height:${getHeight(a.start_time, a.end_time)}px;${overlapStyle(dayLayout, a.id)}font-size:11px;z-index:5"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
                   ${canCompleteAppt(a) ? `<button class="appt-done-btn appt-done-btn-sm" onclick="completeAppointmentFromCalendar(${a.id}, event)" title="Marcar como concluído">
                     <i class="fa fa-check"></i>
@@ -487,7 +503,7 @@ function renderWeekView(container, range, appointments, blocked) {
                 </div>`).join('')}
               ${dayBlocked.map(b => `
                 <div class="blocked-block"
-                  style="position:absolute;top:${getTop(b.start_time)}px;height:${getHeight(b.start_time, b.end_time)}px;left:2px;right:2px;font-size:11px;z-index:5"
+                  style="position:absolute;top:${getTop(b.start_time) + 1}px;height:${getHeight(b.start_time, b.end_time)}px;left:2px;right:2px;font-size:11px;z-index:5"
                   onclick="event.stopPropagation();${canModifyAppt(b) ? `deleteBlockedTime(${b.id})` : ''}">
                   <div class="blocked-block-title"><i class="fa fa-ban"></i> ${esc(b.reason || 'Bloqueado')}</div>
                 </div>`).join('')}

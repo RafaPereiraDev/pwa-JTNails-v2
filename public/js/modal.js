@@ -361,12 +361,12 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
     targetProfId = profList[0].id;
   }
 
+  const selectedServiceIds = appt
+    ? (appt.service_ids && appt.service_ids.length > 0 ? appt.service_ids : (appt.service_id ? [appt.service_id] : []))
+    : (services.length > 0 ? [services[0].id] : []);
+
   const profOptions = profList.map(p =>
     `<option value="${p.id}" ${targetProfId === p.id ? 'selected' : ''}>${esc(p.name)}</option>`
-  ).join('');
-
-  const svcOptions = services.map(s =>
-    `<option value="${s.id}" data-price="${s.price}" data-duration="${s.duration}" ${appt && appt.service_id === s.id ? 'selected' : ''}>${esc(s.name)} - ${formatCurrency(s.price)}</option>`
   ).join('');
 
   const statusOptions = [
@@ -384,11 +384,11 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
     <form id="appt-form">
       <div class="modal-form-body">
         <div class="appt-layout">
-          <!-- BLOCO 1: Cliente & Serviço -->
+          <!-- BLOCO 1: Cliente & Serviços -->
         <div class="appt-block">
           <div class="appt-block-header">
             <i class="fa fa-user-circle"></i>
-            <span>Cliente & Serviço</span>
+            <span>Cliente & Serviços</span>
           </div>
 
           <div class="form-group appt-client-group" style="margin-top:8px">
@@ -412,8 +412,49 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
           </div>
 
           <div class="form-group">
-            <label>Serviço *</label>
-            <select id="appt-service" required onchange="onServiceChange()">${svcOptions}</select>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <label style="margin:0;font-size:13px;font-weight:600;color:var(--gray-700)">
+                Serviços * <span style="font-weight:400;color:var(--gray-500);font-size:11.5px">(selecione um ou mais)</span>
+              </label>
+              <span id="services-badge-count" style="font-size:11px;font-weight:700;color:var(--primary);background:var(--primary-light);padding:2px 8px;border-radius:12px">
+                ${selectedServiceIds.length} selecionado(s)
+              </span>
+            </div>
+            <div class="multi-services-list" id="multi-services-list">
+              ${services.map(s => {
+                const checked = selectedServiceIds.includes(s.id);
+                return `
+                  <label class="service-check-item ${checked ? 'selected' : ''}" data-service-id="${s.id}">
+                    <input type="checkbox" class="service-checkbox" value="${s.id}"
+                      data-price="${s.price}" data-duration="${s.duration}" data-name="${esc(s.name)}"
+                      ${checked ? 'checked' : ''} onchange="onMultiServiceChange()" />
+                    <div class="service-check-info">
+                      <span class="service-check-name">${esc(s.name)}</span>
+                      <div class="service-check-meta">
+                        <span class="service-check-duration"><i class="fa fa-clock"></i> ${formatDurationBR(s.duration)}</span>
+                        <span class="service-check-price">${formatCurrency(s.price)}</span>
+                      </div>
+                    </div>
+                  </label>
+                `;
+              }).join('')}
+            </div>
+
+            <!-- Resumo Dinâmico em Tempo Real -->
+            <div class="appt-services-summary-box" id="appt-services-summary-box">
+              <div class="summary-metric">
+                <span class="metric-label"><i class="fa fa-clock"></i> Duração Total</span>
+                <strong class="metric-value" id="summary-total-duration">0min</strong>
+              </div>
+              <div class="summary-metric">
+                <span class="metric-label"><i class="fa fa-tag"></i> Valor Sugerido</span>
+                <strong class="metric-value" id="summary-total-price">R$ 0,00</strong>
+              </div>
+              <div class="summary-metric">
+                <span class="metric-label"><i class="fa fa-hourglass-end"></i> Término Previsto</span>
+                <strong class="metric-value" id="summary-end-time">--:--</strong>
+              </div>
+            </div>
           </div>
 
           <div class="appt-prof-price-grid">
@@ -453,9 +494,9 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
             </div>
           </div>
 
-          <div class="appt-datetime-hint">
+          <div class="appt-datetime-hint" id="appt-datetime-hint">
             <i class="fa fa-info-circle"></i>
-            <span>A duração do serviço é calculada automaticamente na agenda.</span>
+            <span id="appt-datetime-hint-text">A duração do serviço é calculada automaticamente na agenda.</span>
           </div>
         </div>
 
@@ -514,8 +555,15 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
     </form>
   `;
 
-  // Auto-fill price on load
-  if (!isEdit) onServiceChange();
+  // Listener para atualização do término previsto quando o horário de início é alterado
+  const timeInput = document.getElementById('appt-time');
+  if (timeInput) {
+    timeInput.addEventListener('input', () => updateAppointmentSummary());
+    timeInput.addEventListener('change', () => updateAppointmentSummary());
+  }
+
+  // Inicializa cálculo de múltiplos serviços e resumo em tempo real
+  onMultiServiceChange(!isEdit);
   // Show reliability hint for pre-selected client
   onClientChange();
 
@@ -531,12 +579,22 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       return;
     }
 
+    const selectedCheckboxes = document.querySelectorAll('#multi-services-list .service-checkbox:checked');
+    const selectedServiceIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value, 10)).filter(Boolean);
+
+    if (selectedServiceIds.length === 0) {
+      errEl.textContent = 'Selecione ao menos um serviço para o agendamento.';
+      errEl.style.display = '';
+      return;
+    }
+
     const planEl = document.getElementById('appt-plan');
     const encaixeEl = document.getElementById('appt-encaixe');
     const data = {
       client_id: parseInt(clientId),
       professional_id: parseInt(document.getElementById('appt-professional').value),
-      service_id: parseInt(document.getElementById('appt-service').value),
+      service_id: selectedServiceIds[0],
+      service_ids: selectedServiceIds,
       date: document.getElementById('appt-date').value,
       start_time: document.getElementById('appt-time').value,
       price: parseFloat(document.getElementById('appt-price').value),
@@ -561,7 +619,7 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       String(data.start_time) === String(appt.start_time).slice(0, 5);
     if (!isSameAsSaved) {
       if (data.date < todayStr) {
-        errEl.textContent = 'Não é possível agendar em uma data que já passou.';
+        errEl.textContent = 'Não é possível agendar em uma data que já passaram.';
         errEl.style.display = '';
         return;
       }
@@ -616,13 +674,82 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
   });
 }
 
+function onMultiServiceChange(autoFillPrice = true) {
+  const checkboxes = document.querySelectorAll('#multi-services-list .service-checkbox');
+  const countBadge = document.getElementById('services-badge-count');
+  let totalMinutes = 0;
+  let totalPrice = 0;
+  let count = 0;
+
+  checkboxes.forEach(cb => {
+    const parentLabel = cb.closest('.service-check-item');
+    if (cb.checked) {
+      count++;
+      if (parentLabel) parentLabel.classList.add('selected');
+      const dur = parseInt(cb.dataset.duration, 10) || 60;
+      const pr  = parseFloat(cb.dataset.price) || 0;
+      totalMinutes += dur;
+      totalPrice += pr;
+    } else {
+      if (parentLabel) parentLabel.classList.remove('selected');
+    }
+  });
+
+  if (countBadge) {
+    countBadge.textContent = `${count} selecionado(s)`;
+  }
+
+  // Preenche o valor sugerido se solicitado (ex: novo agendamento ou alteração na seleção)
+  if (autoFillPrice) {
+    const priceInput = document.getElementById('appt-price');
+    if (priceInput) {
+      priceInput.value = totalPrice > 0 ? totalPrice.toFixed(2) : '0.00';
+    }
+  }
+
+  updateAppointmentSummary(totalMinutes, totalPrice);
+}
+
+function updateAppointmentSummary(knownMins = null, knownPrice = null) {
+  let totalMinutes = knownMins;
+  let totalPrice = knownPrice;
+
+  if (totalMinutes === null || totalPrice === null) {
+    totalMinutes = 0;
+    totalPrice = 0;
+    const checkboxes = document.querySelectorAll('#multi-services-list .service-checkbox:checked');
+    checkboxes.forEach(cb => {
+      totalMinutes += parseInt(cb.dataset.duration, 10) || 60;
+      totalPrice += parseFloat(cb.dataset.price) || 0;
+    });
+  }
+
+  const durEl = document.getElementById('summary-total-duration');
+  if (durEl) durEl.textContent = formatDurationBR(totalMinutes);
+
+  const prEl = document.getElementById('summary-total-price');
+  if (prEl) prEl.textContent = formatCurrency(totalPrice);
+
+  const timeInput = document.getElementById('appt-time');
+  const startTime = timeInput ? timeInput.value : '';
+  const endTime = startTime && totalMinutes > 0 ? addMinutesToHHMM(startTime, totalMinutes) : '--:--';
+
+  const endEl = document.getElementById('summary-end-time');
+  if (endEl) endEl.textContent = endTime;
+
+  const hintText = document.getElementById('appt-datetime-hint-text');
+  if (hintText) {
+    if (startTime && totalMinutes > 0) {
+      hintText.innerHTML = `Atendimento das <strong>${startTime}</strong> às <strong>${endTime}</strong> (duração total: <strong>${formatDurationBR(totalMinutes)}</strong>).`;
+    } else {
+      hintText.textContent = 'A duração do serviço é calculada automaticamente na agenda.';
+    }
+  }
+}
+
+// Mantido para compatibilidade se invocado externamente
 function onServiceChange() {
-  const sel = document.getElementById('appt-service');
-  if (!sel || !sel.selectedOptions[0]) return;
-  const opt = sel.selectedOptions[0];
-  const price = opt.dataset.price;
-  const priceInput = document.getElementById('appt-price');
-  if (priceInput && price) priceInput.value = parseFloat(price).toFixed(2);
+  onMultiServiceChange(true);
 }
 
 // Mostra o badge de confiabilidade da cliente atualmente selecionada

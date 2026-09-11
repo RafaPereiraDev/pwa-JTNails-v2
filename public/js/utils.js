@@ -315,3 +315,25 @@ function attachCPFMask(inputId) {
   el.value = maskCPF(el.value);
   el.addEventListener('input', () => { el.value = maskCPF(el.value); });
 }
+
+/** Formata minutos em formato amigável, ex: 45min, 1h, 1h 45min, 2h */
+function formatDurationBR(mins) {
+  mins = parseInt(mins, 10) || 0;
+  if (mins < 60) return `${mins}min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}min` : `${h}h`;
+}
+
+/** Soma minutos a um horário no formato HH:MM e retorna HH:MM */
+function addMinutesToHHMM(timeHHMM, mins) {
+  if (!timeHHMM) return '--:--';
+  const parts = String(timeHHMM).slice(0, 5).split(':');
+  if (parts.length < 2) return '--:--';
+  const [h, m] = parts.map(Number);
+  if (isNaN(h) || isNaN(m)) return '--:--';
+  const total = h * 60 + m + (parseInt(mins, 10) || 0);
+  const endH = Math.floor(total / 60) % 24;
+  const endM = total % 60;
+  return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+}

@@ -100,9 +100,14 @@ const APPT_SELECT = `
     a.start_time::text  AS start_time,
     a.end_time::text    AS end_time,
     a.price, a.status, a.payment_method, a.notes, a.created_at,
-    a.series_id, a.is_encaixe,
+    a.series_id, a.is_encaixe, a.services_summary,
     c.name  AS client_name,  c.phone AS client_phone,
-    COALESCE(s.name, 'Serviço Removido') AS service_name, COALESCE(s.duration, 60) AS service_duration,
+    COALESCE(NULLIF(a.services_summary, ''), s.name, 'Serviço Removido') AS service_name,
+    COALESCE(
+      (SELECT SUM(asv.duration) FROM appointment_services asv WHERE asv.appointment_id = a.id),
+      s.duration,
+      60
+    ) AS service_duration,
     p.name  AS professional_name, p.color AS professional_color
   FROM appointments a
   JOIN clients      c ON a.client_id       = c.id
@@ -276,6 +281,11 @@ router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const a = await getOne(APPT_SELECT + ' WHERE a.id = $1', [req.params.id]);
     if (!a) return res.status(404).json({ error: 'Agendamento não encontrado' });
+    const svcRows = await getAll(
+      'SELECT service_id FROM appointment_services WHERE appointment_id = $1 ORDER BY id',
+      [a.id]
+    );
+    a.service_ids = svcRows.length > 0 ? svcRows.map(r => r.service_id) : (a.service_id ? [a.service_id] : []);
     res.json(a);
   } catch (e) {
     console.error('[appointments GET /:id]', e.message);
@@ -286,10 +296,15 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // POST /api/appointments
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { client_id, professional_id, service_id, date, start_time,
+    const { client_id, professional_id, service_id, service_ids, date, start_time,
             price, payment_method, notes, status, plan, allow_overlap } = req.body;
 
-    if (!client_id || !professional_id || !service_id || !date || !start_time)
+    let sIds = Array.isArray(service_ids) ? service_ids.map(Number).filter(Boolean) : [];
+    if (sIds.length === 0 && service_id) {
+      sIds = [parseInt(service_id, 10)].filter(Boolean);
+    }
+
+    if (!client_id || !professional_id || sIds.length === 0 || !date || !start_time)
       return res.status(400).json({ error: 'Cliente, profissional, serviço, data e horário são obrigatórios' });
 
     // Valida formato de data e hora (igual ao endpoint público)
@@ -317,18 +332,20 @@ router.post('/', authenticateToken, async (req, res) => {
     if (!isPlan && isClosedDay(date))
       return res.status(400).json({ error: 'O salão não atende aos domingos e segundas-feiras' });
 
-    const svc = await getOne('SELECT * FROM services WHERE id = $1 AND active = TRUE', [service_id]);
-    if (!svc) return res.status(404).json({ error: 'Serviço não encontrado ou inativo' });
+    const svcs = await getAll('SELECT * FROM services WHERE id = ANY($1::int[]) AND active = TRUE ORDER BY id', [sIds]);
+    if (!svcs || svcs.length === 0) return res.status(404).json({ error: 'Nenhum serviço válido ou ativo selecionado' });
 
-    const finalPrice = price !== undefined ? parseFloat(price) : parseFloat(svc.price);
-    const end_time   = calcEndTime(start_time, svc.duration);
+    const totalDuration = svcs.reduce((acc, s) => acc + (parseInt(s.duration, 10) || 60), 0);
+    const totalDefaultPrice = svcs.reduce((acc, s) => acc + parseFloat(s.price || 0), 0);
+    const servicesSummary = svcs.map(s => s.name).join(' + ');
+    const primaryServiceId = svcs[0].id;
+
+    const finalPrice = price !== undefined && price !== null && price !== '' ? parseFloat(price) : totalDefaultPrice;
+    const end_time   = calcEndTime(start_time, totalDuration);
     const overlap    = allow_overlap === true || allow_overlap === 'true';
 
     // ── PLANO ANUAL: cria a série inteira numa transação ─────────────────────
     if (plan && PLAN_FREQUENCIES[plan]) {
-      // Usa TODAS as datas calculadas (a 1ª é a própria data selecionada).
-      // Não pula domingos/segundas/feriados: se o admin escolheu o plano, salva
-      // todos os dias da recorrência conforme calculado.
       const dates = generatePlanDates(date, plan);
       const seriesId = `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -338,17 +355,25 @@ router.post('/', authenticateToken, async (req, res) => {
         for (const d of dates) {
           if (!overlap && await hasConflict(professional_id, d, start_time, end_time)) {
             skipped.push(d);
-            continue; // pula a data conflitante (a menos que seja encaixe)
+            continue;
           }
           const r = await client.query(`
             INSERT INTO appointments
-              (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes,series_id,is_encaixe)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+              (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes,series_id,is_encaixe,services_summary)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
             RETURNING id
-          `, [client_id, professional_id, service_id, d, start_time, end_time,
+          `, [client_id, professional_id, primaryServiceId, d, start_time, end_time,
               finalPrice, status || 'scheduled', payment_method || null, notes || null,
-              seriesId, overlap]);
-          insertedIds.push(r.rows[0].id);
+              seriesId, overlap, servicesSummary]);
+
+          const apptId = r.rows[0].id;
+          insertedIds.push(apptId);
+          for (const s of svcs) {
+            await client.query(
+              `INSERT INTO appointment_services (appointment_id, service_id, price, duration) VALUES ($1, $2, $3, $4)`,
+              [apptId, s.id, s.price, s.duration]
+            );
+          }
         }
         return { insertedIds, skipped };
       });
@@ -365,15 +390,26 @@ router.post('/', authenticateToken, async (req, res) => {
     if (!overlap && await hasConflict(professional_id, date, start_time, end_time))
       return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
 
-    const result = await getOne(`
-      INSERT INTO appointments
-        (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes,is_encaixe)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-      RETURNING id
-    `, [client_id, professional_id, service_id, date, start_time, end_time,
-        finalPrice, status || 'scheduled', payment_method || null, notes || null, overlap]);
+    const createdAppt = await withTransaction(async (client) => {
+      const result = await client.query(`
+        INSERT INTO appointments
+          (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes,is_encaixe,services_summary)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        RETURNING id
+      `, [client_id, professional_id, primaryServiceId, date, start_time, end_time,
+          finalPrice, status || 'scheduled', payment_method || null, notes || null, overlap, servicesSummary]);
 
-    res.status(201).json(await getOne(APPT_SELECT + ' WHERE a.id = $1', [result.id]));
+      const apptId = result.rows[0].id;
+      for (const s of svcs) {
+        await client.query(
+          `INSERT INTO appointment_services (appointment_id, service_id, price, duration) VALUES ($1, $2, $3, $4)`,
+          [apptId, s.id, s.price, s.duration]
+        );
+      }
+      return apptId;
+    });
+
+    res.status(201).json(await getOne(APPT_SELECT + ' WHERE a.id = $1', [createdAppt]));
   } catch (e) {
     console.error('[appointments POST]', e.message);
     res.status(500).json({ error: 'Erro interno' });
@@ -390,7 +426,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     );
     if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
 
-    const { client_id, professional_id, service_id, date, start_time,
+    const { client_id, professional_id, service_id, service_ids, date, start_time,
             price, payment_method, notes, status } = req.body;
 
     // Valida formato de data e hora se fornecidos
@@ -402,7 +438,29 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const newProfId = professional_id || appt.professional_id;
     const newDate   = date       || appt.date;
     const newStart  = start_time || String(appt.start_time).slice(0, 5);
-    const newSvcId  = service_id || appt.service_id;
+
+    let sIds = Array.isArray(service_ids) ? service_ids.map(Number).filter(Boolean) : null;
+    if (!sIds && service_id) {
+      sIds = [parseInt(service_id, 10)].filter(Boolean);
+    }
+
+    let svcs = [];
+    let newDuration = 60;
+    let newSummary = appt.services_summary;
+    let newSvcId = appt.service_id;
+
+    if (sIds && sIds.length > 0) {
+      svcs = await getAll('SELECT * FROM services WHERE id = ANY($1::int[])', [sIds]);
+      if (svcs.length > 0) {
+        newDuration = svcs.reduce((acc, s) => acc + (parseInt(s.duration, 10) || 60), 0);
+        newSummary = svcs.map(s => s.name).join(' + ');
+        newSvcId = svcs[0].id;
+      }
+    } else if (newSvcId) {
+      const svc = await getOne('SELECT * FROM services WHERE id = $1', [newSvcId]);
+      newDuration = svc ? svc.duration : 60;
+      newSummary = appt.services_summary || svc?.name || null;
+    }
 
     // Se a data/horário estiver sendo ALTERADA, não permite mover para o passado.
     // Mudanças que mantêm a data/hora original (ex.: só trocar status) são permitidas.
@@ -420,28 +478,41 @@ router.put('/:id', authenticateToken, async (req, res) => {
       if (isClosedDay(newDate))
         return res.status(400).json({ error: 'O salão não atende aos domingos e segundas-feiras' });
     }
-    const svc       = await getOne('SELECT * FROM services WHERE id = $1', [newSvcId]);
-    const newEnd    = calcEndTime(String(newStart).slice(0,5), svc.duration);
-    const newPrice  = price !== undefined ? parseFloat(price) : parseFloat(appt.price);
+
+    const newEnd   = calcEndTime(String(newStart).slice(0,5), newDuration);
+    const newPrice = price !== undefined && price !== null && price !== '' ? parseFloat(price) : parseFloat(appt.price);
 
     const allowOverlap = req.body.allow_overlap === true || req.body.allow_overlap === 'true';
     if (!allowOverlap && await hasConflict(newProfId, newDate, newStart, newEnd, appt.id))
       return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
 
-    await query(`
-      UPDATE appointments SET
-        client_id=$1, professional_id=$2, service_id=$3, date=$4,
-        start_time=$5, end_time=$6, price=$7, status=$8,
-        payment_method=$9, notes=$10
-      WHERE id=$11
-    `, [
-      client_id || appt.client_id,
-      newProfId, newSvcId, newDate, newStart, newEnd, newPrice,
-      status || appt.status,
-      payment_method !== undefined ? payment_method : appt.payment_method,
-      notes          !== undefined ? notes          : appt.notes,
-      req.params.id,
-    ]);
+    await withTransaction(async (client) => {
+      await client.query(`
+        UPDATE appointments SET
+          client_id=$1, professional_id=$2, service_id=$3, date=$4,
+          start_time=$5, end_time=$6, price=$7, status=$8,
+          payment_method=$9, notes=$10, services_summary=$11
+        WHERE id=$12
+      `, [
+        client_id || appt.client_id,
+        newProfId, newSvcId, newDate, newStart, newEnd, newPrice,
+        status || appt.status,
+        payment_method !== undefined ? payment_method : appt.payment_method,
+        notes          !== undefined ? notes          : appt.notes,
+        newSummary,
+        req.params.id,
+      ]);
+
+      if (svcs.length > 0) {
+        await client.query('DELETE FROM appointment_services WHERE appointment_id = $1', [req.params.id]);
+        for (const s of svcs) {
+          await client.query(
+            'INSERT INTO appointment_services (appointment_id, service_id, price, duration) VALUES ($1, $2, $3, $4)',
+            [req.params.id, s.id, s.price, s.duration]
+          );
+        }
+      }
+    });
 
     // Gera receita ao concluir
     if (status === 'completed' && appt.status !== 'completed') {
@@ -455,7 +526,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
         );
         const cl = await getOne('SELECT name FROM clients  WHERE id = $1', [updated.client_id]);
         const sv = updated.service_id ? await getOne('SELECT name FROM services WHERE id = $1', [updated.service_id]) : null;
-        const svcTitle = sv?.name || 'Serviço';
+        const svcTitle = updated.services_summary || sv?.name || 'Serviço';
         const clTitle  = cl?.name || 'Cliente';
         await query(`
           INSERT INTO transactions
@@ -479,7 +550,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     res.json({ message: 'Agendamento atualizado com sucesso' });
   } catch (e) {
-    console.error('[appointments PUT]', e.message);
+    console.error('[appointments PUT /:id]', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

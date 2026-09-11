@@ -156,6 +156,18 @@ async function initDatabase() {
     -- Exclusão definitiva específica de "Mão + Pé"
     DELETE FROM services
     WHERE name ILIKE '%Mão + Pé%' OR name ILIKE '%Mao + Pe%';
+
+    -- Múltiplos serviços: resumo textual no agendamento e tabela associativa
+    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS services_summary TEXT;
+
+    CREATE TABLE IF NOT EXISTS appointment_services (
+      id              SERIAL PRIMARY KEY,
+      appointment_id  INTEGER NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+      service_id      INTEGER NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+      price           NUMERIC(10,2),
+      duration        INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_appointment_services_appt ON appointment_services(appointment_id);
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)
