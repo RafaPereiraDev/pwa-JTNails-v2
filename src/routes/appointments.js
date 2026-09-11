@@ -118,16 +118,25 @@ const APPT_SELECT = `
 // GET /api/appointments/pending-confirmation
 router.get('/pending-confirmation', authenticateToken, async (req, res) => {
   try {
+    const isMaster = req.user.role === 'master';
+    const profId   = isMaster
+      ? (req.query.professional_id ? parseInt(req.query.professional_id, 10) : null)
+      : (req.user.professional_id ? parseInt(req.user.professional_id, 10) : -1);
+
+    // Usuárias autenticadas sem vínculo com profissional (e não-master) não possuem agendamentos
+    if (!isMaster && profId === -1) {
+      return res.json([]);
+    }
+
     let sql = APPT_SELECT + `
       WHERE a.status IN ('scheduled','confirmed','in_progress')
         AND (a.date::text || ' ' || a.end_time::text)::timestamp
               < (NOW() AT TIME ZONE 'America/Sao_Paulo')
     `;
     const params = [];
-    // Agenda compartilhada: opcionalmente filtra por profissional via query.
-    if (req.query.professional_id) {
+    if (profId && profId !== -1) {
       sql += ` AND a.professional_id = $1`;
-      params.push(req.query.professional_id);
+      params.push(profId);
     }
     sql += ' ORDER BY a.date, a.start_time';
     res.json(await getAll(sql, params));
@@ -171,6 +180,9 @@ router.post('/bulk-confirm', authenticateToken, async (req, res) => {
     if (!Array.isArray(updates) || updates.length === 0)
       return res.status(400).json({ error: 'Envie um array com as confirmações' });
 
+    const isMaster = req.user.role === 'master';
+    const profId   = isMaster ? null : (req.user.professional_id ? parseInt(req.user.professional_id, 10) : -1);
+
     await withTransaction(async (client) => {
       for (const { id, status, payment_method } of updates) {
         if (!id || !['completed','no_show','cancelled'].includes(status)) continue;
@@ -181,6 +193,11 @@ router.post('/bulk-confirm', authenticateToken, async (req, res) => {
           [id]
         )).rows[0];
         if (!appt) continue;
+
+        // Se não for master, garante que só pode confirmar agendamentos da própria profissional autenticada
+        if (!isMaster && (!profId || appt.professional_id !== profId)) {
+          continue;
+        }
 
         await client.query(
           'UPDATE appointments SET status=$1, payment_method=COALESCE($2, payment_method) WHERE id=$3',

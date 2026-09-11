@@ -238,14 +238,20 @@ function openNewClientModal() {
 let _pendingMap = new Map();
 
 async function checkPendingConfirmations() {
-  // Só profissionais e admins com agenda própria precisam confirmar.
+  // Só profissionais e admins com agenda própria vinculada precisam confirmar.
   // Master não tem agenda, então pula.
-  if (!currentUser || currentUser.role === 'master') return;
+  if (!currentUser || currentUser.role === 'master' || !currentUser.professional_id) return;
 
   try {
-    const pending = await api.getPendingConfirmation();
-    if (!pending || pending.length === 0) return;
-    openPendingModal(pending);
+    const profId = currentUser.professional_id;
+    const pending = await api.getPendingConfirmation({ professional_id: profId });
+    if (!Array.isArray(pending) || pending.length === 0) return;
+
+    // Garante isolamento estrito no frontend: apenas agendamentos da própria profissional logada
+    const myPending = pending.filter(a => Number(a.professional_id) === Number(profId));
+    if (myPending.length === 0) return;
+
+    openPendingModal(myPending);
   } catch (e) {
     // Falha silenciosa: não interrompe o painel se a checagem der erro
     console.warn('checkPendingConfirmations:', e.message);
@@ -253,6 +259,12 @@ async function checkPendingConfirmations() {
 }
 
 function openPendingModal(pending) {
+  // Garante que só abre para a profissional logada e apenas com seus próprios agendamentos
+  if (!currentUser || !currentUser.professional_id) return;
+  const myPending = (pending || []).filter(a => Number(a.professional_id) === Number(currentUser.professional_id));
+  if (myPending.length === 0) return;
+  pending = myPending;
+
   // Remove overlay anterior se existir
   const old = document.getElementById('pending-overlay');
   if (old) old.remove();

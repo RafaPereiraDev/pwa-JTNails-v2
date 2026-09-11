@@ -88,7 +88,15 @@ const api = {
   updateAppointment: (id, data) => api.put(`/appointments/${id}`, data),
   deleteAppointment: (id, tipo) => api.delete(`/appointments/${id}${tipo ? `?tipo_cancelamento=${encodeURIComponent(tipo)}` : ''}`),
 
-  getPendingConfirmation: () => api.get('/appointments/pending-confirmation'),
+  getPendingConfirmation: (params = {}) => {
+    let q = '';
+    if (typeof params === 'number' || typeof params === 'string') {
+      q = `professional_id=${encodeURIComponent(params)}`;
+    } else if (params && typeof params === 'object') {
+      q = new URLSearchParams(params).toString();
+    }
+    return api.get('/appointments/pending-confirmation' + (q ? '?' + q : ''));
+  },
   getPlansEnding: () => api.get('/appointments/plans-ending'),
   bulkConfirmAppointments: (updates) => api.post('/appointments/bulk-confirm', updates),
 
