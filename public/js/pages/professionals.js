@@ -112,54 +112,80 @@ function openAgendaProfessional(profId) {
   navigateTo('agenda');
 }
 
+function selectProfColor(color, el) {
+  const input = document.getElementById('pf-color');
+  if (input && color) input.value = color;
+  const dots = document.querySelectorAll('.prof-color-dot');
+  dots.forEach(d => {
+    const dColor = (d.getAttribute('data-color') || '').toLowerCase();
+    d.classList.toggle('selected', dColor === (color || '').toLowerCase());
+  });
+}
+window.selectProfColor = selectProfColor;
+
 async function openProfessionalModal(id = null) {
-  openModal(id ? 'Editar Profissional' : 'Nova Profissional', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-sm');
+  openModal(id ? 'Editar Profissional' : 'Nova Profissional', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-prof');
   let prof = null;
   if (id) {
     try { prof = await api.getProfessional(id); } catch(e) {}
   }
 
+  const defaultColors = ['#4E6754', '#3A5141', '#C19B53', '#BBA263', '#8B5CF6', '#EC4899', '#3B82F6', '#14B8A6'];
+  const selectedColor = prof && prof.color ? prof.color : '#4E6754';
+
   document.getElementById('modal-body').innerHTML = `
-    <form id="prof-form">
-      <div class="form-group">
-        <label>Nome *</label>
-        <input type="text" id="pf-name" value="${prof ? esc(prof.name) : ''}" required placeholder="Nome da profissional" />
+    <form id="prof-form" class="prof-form">
+      <div class="prof-form-body">
+        <div class="form-group prof-col-full">
+          <label>Nome *</label>
+          <input type="text" id="pf-name" value="${prof ? esc(prof.name) : ''}" required placeholder="Nome da profissional" />
+        </div>
+        <div class="form-group prof-col-1">
+          <label>Telefone</label>
+          <input type="tel" id="pf-phone" value="${prof ? esc(prof.phone || '') : ''}" placeholder="(11) 99999-9999" />
+        </div>
+        <div class="form-group prof-col-2">
+          <label>E-mail ${id ? '' : '*'} <span class="text-xs text-muted">(login de acesso)</span></label>
+          <input type="email" id="pf-email" value="${prof ? esc(prof.email || '') : ''}" placeholder="email@exemplo.com" ${id ? '' : 'required'} />
+        </div>
+        ${!id ? `
+        <div class="form-group prof-col-1">
+          <label>Senha de acesso *</label>
+          <input type="password" id="pf-password" required minlength="6" placeholder="Mínimo 6 caracteres" />
+        </div>
+        <div class="form-group prof-col-2">
+          <label>Função *</label>
+          <select id="pf-role">
+            <option value="professional" selected>Profissional (só atende)</option>
+            <option value="admin">Administradora (atende + gerencia)</option>
+          </select>
+        </div>
+        ` : ''}
+        <div class="form-group prof-col-full prof-color-group">
+          <label>Cor na agenda</label>
+          <div class="prof-color-palette" id="prof-color-palette">
+            ${defaultColors.map(c => `
+              <button type="button" class="prof-color-dot ${c.toLowerCase() === selectedColor.toLowerCase() ? 'selected' : ''}" style="background-color:${c}" data-color="${c}" onclick="selectProfColor('${c}', this)" title="${c}" aria-label="Cor ${c}"></button>
+            `).join('')}
+            <label class="prof-color-custom-btn" title="Escolher outra cor...">
+              <input type="color" id="pf-color" value="${selectedColor}" oninput="selectProfColor(this.value, this)" />
+              <i class="fa fa-palette"></i>
+            </label>
+          </div>
+        </div>
+        <div id="pf-error" class="alert alert-error prof-col-full" style="display:none"></div>
       </div>
-      <div class="form-group">
-        <label>Telefone</label>
-        <input type="tel" id="pf-phone" value="${prof ? esc(prof.phone || '') : ''}" placeholder="(11) 99999-9999" />
-      </div>
-      <div class="form-group">
-        <label>E-mail ${id ? '' : '*'} <span class="text-xs text-muted">(login de acesso)</span></label>
-        <input type="email" id="pf-email" value="${prof ? esc(prof.email || '') : ''}" placeholder="email@exemplo.com" ${id ? '' : 'required'} />
-      </div>
-      ${!id ? `
-      <div class="form-group">
-        <label>Senha de acesso *</label>
-        <input type="password" id="pf-password" required minlength="6" placeholder="Mínimo 6 caracteres" />
-      </div>
-      <div class="form-group">
-        <label>Função *</label>
-        <select id="pf-role">
-          <option value="professional" selected>Profissional (só atende)</option>
-          <option value="admin">Administradora (atende + gerencia)</option>
-        </select>
-      </div>
-      ` : ''}
-      <div class="form-group">
-        <label>Cor na agenda</label>
-        <input type="color" id="pf-color" value="${prof ? (prof.color || '#3B5848') : '#3B5848'}" style="height:40px;padding:4px" />
-      </div>
-      <div id="pf-error" class="alert alert-error" style="display:none"></div>
-      <div class="modal-footer" style="padding:0;margin-top:16px">
-        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        ${id ? `<button type="button" class="btn btn-danger btn-sm" onclick="toggleProfActive(${id}, ${prof && prof.active ? 0 : 1})">
-          ${prof && prof.active ? '<i class="fa fa-ban"></i> Desativar' : '<i class="fa fa-check"></i> Ativar'}
-        </button>` : ''}
-        <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar</button>
+      <div class="modal-footer prof-modal-footer prof-col-full">
+        <div class="prof-footer-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+          ${id ? `<button type="button" class="btn btn-danger btn-sm" onclick="toggleProfActive(${id}, ${prof && prof.active ? 0 : 1})">
+            ${prof && prof.active ? '<i class="fa fa-ban"></i> Desativar' : '<i class="fa fa-check"></i> Ativar'}
+          </button>` : ''}
+          <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar</button>
+        </div>
+        ${!id ? '<p class="prof-info-note">A profissional já poderá entrar no sistema com este e-mail e senha. A função pode ser alterada depois em Configurações → Usuários.</p>' : ''}
       </div>
     </form>
-    ${!id ? '<p class="text-xs text-muted" style="margin-top:12px;text-align:center">A profissional já poderá entrar no sistema com este e-mail e senha. A função pode ser alterada depois em Configurações → Usuários.</p>' : ''}
   `;
 
   attachPhoneMask('pf-phone');

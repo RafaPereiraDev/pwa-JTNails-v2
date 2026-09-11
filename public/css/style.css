@@ -1154,6 +1154,223 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   }
 }
 
+/* ===== MODAL DE PROFISSIONAL (REFORMULADO) ===== */
+.modal-prof,
+.modal:has(#prof-form) {
+  max-width: 540px !important;
+  width: 95% !important;
+  border-radius: 16px;
+}
+
+/* Formulário e Corpo */
+.modal-prof #prof-form,
+#prof-form {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.prof-form-body {
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  padding: 20px !important;
+  min-height: 0 !important;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box !important;
+  width: 100% !important;
+}
+
+.prof-form-body .form-group {
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.prof-form-body .form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700, #374151);
+}
+
+/* 1. Grid Desktop (>= 641px): 2 colunas equilibradas */
+@media (min-width: 641px) {
+  .prof-form-body,
+  #prof-form:not(:has(.prof-form-body)) {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 16px 16px !important;
+    align-items: flex-start !important;
+  }
+
+  /* Nome: 100% */
+  .prof-col-full,
+  .prof-form-body > .form-group:has(#pf-name),
+  #prof-form > .form-group:has(#pf-name),
+  .prof-color-group,
+  .prof-form-body > .form-group:has(#pf-color),
+  #prof-form > .form-group:has(#pf-color),
+  #pf-error {
+    grid-column: 1 / -1 !important;
+  }
+
+  /* Telefone & Senha: Coluna 1 */
+  .prof-col-1,
+  .prof-form-body > .form-group:has(#pf-phone),
+  #prof-form > .form-group:has(#pf-phone),
+  .prof-form-body > .form-group:has(#pf-password),
+  #prof-form > .form-group:has(#pf-password) {
+    grid-column: 1 !important;
+  }
+
+  /* E-mail & Função: Coluna 2 */
+  .prof-col-2,
+  .prof-form-body > .form-group:has(#pf-email),
+  #prof-form > .form-group:has(#pf-email),
+  .prof-form-body > .form-group:has(#pf-role),
+  #prof-form > .form-group:has(#pf-role) {
+    grid-column: 2 !important;
+  }
+}
+
+/* 2. Mobile (<= 640px): 1 coluna (100%) */
+@media (max-width: 640px) {
+  .prof-form-body,
+  #prof-form:not(:has(.prof-form-body)) {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+    padding: 16px !important;
+  }
+  .prof-form-body > *,
+  #prof-form > * {
+    grid-column: 1 !important;
+    width: 100% !important;
+  }
+}
+
+/* Inputs do Modal de Profissional */
+.modal-prof input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+.modal-prof select,
+.modal:has(#prof-form) input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+.modal:has(#prof-form) select {
+  border-radius: 10px;
+  border: 1.5px solid var(--gray-200, #e4e4e7);
+  background: #fdfdfd;
+  font-size: 13.5px;
+  padding: 9px 12px;
+  transition: all var(--transition, 0.2s ease);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.modal-prof input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus,
+.modal-prof select:focus,
+.modal:has(#prof-form) input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus,
+.modal:has(#prof-form) select:focus {
+  border-color: var(--primary, #4E6754);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(78, 103, 84, 0.15);
+}
+
+/* 2. Campo "Cor na Agenda": Paleta de bolinhas */
+.prof-color-palette {
+  display: flex !important;
+  gap: 10px !important;
+  align-items: center !important;
+  margin-top: 6px !important;
+  flex-wrap: wrap !important;
+}
+
+.prof-color-dot {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% !important;
+  border: 2px solid transparent !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  outline: none !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18) !important;
+  flex-shrink: 0 !important;
+}
+.prof-color-dot:hover {
+  transform: scale(1.15) !important;
+}
+.prof-color-dot.selected {
+  box-shadow: 0 0 0 2.5px #ffffff, 0 0 0 4.5px var(--primary, #4E6754) !important;
+  transform: scale(1.1) !important;
+}
+
+.prof-color-custom-btn {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% !important;
+  border: 1.5px dashed #94a3b8 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  color: #64748b !important;
+  position: relative !important;
+  overflow: hidden !important;
+  transition: all 0.2s ease !important;
+  background: #f8fafc !important;
+  flex-shrink: 0 !important;
+}
+.prof-color-custom-btn:hover {
+  border-color: var(--primary, #4E6754) !important;
+  color: var(--primary, #4E6754) !important;
+  transform: scale(1.1) !important;
+}
+.prof-color-custom-btn input[type="color"] {
+  position: absolute !important;
+  top: -10px !important;
+  left: -10px !important;
+  width: 60px !important;
+  height: 60px !important;
+  opacity: 0 !important;
+  cursor: pointer !important;
+}
+
+/* 3. Rodapé do Modal */
+.prof-modal-footer {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  background: #ffffff !important;
+  border-top: 1px solid #f1f5f9 !important;
+  padding: 14px 20px !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.prof-footer-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: 100% !important;
+}
+
+.prof-info-note {
+  margin-top: 10px !important;
+  font-size: 0.78rem !important;
+  color: #64748b !important;
+  text-align: center !important;
+  line-height: 1.4 !important;
+  margin-bottom: 0 !important;
+}
+
 /* ===== TOAST ===== */
 #toast-container {
   position: fixed;
