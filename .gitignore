@@ -42,3 +42,8 @@ build/
 tmp/
 temp/
 .cache/
+
+# ===== Backups locais =====
+backup*.json
+backup*.sql
+backup.js
