@@ -147,25 +147,70 @@ router.get('/pending-confirmation', authenticateToken, async (req, res) => {
 });
 
 // GET /api/appointments/plans-ending — planos anuais em que resta apenas 1
-// agendamento futuro pendente (penúltimo já passou). Serve para avisar a renovação.
+// agendamento futuro pendente ou o plano expira em menos de 30 dias.
 router.get('/plans-ending', authenticateToken, async (req, res) => {
   try {
+    const isMaster = req.user.role === 'master' || req.user.role === 'admin';
+    const profId   = isMaster
+      ? (req.query.professional_id ? parseInt(req.query.professional_id, 10) : null)
+      : (req.user.professional_id ? parseInt(req.user.professional_id, 10) : -1);
+
+    if (!isMaster && profId === -1) {
+      return res.json([]);
+    }
+
+    const params = [];
+    let profFilter = '';
+    if (profId && profId !== -1) {
+      params.push(profId);
+      profFilter = `AND a.professional_id = $${params.length}`;
+    }
+
     const rows = await getAll(`
-      SELECT a.series_id,
-             MIN(c.name)               AS client_name,
-             MIN(a.client_id)          AS client_id,
-             MIN(a.professional_id)    AS professional_id,
-             COUNT(*)                  AS restantes
-      FROM appointments a
-      JOIN clients c ON c.id = a.client_id
-      WHERE a.series_id IS NOT NULL
-        AND a.status IN ('scheduled','confirmed')
-        AND (a.date::text || ' ' || a.start_time::text)::timestamp
-              >= (NOW() AT TIME ZONE 'America/Sao_Paulo')
-      GROUP BY a.series_id
-      HAVING COUNT(*) = 1
-      ORDER BY MIN(c.name)
-    `);
+      WITH client_plan_stats AS (
+        SELECT
+          c.id AS client_id,
+          c.name AS client_name,
+          a.professional_id,
+          MAX(a.series_id) AS series_id,
+          COUNT(a.id) FILTER (WHERE a.status NOT IN ('cancelled', 'removido'))::integer AS total_validos,
+          COUNT(a.id) FILTER (
+            WHERE a.status NOT IN ('cancelled', 'removido')
+              AND a.date >= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+          )::integer AS restantes,
+          MAX(a.date) FILTER (WHERE a.status NOT IN ('cancelled', 'removido')) AS data_fim,
+          MAX(a.date) FILTER (WHERE a.series_id IS NOT NULL) AS data_fim_serie
+        FROM clients c
+        JOIN appointments a ON a.client_id = c.id
+        WHERE EXISTS (
+          SELECT 1 FROM appointments a2
+          WHERE a2.client_id = c.id
+            AND a2.series_id IS NOT NULL
+            AND a2.professional_id = a.professional_id
+        )
+        ${profFilter}
+        GROUP BY c.id, c.name, a.professional_id
+      )
+      SELECT
+        client_id,
+        client_name,
+        professional_id,
+        series_id,
+        restantes,
+        data_fim::text AS data_fim,
+        data_fim_serie::text AS data_fim_serie
+      FROM client_plan_stats
+      WHERE total_validos > 0
+        AND (
+          (restantes = 1)
+          OR (restantes = 0 AND data_fim >= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date - INTERVAL '30 days')
+          OR (
+            data_fim >= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+            AND data_fim <= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date + INTERVAL '30 days'
+          )
+        )
+      ORDER BY client_name
+    `, params);
     res.json(rows);
   } catch (e) {
     console.error('[appointments plans-ending]', e.message);

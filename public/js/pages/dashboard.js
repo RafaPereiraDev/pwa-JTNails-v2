@@ -202,13 +202,19 @@ async function loadDashboard() {
         </div>
         <div class="card-body">
           <p class="text-sm text-muted" style="margin-bottom:12px">
-            ${plansEnding.length === 1 ? 'Uma cliente está' : 'Estas clientes estão'} no último agendamento do Plano Anual. Que tal renovar por mais 1 ano?
+            ${plansEnding.length === 1 ? 'Uma cliente está' : 'Estas clientes estão'} com o Plano Anual terminando. Que tal renovar por mais 1 ano?
           </p>
           ${plansEnding.map(p => `
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--gray-100)">
               <div>
                 <div class="font-semibold">${esc(p.client_name)}</div>
-                <div class="text-xs text-muted">Resta apenas 1 agendamento do plano.</div>
+                <div class="text-xs text-muted">
+                  ${parseInt(p.restantes, 10) === 1
+                    ? 'Resta apenas 1 agendamento do plano.'
+                    : (parseInt(p.restantes, 10) === 0
+                      ? 'Plano finalizado recentemente (0 agendamentos restantes).'
+                      : `Restam ${p.restantes} agendamentos (término em ${formatDate(p.data_fim)}).`)}
+                </div>
               </div>
               <button class="btn btn-primary btn-sm" onclick="openNewAppointment(null, ${p.professional_id})" title="Renovar plano">
                 <i class="fa fa-rotate-right"></i> Renovar
