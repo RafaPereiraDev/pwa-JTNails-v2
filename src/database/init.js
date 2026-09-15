@@ -18,6 +18,8 @@ async function initDatabase() {
       color      TEXT    DEFAULT '#e91e8c',
       photo      TEXT,
       bio        TEXT,
+      work_start_time TIME    DEFAULT '08:00',
+      work_end_time   TIME    DEFAULT '19:30',
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
@@ -168,6 +170,12 @@ async function initDatabase() {
       duration        INTEGER
     );
     CREATE INDEX IF NOT EXISTS idx_appointment_services_appt ON appointment_services(appointment_id);
+
+    -- Expediente individual por profissional
+    ALTER TABLE professionals ADD COLUMN IF NOT EXISTS work_start_time TIME DEFAULT '08:00';
+    ALTER TABLE professionals ADD COLUMN IF NOT EXISTS work_end_time   TIME DEFAULT '19:30';
+    UPDATE professionals SET work_start_time = '08:00' WHERE work_start_time IS NULL;
+    UPDATE professionals SET work_end_time   = '19:30' WHERE work_end_time IS NULL;
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)

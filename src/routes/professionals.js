@@ -4,9 +4,11 @@ const bcrypt  = require('bcryptjs');
 const { query, getOne, getAll, withTransaction } = require('../database/db');
 const { authenticateToken, requireAdmin }        = require('../middleware/auth');
 
+const PROF_SELECT = 'SELECT id, name, phone, email, active, color, photo, bio, work_start_time::text AS work_start_time, work_end_time::text AS work_end_time, created_at FROM professionals';
+
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    res.json(await getAll('SELECT * FROM professionals ORDER BY name'));
+    res.json(await getAll(`${PROF_SELECT} ORDER BY name`));
   } catch (e) {
     console.error('[professionals GET /]', e.message);
     res.status(500).json({ error: 'Erro interno' });
@@ -15,7 +17,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
 router.get('/active', authenticateToken, async (req, res) => {
   try {
-    res.json(await getAll('SELECT * FROM professionals WHERE active = TRUE ORDER BY name'));
+    res.json(await getAll(`${PROF_SELECT} WHERE active = TRUE ORDER BY name`));
   } catch (e) {
     console.error('[professionals GET /active]', e.message);
     res.status(500).json({ error: 'Erro interno' });
@@ -27,7 +29,7 @@ router.get('/me/profile', authenticateToken, async (req, res) => {
     const profId = req.user.professional_id;
     if (!profId)
       return res.status(403).json({ error: 'Seu usuário não está vinculado a uma profissional' });
-    const prof = await getOne('SELECT * FROM professionals WHERE id = $1', [profId]);
+    const prof = await getOne(`${PROF_SELECT} WHERE id = $1`, [profId]);
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
     res.json(prof);
   } catch (e) {
@@ -45,7 +47,7 @@ router.put('/me/profile', authenticateToken, async (req, res) => {
     const prof = await getOne('SELECT * FROM professionals WHERE id = $1', [profId]);
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
-    let { photo, bio } = req.body;
+    let { photo, bio, work_start_time, work_end_time } = req.body;
     if (bio !== undefined && bio !== null) {
       bio = String(bio);
       if (bio.length > 500)
@@ -57,11 +59,20 @@ router.put('/me/profile', authenticateToken, async (req, res) => {
       if (photo.length > 1500000)
         return res.status(400).json({ error: 'A imagem é muito grande. Escolha uma foto menor.' });
     }
+    if (work_start_time && !/^\d{2}:\d{2}/.test(String(work_start_time))) {
+      return res.status(400).json({ error: 'Horário de início inválido' });
+    }
+    if (work_end_time && !/^\d{2}:\d{2}/.test(String(work_end_time))) {
+      return res.status(400).json({ error: 'Horário de término inválido' });
+    }
 
     const newPhoto = photo !== undefined ? (photo || null) : prof.photo;
     const newBio   = bio   !== undefined ? (bio   || null) : prof.bio;
-    await query('UPDATE professionals SET photo=$1, bio=$2 WHERE id=$3', [newPhoto, newBio, profId]);
-    res.json({ message: 'Perfil atualizado com sucesso', photo: newPhoto });
+    const newStart = work_start_time !== undefined ? (work_start_time || '08:00') : prof.work_start_time;
+    const newEnd   = work_end_time   !== undefined ? (work_end_time   || '19:30') : prof.work_end_time;
+
+    await query('UPDATE professionals SET photo=$1, bio=$2, work_start_time=$3, work_end_time=$4 WHERE id=$5', [newPhoto, newBio, newStart, newEnd, profId]);
+    res.json({ message: 'Perfil atualizado com sucesso', photo: newPhoto, work_start_time: newStart, work_end_time: newEnd });
   } catch (e) {
     console.error('[professionals PUT /me/profile]', e.message);
     res.status(500).json({ error: 'Erro interno' });
@@ -100,7 +111,7 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
 
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const prof = await getOne('SELECT * FROM professionals WHERE id = $1', [req.params.id]);
+    const prof = await getOne(`${PROF_SELECT} WHERE id = $1`, [req.params.id]);
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
     res.json(prof);
   } catch (e) {
@@ -111,7 +122,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    let { name, phone, email, color, password, role } = req.body;
+    let { name, phone, email, color, password, role, work_start_time, work_end_time } = req.body;
     if (!name || !email || !password)
       return res.status(400).json({ error: 'Nome, e-mail e senha são obrigatórios' });
 
@@ -123,15 +134,25 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     if (String(password).length < 6)
       return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' });
 
+    if (work_start_time && !/^\d{2}:\d{2}/.test(String(work_start_time))) {
+      return res.status(400).json({ error: 'Horário de início inválido' });
+    }
+    if (work_end_time && !/^\d{2}:\d{2}/.test(String(work_end_time))) {
+      return res.status(400).json({ error: 'Horário de término inválido' });
+    }
+
     role = (role === 'admin') ? 'admin' : 'professional';
 
     const existing = await getOne('SELECT id FROM users WHERE email = $1', [email]);
     if (existing) return res.status(400).json({ error: 'Este e-mail já está cadastrado' });
 
+    const startVal = work_start_time && /^\d{2}:\d{2}/.test(String(work_start_time)) ? String(work_start_time).slice(0, 5) : '08:00';
+    const endVal   = work_end_time   && /^\d{2}:\d{2}/.test(String(work_end_time))   ? String(work_end_time).slice(0, 5)   : '19:30';
+
     const profId = await withTransaction(async (client) => {
       const profResult = await client.query(
-        'INSERT INTO professionals (name, phone, email, color) VALUES ($1,$2,$3,$4) RETURNING id',
-        [name, phone || null, email, color || '#e91e8c']
+        'INSERT INTO professionals (name, phone, email, color, work_start_time, work_end_time) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+        [name, phone || null, email, color || '#e91e8c', startVal, endVal]
       );
       const id = profResult.rows[0].id;
       const hash = await require('bcryptjs').hash(String(password), 10);
@@ -151,7 +172,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
 
 router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { name, phone, email, color, active } = req.body;
+    const { name, phone, email, color, active, work_start_time, work_end_time } = req.body;
     const prof = await getOne('SELECT * FROM professionals WHERE id = $1', [req.params.id]);
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
@@ -161,14 +182,23 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
         return res.status(400).json({ error: 'E-mail inválido' });
     }
 
+    if (work_start_time && !/^\d{2}:\d{2}/.test(String(work_start_time))) {
+      return res.status(400).json({ error: 'Horário de início inválido' });
+    }
+    if (work_end_time && !/^\d{2}:\d{2}/.test(String(work_end_time))) {
+      return res.status(400).json({ error: 'Horário de término inválido' });
+    }
+
     const newName   = name   || prof.name;
     const newEmail  = email  !== undefined ? email  : prof.email;
     const newActive = active !== undefined ? active : prof.active;
+    const newStart  = work_start_time !== undefined ? (work_start_time || '08:00') : prof.work_start_time;
+    const newEnd    = work_end_time   !== undefined ? (work_end_time   || '19:30') : prof.work_end_time;
 
     await query(
-      'UPDATE professionals SET name=$1, phone=$2, email=$3, color=$4, active=$5 WHERE id=$6',
+      'UPDATE professionals SET name=$1, phone=$2, email=$3, color=$4, active=$5, work_start_time=$6, work_end_time=$7 WHERE id=$8',
       [newName, phone !== undefined ? phone : prof.phone,
-       newEmail, color || prof.color, newActive, req.params.id]
+       newEmail, color || prof.color, newActive, newStart, newEnd, req.params.id]
     );
 
     const linkedUser = await getOne('SELECT id FROM users WHERE professional_id = $1', [req.params.id]);

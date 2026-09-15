@@ -334,6 +334,7 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
 
   // Lista de clientes disponível para o autocomplete de busca
   window._apptClients = clients;
+  window._apptProfessionals = professionals;
   const preSelected = appt
     ? clients.find(c => c.id === appt.client_id)
     : (prefillClientId ? clients.find(c => c.id === parseInt(prefillClientId, 10)) : null);
@@ -494,9 +495,10 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
           </div>
 
           <div class="appt-datetime-hint" id="appt-datetime-hint">
-            <i class="fa fa-info-circle"></i>
+            <i class="fa fa-info-circle" id="appt-datetime-hint-icon"></i>
             <span id="appt-datetime-hint-text">A duração do serviço é calculada automaticamente na agenda.</span>
           </div>
+          <div id="appt-shift-alert" class="alert alert-warning" style="display:none;margin-top:10px;font-size:12.5px;padding:8px 12px;border-radius:8px"></div>
         </div>
 
         <!-- BLOCO 3: Opções & Pagamento -->
@@ -559,6 +561,16 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
   if (timeInput) {
     timeInput.addEventListener('input', () => updateAppointmentSummary());
     timeInput.addEventListener('change', () => updateAppointmentSummary());
+  }
+
+  const profSelect = document.getElementById('appt-professional');
+  if (profSelect) {
+    profSelect.addEventListener('change', () => updateAppointmentSummary());
+  }
+
+  const encaixeInput = document.getElementById('appt-encaixe');
+  if (encaixeInput) {
+    encaixeInput.addEventListener('change', () => updateAppointmentSummary());
   }
 
   // Inicializa cálculo de múltiplos serviços e resumo em tempo real
@@ -627,10 +639,36 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
         errEl.style.display = '';
         return;
       }
-      const dow = new Date(`${data.date}T12:00:00`).getDay();
-      if (dow === 0 || dow === 1) {
-        errEl.textContent = 'O salão não atende aos domingos e segundas-feiras.';
+    }
+
+    // Validação de término previsto vs expediente da profissional selecionada
+    const selectedProf = (window._apptProfessionals || []).find(p => p.id === data.professional_id);
+    if (selectedProf && data.start_time) {
+      const totalDur = Array.from(selectedCheckboxes).reduce((acc, cb) => acc + (parseInt(cb.dataset.duration, 10) || 60), 0);
+      const calculatedEnd = addMinutesToHHMM(data.start_time, totalDur);
+      const profEndStr = (selectedProf.work_end_time || '19:30').slice(0, 5);
+      const [eh, em] = calculatedEnd.split(':').map(Number);
+      const endMins = eh * 60 + em;
+      const [peh, pem] = profEndStr.split(':').map(Number);
+      const profEndMins = peh * 60 + pem;
+
+      if (endMins > profEndMins && !data.allow_overlap) {
+        errEl.innerHTML = `
+          O término previsto (<strong>${calculatedEnd}</strong>) ultrapassa o encerramento do expediente de <strong>${esc(selectedProf.name)}</strong> (${profEndStr}).<br>
+          <a href="#" id="enable-encaixe-link" style="font-weight:700;color:var(--primary);text-decoration:underline;display:inline-block;margin-top:6px">
+            <i class="fa fa-check-square"></i> Marcar "Permitir encaixe" para confirmar este agendamento
+          </a>
+        `;
         errEl.style.display = '';
+        const link = document.getElementById('enable-encaixe-link');
+        if (link) {
+          link.onclick = (ev) => {
+            ev.preventDefault();
+            if (encaixeEl) encaixeEl.checked = true;
+            updateAppointmentSummary();
+            document.getElementById('appt-form').requestSubmit();
+          };
+        }
         return;
       }
     }
@@ -734,14 +772,73 @@ function updateAppointmentSummary(knownMins = null, knownPrice = null) {
   const endTime = startTime && totalMinutes > 0 ? addMinutesToHHMM(startTime, totalMinutes) : '--:--';
 
   const endEl = document.getElementById('summary-end-time');
-  if (endEl) endEl.textContent = endTime;
-
   const hintText = document.getElementById('appt-datetime-hint-text');
+  const shiftAlert = document.getElementById('appt-shift-alert');
+
+  const profSelect = document.getElementById('appt-professional');
+  const profId = profSelect ? parseInt(profSelect.value, 10) : null;
+  const prof = (window._apptProfessionals || []).find(p => p.id === profId);
+
+  const encaixeEl = document.getElementById('appt-encaixe');
+  const isEncaixe = encaixeEl ? encaixeEl.checked : false;
+
+  let exceedsShift = false;
+  let profEndStr = '19:30';
+  let profStartStr = '08:00';
+
+  if (prof) {
+    profStartStr = (prof.work_start_time || '08:00').slice(0, 5);
+    profEndStr   = (prof.work_end_time   || '19:30').slice(0, 5);
+  }
+
+  if (startTime && totalMinutes > 0 && endTime !== '--:--') {
+    const [eh, em] = endTime.split(':').map(Number);
+    const endMins = eh * 60 + em;
+    const [peh, pem] = profEndStr.split(':').map(Number);
+    const profEndMins = peh * 60 + pem;
+    if (endMins > profEndMins) {
+      exceedsShift = true;
+    }
+  }
+
   if (hintText) {
     if (startTime && totalMinutes > 0) {
-      hintText.innerHTML = `Atendimento das <strong>${startTime}</strong> às <strong>${endTime}</strong> (duração total: <strong>${formatDurationBR(totalMinutes)}</strong>).`;
+      hintText.innerHTML = `Atendimento das <strong>${startTime}</strong> às <strong>${endTime}</strong> (duração total: <strong>${formatDurationBR(totalMinutes)}</strong>). Expediente: <strong>${profStartStr} às ${profEndStr}</strong>.`;
     } else {
-      hintText.textContent = 'A duração do serviço é calculada automaticamente na agenda.';
+      hintText.innerHTML = `A duração do serviço é calculada automaticamente na agenda. Expediente: <strong>${profStartStr} às ${profEndStr}</strong>.`;
+    }
+  }
+
+  if (exceedsShift) {
+    if (!isEncaixe) {
+      if (shiftAlert) {
+        shiftAlert.className = 'alert alert-error';
+        shiftAlert.innerHTML = `<i class="fa fa-exclamation-triangle"></i> Término previsto (<strong>${endTime}</strong>) ultrapassa o expediente de <strong>${esc(prof ? prof.name : '')}</strong> (encerra às <strong>${profEndStr}</strong>). Marque <strong>"Permitir encaixe (sobrepor horário)"</strong> abaixo se deseja prosseguir.`;
+        shiftAlert.style.display = 'block';
+      }
+      if (endEl) {
+        endEl.innerHTML = `<span style="color:var(--danger)">${endTime} ⚠️</span>`;
+      }
+    } else {
+      if (shiftAlert) {
+        shiftAlert.className = 'alert alert-info';
+        shiftAlert.style.background = '#f0fdf4';
+        shiftAlert.style.borderColor = '#bbf7d0';
+        shiftAlert.style.color = '#166534';
+        shiftAlert.innerHTML = `<i class="fa fa-check-circle" style="color:var(--success)"></i> Encaixe ativado: término às <strong>${endTime}</strong> permitido além do expediente (${profEndStr}).`;
+        shiftAlert.style.display = 'block';
+      }
+      if (endEl) {
+        endEl.innerHTML = `<span style="color:var(--primary)">${endTime} <small style="font-weight:600;font-size:11px">(Encaixe)</small></span>`;
+      }
+    }
+  } else {
+    if (shiftAlert) {
+      shiftAlert.style.display = 'none';
+      shiftAlert.innerHTML = '';
+    }
+    if (endEl) {
+      endEl.textContent = endTime;
     }
   }
 }

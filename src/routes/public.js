@@ -58,7 +58,7 @@ function overlaps(aS, aE, bS, bE) { return aS < bE && aE > bS; }
 router.get('/professionals', async (req, res) => {
   try {
     res.json(await getAll(
-      'SELECT id, name, color, photo, bio FROM professionals WHERE active = TRUE ORDER BY name'
+      'SELECT id, name, color, photo, bio, work_start_time::text AS work_start_time, work_end_time::text AS work_end_time FROM professionals WHERE active = TRUE ORDER BY name'
     ));
   } catch (e) {
     console.error('[public/professionals]', e.message);
@@ -94,7 +94,10 @@ router.get('/available-slots', async (req, res) => {
     const svc = await getOne('SELECT * FROM services WHERE id = $1 AND active = TRUE', [service_id]);
     if (!svc) return res.status(404).json({ error: 'Serviço não encontrado' });
 
-    const prof = await getOne('SELECT id FROM professionals WHERE id = $1 AND active = TRUE', [professional_id]);
+    const prof = await getOne(
+      'SELECT id, name, work_start_time::text AS work_start_time, work_end_time::text AS work_end_time FROM professionals WHERE id = $1 AND active = TRUE',
+      [professional_id]
+    );
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
     const duration = svc.duration || 60;
@@ -120,9 +123,16 @@ router.get('/available-slots', async (req, res) => {
       end:   toMinutes(b.end_time),
     }));
 
+    const profStartStr = (prof.work_start_time || '08:00').slice(0, 5);
+    const profEndStr   = (prof.work_end_time   || '19:30').slice(0, 5);
+    const profStartMin = toMinutes(profStartStr);
+    const profEndMin   = toMinutes(profEndStr);
+
     const slots = [];
-    for (let start = OPEN_HOUR * 60; start <= CLOSE_MINS; start += SLOT_STEP) {
+    for (let start = profStartMin; start < profEndMin; start += SLOT_STEP) {
       const end = start + duration;
+      // Regra: horario_inicio + duracao_total_servicos <= horario_fim_expediente_da_profissional
+      if (end > profEndMin) break;
       if (isToday && start <= nowMinutes) continue;
       if (!busy.some(b => overlaps(start, end, b.start, b.end))) slots.push(toHHMM(start));
     }
@@ -172,7 +182,10 @@ router.post('/appointments', async (req, res) => {
     const svc = await getOne('SELECT * FROM services WHERE id = $1 AND active = TRUE', [service_id]);
     if (!svc) return res.status(404).json({ error: 'Serviço não encontrado ou inativo' });
 
-    const prof = await getOne('SELECT id FROM professionals WHERE id = $1 AND active = TRUE', [professional_id]);
+    const prof = await getOne(
+      'SELECT id, name, work_start_time::text AS work_start_time, work_end_time::text AS work_end_time FROM professionals WHERE id = $1 AND active = TRUE',
+      [professional_id]
+    );
     if (!prof) return res.status(404).json({ error: 'Profissional não encontrada' });
 
     const startMin = toMinutes(start_time);
@@ -192,10 +205,19 @@ router.post('/appointments', async (req, res) => {
     if (date > maxStr)
       return res.status(400).json({ error: 'Agendamentos podem ser feitos com no máximo 30 dias de antecedência.' });
 
+    const profStartStr = (prof.work_start_time || '08:00').slice(0, 5);
+    const profEndStr   = (prof.work_end_time   || '19:30').slice(0, 5);
+    const profStartMin = toMinutes(profStartStr);
+    const profEndMin   = toMinutes(profEndStr);
+
     const duration = svc.duration || 60;
     const endMin   = startMin + duration;
-    if (startMin < OPEN_HOUR * 60 || startMin > CLOSE_MINS)
-      return res.status(400).json({ error: 'Horário fora do funcionamento. Agendamentos permitidos das 08:00 às 18:30.' });
+
+    // Regra: horario_inicio + duracao_total_servicos <= horario_fim_expediente_da_profissional
+    if (startMin < profStartMin || endMin > profEndMin)
+      return res.status(400).json({
+        error: `Horário fora do expediente da profissional (${profStartStr} às ${profEndStr}). O atendimento deve terminar até às ${profEndStr}.`
+      });
 
     const end_time = toHHMM(endMin);
 

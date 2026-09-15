@@ -57,6 +57,7 @@ async function renderProfessionalsList() {
                   </div>
                   ${p.phone ? `<div class="text-sm text-muted"><i class="fa fa-phone"></i> ${formatPhone(p.phone)}</div>` : ''}
                   ${p.email ? `<div class="text-sm text-muted"><i class="fa fa-envelope"></i> ${esc(p.email)}</div>` : ''}
+                  <div class="text-sm text-muted"><i class="fa fa-clock"></i> Expediente: <strong>${(p.work_start_time || '08:00').slice(0,5)}</strong> às <strong>${(p.work_end_time || '19:30').slice(0,5)}</strong></div>
                   ${p.bio ? `<div class="text-sm" style="margin-top:6px;color:var(--gray-600);font-style:italic">"${esc(p.bio)}"</div>` : ''}
                 </div>
                 ${(() => {
@@ -148,6 +149,14 @@ async function openProfessionalModal(id = null) {
           <label>E-mail ${id ? '' : '*'} <span class="text-xs text-muted">(login de acesso)</span></label>
           <input type="email" id="pf-email" value="${prof ? esc(prof.email || '') : ''}" placeholder="email@exemplo.com" ${id ? '' : 'required'} />
         </div>
+        <div class="form-group prof-col-1">
+          <label>Início do Expediente *</label>
+          <input type="time" id="pf-work-start" value="${prof && prof.work_start_time ? String(prof.work_start_time).slice(0, 5) : '08:00'}" required />
+        </div>
+        <div class="form-group prof-col-2">
+          <label>Término do Expediente *</label>
+          <input type="time" id="pf-work-end" value="${prof && prof.work_end_time ? String(prof.work_end_time).slice(0, 5) : '19:30'}" required />
+        </div>
         ${!id ? `
         <div class="form-group prof-col-1">
           <label>Senha de acesso *</label>
@@ -198,7 +207,9 @@ async function openProfessionalModal(id = null) {
       name: document.getElementById('pf-name').value,
       phone: document.getElementById('pf-phone').value || null,
       email: document.getElementById('pf-email').value || null,
-      color: document.getElementById('pf-color').value
+      color: document.getElementById('pf-color').value,
+      work_start_time: document.getElementById('pf-work-start').value || '08:00',
+      work_end_time: document.getElementById('pf-work-end').value || '19:30',
     };
     if (!id) {
       data.password = document.getElementById('pf-password').value;

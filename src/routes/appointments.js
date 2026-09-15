@@ -388,11 +388,6 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Não é possível agendar em uma data que já passou' });
     if (date === today && startMin <= nowMin)
       return res.status(400).json({ error: 'Não é possível agendar em um horário que já passou hoje' });
-    // Dom/seg fechados: bloqueia agendamento AVULSO nesses dias. Planos anuais
-    // (recorrência) são permitidos em qualquer dia, a critério do admin.
-    const isPlan = plan && PLAN_FREQUENCIES[plan];
-    if (!isPlan && isClosedDay(date))
-      return res.status(400).json({ error: 'O salão não atende aos domingos e segundas-feiras' });
 
     const svcs = await getAll('SELECT * FROM services WHERE id = ANY($1::int[]) AND active = TRUE ORDER BY id', [sIds]);
     if (!svcs || svcs.length === 0) return res.status(404).json({ error: 'Nenhum serviço válido ou ativo selecionado' });
@@ -405,6 +400,24 @@ router.post('/', authenticateToken, async (req, res) => {
     const finalPrice = price !== undefined && price !== null && price !== '' ? parseFloat(price) : totalDefaultPrice;
     const end_time   = calcEndTime(start_time, totalDuration);
     const overlap    = allow_overlap === true || allow_overlap === 'true';
+
+    // Valida encerramento de expediente da profissional se não for encaixe
+    const prof = await getOne(
+      'SELECT id, name, work_start_time::text AS work_start_time, work_end_time::text AS work_end_time FROM professionals WHERE id = $1',
+      [professional_id]
+    );
+    if (prof) {
+      const profEndStr = (prof.work_end_time || '19:30').slice(0, 5);
+      const [peh, pem] = profEndStr.split(':').map(Number);
+      const profEndMins = peh * 60 + pem;
+      const [eh, em] = end_time.split(':').map(Number);
+      const endMins = eh * 60 + em;
+      if (!overlap && endMins > profEndMins) {
+        return res.status(400).json({
+          error: `O término previsto (${end_time}) ultrapassa o encerramento do expediente de ${prof.name} (${profEndStr}). Marque "Permitir encaixe" para confirmar.`
+        });
+      }
+    }
 
     // ── PLANO ANUAL: cria a série inteira numa transação ─────────────────────
     if (plan && PLAN_FREQUENCIES[plan]) {
@@ -537,14 +550,31 @@ router.put('/:id', authenticateToken, async (req, res) => {
       const startMin = sh * 60 + sm;
       if (newDate < today || (newDate === today && startMin <= nowMin))
         return res.status(400).json({ error: 'Não é possível remarcar para uma data ou horário que já passou' });
-      if (isClosedDay(newDate))
-        return res.status(400).json({ error: 'O salão não atende aos domingos e segundas-feiras' });
     }
 
     const newEnd   = calcEndTime(String(newStart).slice(0,5), newDuration);
     const newPrice = price !== undefined && price !== null && price !== '' ? parseFloat(price) : parseFloat(appt.price);
 
     const allowOverlap = req.body.allow_overlap === true || req.body.allow_overlap === 'true';
+
+    // Valida encerramento de expediente da profissional se não for encaixe
+    const prof = await getOne(
+      'SELECT id, name, work_start_time::text AS work_start_time, work_end_time::text AS work_end_time FROM professionals WHERE id = $1',
+      [newProfId]
+    );
+    if (prof) {
+      const profEndStr = (prof.work_end_time || '19:30').slice(0, 5);
+      const [peh, pem] = profEndStr.split(':').map(Number);
+      const profEndMins = peh * 60 + pem;
+      const [eh, em] = newEnd.split(':').map(Number);
+      const endMins = eh * 60 + em;
+      if (!allowOverlap && endMins > profEndMins) {
+        return res.status(400).json({
+          error: `O término previsto (${newEnd}) ultrapassa o encerramento do expediente de ${prof.name} (${profEndStr}). Marque "Permitir encaixe" para salvar.`
+        });
+      }
+    }
+
     if (!allowOverlap && await hasConflict(newProfId, newDate, newStart, newEnd, appt.id))
       return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
 

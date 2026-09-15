@@ -366,6 +366,17 @@ async function loadMyProfileForm() {
         </div>
       </div>
 
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div class="form-group" style="margin:0">
+          <label>Início do Expediente</label>
+          <input type="time" id="profile-work-start" value="${prof.work_start_time ? String(prof.work_start_time).slice(0, 5) : '08:00'}" required />
+        </div>
+        <div class="form-group" style="margin:0">
+          <label>Término do Expediente</label>
+          <input type="time" id="profile-work-end" value="${prof.work_end_time ? String(prof.work_end_time).slice(0, 5) : '19:30'}" required />
+        </div>
+      </div>
+
       <div class="form-group">
         <label>Biografia <span class="text-xs text-muted">(máx. 500 caracteres)</span></label>
         <textarea id="profile-bio" rows="4" maxlength="500" placeholder="Fale um pouco sobre você e seu trabalho...">${esc(bio)}</textarea>
@@ -403,7 +414,11 @@ async function loadMyProfileForm() {
     e.preventDefault();
     const errEl = document.getElementById('profile-error');
     errEl.style.display = 'none';
-    const payload = { bio: bioEl.value };
+    const payload = {
+      bio: bioEl.value,
+      work_start_time: document.getElementById('profile-work-start').value || '08:00',
+      work_end_time: document.getElementById('profile-work-end').value || '19:30',
+    };
     if (_profilePhotoData !== null) payload.photo = _profilePhotoData; // só envia se mudou
     try {
       const res = await api.updateMyProfile(payload);
