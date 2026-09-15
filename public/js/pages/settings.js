@@ -461,7 +461,7 @@ async function loadUsersTable() {
                 <tr>
                   <td class="font-semibold">${esc(u.name)}</td>
                   <td>${esc(u.email)}</td>
-                  <td><span class="badge badge-${u.role}">${ {master:'Mestre', admin:'Administradora', professional:'Profissional'}[u.role] || esc(u.role) }</span></td>
+                  <td><span class="badge badge-${u.role}">${ {master:'Mestre', admin:'Administradora', professional:'Profissional', receptionist:'Recepcionista'}[u.role] || esc(u.role) }</span></td>
                   <td>${esc(u.professional_name || '-')}</td>
                   <td>
                     <button class="btn btn-xs ${u.active ? 'btn-success' : 'btn-secondary'}"
@@ -500,7 +500,7 @@ async function loadUsersTable() {
 
 // Edita apenas a FUNÇÃO (papel) do usuário. Criação de gente é feita na aba Profissionais.
 async function openUserModal(id) {
-  openModal('Editar Função', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-sm');
+  openModal('Editar Função', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-sm modal-edit-role');
 
   let user = null;
   try {
@@ -509,7 +509,7 @@ async function openUserModal(id) {
   } catch(e) {}
 
   if (!user) {
-    document.getElementById('modal-body').innerHTML = `<div class="alert alert-error">Usuário não encontrado</div>`;
+    document.getElementById('modal-body').innerHTML = `<div class="edit-role-body"><div class="alert alert-error">Usuário não encontrado</div></div>`;
     return;
   }
 
@@ -517,24 +517,31 @@ async function openUserModal(id) {
   const isMasterUser = user.role === 'master';
 
   document.getElementById('modal-body').innerHTML = `
-    <div style="margin-bottom:16px">
-      <div class="font-semibold" style="font-size:16px">${esc(user.name)}</div>
-      <div class="text-sm text-muted">${esc(user.email)}</div>
-    </div>
-    <form id="user-form">
-      ${isMasterUser ? `
-        <div class="alert alert-info">A função do administrador mestre não pode ser alterada.</div>
-      ` : `
-        <div class="form-group">
-          <label>Função *</label>
-          <select id="uf-role">
-            <option value="professional" ${user.role === 'professional' ? 'selected' : ''}>Profissional (só atende)</option>
-            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administradora (atende + gerencia)</option>
-          </select>
+    <form id="user-form" class="edit-role-form">
+      <div class="edit-role-body">
+        <!-- Seção de Identificação do Usuário -->
+        <div class="user-id-card">
+          <div class="user-id-name">${esc(user.name)}</div>
+          <div class="user-id-email">${esc(user.email)}</div>
         </div>
-      `}
-      <div id="uf-error" class="alert alert-error" style="display:none"></div>
-      <div class="modal-footer" style="padding:0;margin-top:16px">
+
+        <!-- Campo de Seleção (Função) -->
+        ${isMasterUser ? `
+          <div class="alert alert-info" style="margin-bottom:0">A função do administrador mestre não pode ser alterada.</div>
+        ` : `
+          <div class="form-group" style="margin-bottom:0">
+            <label for="uf-role" class="form-label">Função *</label>
+            <select id="uf-role" class="form-control" required>
+              <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administradora (atende + gerencia)</option>
+              <option value="professional" ${user.role === 'professional' ? 'selected' : ''}>Profissional (apenas atende)</option>
+              <option value="receptionist" ${user.role === 'receptionist' ? 'selected' : ''}>Recepcionista / Suporte</option>
+            </select>
+          </div>
+        `}
+        <div id="uf-error" class="alert alert-error" style="display:none;margin-top:14px"></div>
+      </div>
+
+      <div class="modal-footer edit-role-footer">
         <button type="button" class="btn btn-secondary" onclick="closeModal()">Fechar</button>
         ${isMasterUser ? '' : `<button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar função</button>`}
       </div>

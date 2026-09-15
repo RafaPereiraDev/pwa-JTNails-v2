@@ -8,7 +8,7 @@ function clearToken() { localStorage.removeItem('token'); }
 function setCurrentUser(user) {
   currentUser = user;
   document.getElementById('user-name-display').textContent = user.name;
-  const roleLabels = { master: 'Administrador Mestre', admin: 'Administradora', professional: 'Profissional' };
+  const roleLabels = { master: 'Administrador Mestre', admin: 'Administradora', professional: 'Profissional', receptionist: 'Recepcionista' };
   document.getElementById('user-role-display').textContent = roleLabels[user.role] || 'Usuário';
   applySidebarAvatar();
 

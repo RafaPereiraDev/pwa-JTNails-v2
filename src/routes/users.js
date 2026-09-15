@@ -23,7 +23,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     const { name, email, password, role, professional_id } = req.body;
     if (!name || !email || !password || !role)
       return res.status(400).json({ error: 'Nome, e-mail, senha e função são obrigatórios' });
-    if (!['admin','professional'].includes(role))
+    if (!['admin','professional','receptionist'].includes(role))
       return res.status(400).json({ error: 'Função inválida' });
     if (role === 'master' && req.user.role !== 'master')
       return res.status(403).json({ error: 'Apenas o administrador mestre pode criar outro mestre' });
@@ -57,6 +57,8 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     const newRole = role || user.role;
     if (newRole === 'master' && req.user.role !== 'master')
       return res.status(403).json({ error: 'Apenas o administrador mestre pode definir a função mestre' });
+    if (!['master','admin','professional','receptionist'].includes(newRole))
+      return res.status(400).json({ error: 'Função inválida' });
 
     await query(
       'UPDATE users SET name=$1, email=$2, role=$3, professional_id=$4, active=$5 WHERE id=$6',

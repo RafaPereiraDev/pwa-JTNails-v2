@@ -28,7 +28,7 @@ async function initDatabase() {
       name            TEXT    NOT NULL,
       email           TEXT    UNIQUE NOT NULL,
       password        TEXT    NOT NULL,
-      role            TEXT    NOT NULL CHECK(role IN ('master','admin','professional')),
+      role            TEXT    NOT NULL CHECK(role IN ('master','admin','professional','receptionist')),
       professional_id INTEGER REFERENCES professionals(id),
       active          BOOLEAN DEFAULT TRUE,
       created_at      TIMESTAMPTZ DEFAULT NOW()
@@ -176,6 +176,10 @@ async function initDatabase() {
     ALTER TABLE professionals ADD COLUMN IF NOT EXISTS work_end_time   TIME DEFAULT '19:30';
     UPDATE professionals SET work_start_time = '08:00' WHERE work_start_time IS NULL;
     UPDATE professionals SET work_end_time   = '19:30' WHERE work_end_time IS NULL;
+
+    -- Permite função de recepcionista no check de role dos usuários
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('master','admin','professional','receptionist'));
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)
