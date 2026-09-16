@@ -99,6 +99,10 @@ function sendAppointmentReminder(phone, name, date, time, service) {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
+      .then((reg) => {
+        // Força verificação imediata de atualizações do Service Worker no servidor
+        reg.update().catch(() => {});
+      })
       .catch(err => console.warn('SW registro falhou:', err));
   });
 }
