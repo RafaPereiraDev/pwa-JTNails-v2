@@ -126,6 +126,7 @@ const api = {
     return api.get('/blocked-times' + (q ? '?' + q : ''));
   },
   createBlockedTime: (data) => api.post('/blocked-times', data),
+  checkBlockedTimeConflicts: (data) => api.post('/blocked-times/check-conflicts', data),
   deleteBlockedTime: (id) => api.delete(`/blocked-times/${id}`),
 
   // Users

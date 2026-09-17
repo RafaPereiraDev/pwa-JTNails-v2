@@ -180,6 +180,10 @@ async function initDatabase() {
     -- Permite função de recepcionista no check de role dos usuários
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
     ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('master','admin','professional','receptionist'));
+
+    -- Bloqueios de horário com suporte a dia inteiro e intervalo de datas
+    ALTER TABLE blocked_times ADD COLUMN IF NOT EXISTS all_day  BOOLEAN DEFAULT FALSE;
+    ALTER TABLE blocked_times ADD COLUMN IF NOT EXISTS end_date DATE;
   `);
 
   // Mensagem de aniversário padrão (só insere se ainda não existir)

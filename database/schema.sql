@@ -87,6 +87,8 @@ CREATE TABLE IF NOT EXISTS blocked_times (
   start_time      TIME NOT NULL,
   end_time        TIME NOT NULL,
   reason          TEXT,
+  all_day         BOOLEAN DEFAULT FALSE,
+  end_date        DATE,
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 

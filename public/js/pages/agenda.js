@@ -155,8 +155,11 @@ async function loadAgendaView() {
       if (label) label.textContent = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       params.start_date = `${y}-${m}-01`;
       params.end_date = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
-      const appointments = await api.getAppointments(params);
-      renderMonthView(container, d.getFullYear(), d.getMonth(), appointments);
+      const [appointments, blocked] = await Promise.all([
+        api.getAppointments(params),
+        api.getBlockedTimes(params)
+      ]);
+      renderMonthView(container, d.getFullYear(), d.getMonth(), appointments, blocked);
     }
   } catch (e) {
     container.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
@@ -266,14 +269,16 @@ function renderDayView(container, date, appointments, blocked) {
 
   // Posicionamento vertical proporcional aos minutos em faixas de 30min
   function getTop(time) {
-    const [h, m] = time.split(':').map(Number);
-    const mins = (h - TIME_START) * 60 + m;
+    const [h, m] = (time || '07:00').split(':').map(Number);
+    const mins = Math.max(0, (h - TIME_START) * 60 + m);
     return (mins / 30) * SLOT_HEIGHT_30;
   }
   function getHeight(start, end) {
-    const [sh, sm] = start.split(':').map(Number);
-    const [eh, em] = end.split(':').map(Number);
-    const mins = (eh * 60 + em) - (sh * 60 + sm);
+    const [sh, sm] = (start || '07:00').split(':').map(Number);
+    const [eh, em] = (end || '23:00').split(':').map(Number);
+    const startMins = Math.max(TIME_START * 60, sh * 60 + sm);
+    const endMins = Math.min(TIME_END * 60, eh * 60 + em);
+    const mins = Math.max(0, endMins - startMins);
     // Margem de 2px para espaçamento visual entre cards sequenciais
     return Math.max(26, (mins / 30) * SLOT_HEIGHT_30 - 2);
   }
@@ -307,12 +312,13 @@ function renderDayView(container, date, appointments, blocked) {
     </div>
   `;
 
+  // Cards de agendamentos das clientes (z-index 10: sempre clicáveis e visíveis sobre faixas de bloqueio)
   const apptBlocks = appointments.map(a => {
     const top = getTop(a.start_time);
     const height = getHeight(a.start_time, a.end_time);
     const color = a.professional_color || '#3B5848';
     return `
-      <div class="appt-block appt-card" style="background:${color};position:absolute;top:${top + 1}px;height:${height}px;${overlapStyle(dayLayout, a.id)}z-index:5"
+      <div class="appt-block appt-card" style="background:${color};position:absolute;top:${top + 1}px;height:${height}px;${overlapStyle(dayLayout, a.id)}z-index:10"
         onclick="event.stopPropagation();openEditAppointment(${a.id})">
         ${canCompleteAppt(a) ? `<button class="appt-done-btn" onclick="completeAppointmentFromCalendar(${a.id}, event)" title="Marcar como concluído">
           <i class="fa fa-check"></i>
@@ -327,14 +333,21 @@ function renderDayView(container, date, appointments, blocked) {
       </div>`;
   }).join('');
 
+  // Faixas de bloqueio de horário (z-index 3: sobreposta ao grid, sob os agendamentos)
   const blockedBlocks = blocked.map(b => {
     const top = getTop(b.start_time);
     const height = getHeight(b.start_time, b.end_time);
+    const isAllDay = b.all_day || (b.start_time.slice(0, 5) === '07:00' && b.end_time.slice(0, 5) === '23:00');
+    const timeText = isAllDay ? 'Dia Inteiro' : `${formatTime(b.start_time)} - ${formatTime(b.end_time)}`;
     return `
-      <div class="blocked-block" style="position:absolute;top:${top + 1}px;height:${height}px;left:4px;right:4px;z-index:4"
-        onclick="event.stopPropagation();${canModifyAppt(b) ? `deleteBlockedTime(${b.id})` : ''}">
-        <div class="blocked-block-title"><i class="fa fa-ban"></i> ${esc(b.reason || 'Bloqueado')}</div>
-        <div style="font-size:11px;color:var(--gray-500)">${formatTime(b.start_time)} - ${formatTime(b.end_time)} · ${esc(b.professional_name)}</div>
+      <div class="blocked-block" style="position:absolute;top:${top + 1}px;height:${height}px;left:4px;right:4px;z-index:3"
+        onclick="event.stopPropagation();${canModifyAppt(b) ? `deleteBlockedTime(${b.id})` : ''}"
+        title="Bloqueio de Horário. Clique para remover.">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div class="blocked-block-title"><i class="fa fa-ban"></i> ${esc(b.reason || 'Bloqueado')}</div>
+          ${canModifyAppt(b) ? `<button type="button" class="blocked-delete-btn" onclick="event.stopPropagation();deleteBlockedTime(${b.id})" title="Remover bloqueio"><i class="fa fa-times"></i></button>` : ''}
+        </div>
+        <div style="font-size:11px;color:#64748b;font-weight:500;margin-top:2px">${timeText} · ${esc(b.professional_name)}</div>
       </div>`;
   }).join('');
 
@@ -358,8 +371,8 @@ function renderDayView(container, date, appointments, blocked) {
           onclick="handleDayClick(event, '${date}')">
           ${slots.map(s => `<div class="agenda-grid-slot ${s.isHalf ? 'half-hour' : 'full-hour'}" data-time="${s.time}" style="height:${SLOT_HEIGHT_30}px"></div>`).join('')}
           ${pastOverlayHeight(date) > 0 ? `<div class="agenda-past-overlay" style="position:absolute;top:0;left:0;right:0;height:${pastOverlayHeight(date)}px;z-index:2" title="Horário já passado"></div>` : ''}
-          ${apptBlocks}
           ${blockedBlocks}
+          ${apptBlocks}
         </div>
       </div>
     </div>
@@ -479,14 +492,16 @@ function renderWeekView(container, range, appointments, blocked) {
   const slots = getAgendaTimeSlots();
 
   function getTop(time) {
-    const [h, m] = time.split(':').map(Number);
-    const mins = (h - TIME_START) * 60 + m;
+    const [h, m] = (time || '07:00').split(':').map(Number);
+    const mins = Math.max(0, (h - TIME_START) * 60 + m);
     return (mins / 30) * SLOT_HEIGHT_30;
   }
   function getHeight(start, end) {
-    const [sh, sm] = start.split(':').map(Number);
-    const [eh, em] = end.split(':').map(Number);
-    const mins = (eh * 60 + em) - (sh * 60 + sm);
+    const [sh, sm] = (start || '07:00').split(':').map(Number);
+    const [eh, em] = (end || '23:00').split(':').map(Number);
+    const startMins = Math.max(TIME_START * 60, sh * 60 + sm);
+    const endMins = Math.min(TIME_END * 60, eh * 60 + em);
+    const mins = Math.max(0, endMins - startMins);
     return Math.max(26, (mins / 30) * SLOT_HEIGHT_30 - 2);
   }
 
@@ -532,9 +547,24 @@ function renderWeekView(container, range, appointments, blocked) {
               onclick="handleWeekColClick(event, '${day}')">
               ${slots.map(s => `<div class="agenda-grid-slot ${s.isHalf ? 'half-hour' : 'full-hour'}" data-time="${s.time}" style="height:${SLOT_HEIGHT_30}px"></div>`).join('')}
               ${pastH > 0 ? `<div class="agenda-past-overlay" style="position:absolute;top:0;left:0;right:0;height:${pastH}px;z-index:2" title="Horário já passado"></div>` : ''}
+              ${dayBlocked.map(b => {
+                const isAllDay = b.all_day || (b.start_time.slice(0, 5) === '07:00' && b.end_time.slice(0, 5) === '23:00');
+                const timeText = isAllDay ? 'Dia Inteiro' : `${formatTime(b.start_time)} - ${formatTime(b.end_time)}`;
+                return `
+                <div class="blocked-block"
+                  style="position:absolute;top:${getTop(b.start_time) + 1}px;height:${getHeight(b.start_time, b.end_time)}px;left:2px;right:2px;font-size:11px;z-index:3"
+                  onclick="event.stopPropagation();${canModifyAppt(b) ? `deleteBlockedTime(${b.id})` : ''}"
+                  title="Bloqueio de Horário. Clique para remover.">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                    <div class="blocked-block-title"><i class="fa fa-ban"></i> ${esc(b.reason || 'Bloqueado')}</div>
+                    ${canModifyAppt(b) ? `<button type="button" class="blocked-delete-btn" onclick="event.stopPropagation();deleteBlockedTime(${b.id})" title="Remover bloqueio"><i class="fa fa-times"></i></button>` : ''}
+                  </div>
+                  <div style="font-size:10px;color:#64748b;font-weight:500;margin-top:2px">${timeText}</div>
+                </div>`;
+              }).join('')}
               ${dayAppts.map(a => `
                 <div class="appt-block appt-card"
-                  style="background:${a.professional_color || '#3B5848'};position:absolute;top:${getTop(a.start_time) + 1}px;height:${getHeight(a.start_time, a.end_time)}px;${overlapStyle(dayLayout, a.id)}z-index:5"
+                  style="background:${a.professional_color || '#3B5848'};position:absolute;top:${getTop(a.start_time) + 1}px;height:${getHeight(a.start_time, a.end_time)}px;${overlapStyle(dayLayout, a.id)}z-index:10"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
                   ${canCompleteAppt(a) ? `<button class="appt-done-btn appt-done-btn-sm" onclick="completeAppointmentFromCalendar(${a.id}, event)" title="Marcar como concluído">
                     <i class="fa fa-check"></i>
@@ -546,12 +576,6 @@ function renderWeekView(container, range, appointments, blocked) {
                   <div class="appt-block-sub">${esc(a.service_name)} · ${formatCurrency(a.price)}</div>
                   ${agendaProfFilter === 'all' ? `<div class="appt-block-sub">${esc(a.professional_name)}</div>` : ''}
                   <div class="appt-block-sub">${statusBadge(a.status)}</div>
-                </div>`).join('')}
-              ${dayBlocked.map(b => `
-                <div class="blocked-block"
-                  style="position:absolute;top:${getTop(b.start_time) + 1}px;height:${getHeight(b.start_time, b.end_time)}px;left:2px;right:2px;font-size:11px;z-index:5"
-                  onclick="event.stopPropagation();${canModifyAppt(b) ? `deleteBlockedTime(${b.id})` : ''}">
-                  <div class="blocked-block-title"><i class="fa fa-ban"></i> ${esc(b.reason || 'Bloqueado')}</div>
                 </div>`).join('')}
             </div>`;
   }).join('')}
@@ -572,7 +596,7 @@ function renderWeekView(container, range, appointments, blocked) {
   }, 60);
 }
 
-function renderMonthView(container, year, month, appointments) {
+function renderMonthView(container, year, month, appointments, blocked = []) {
   const today = getTodayStr();
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
@@ -599,12 +623,19 @@ function renderMonthView(container, year, month, appointments) {
     apptMap[a.date].push(a);
   });
 
+  const blockedMap = {};
+  (blocked || []).forEach(b => {
+    if (!blockedMap[b.date]) blockedMap[b.date] = [];
+    blockedMap[b.date].push(b);
+  });
+
   container.innerHTML = `
     <div class="card">
       <div style="display:grid;grid-template-columns:repeat(7,1fr)">
         ${days.map(d => `<div class="month-day-header">${d}</div>`).join('')}
         ${cells.map(cell => {
     const cellAppts = apptMap[cell.date] || [];
+    const cellBlocked = blockedMap[cell.date] || [];
     const shown = cellAppts.slice(0, 3);
     const more = cellAppts.length - 3;
     const isPast = cell.date < today;
@@ -612,6 +643,12 @@ function renderMonthView(container, year, month, appointments) {
             <div class="month-day ${cell.otherMonth ? 'other-month' : ''} ${cell.date === today ? 'today' : ''} ${isPast ? 'past-day' : ''}"
               ${!isPast ? `onclick="goToDayView('${cell.date}')"` : ''}>
               <div class="day-num">${parseInt(cell.date.split('-')[2])}</div>
+              ${cellBlocked.map(b => `
+                <div class="month-blocked"
+                  onclick="event.stopPropagation();${canModifyAppt(b) ? `deleteBlockedTime(${b.id})` : ''}"
+                  title="Bloqueio: ${esc(b.reason || 'Bloqueado')}. Clique para remover.">
+                  <i class="fa fa-ban" style="font-size:9px"></i> ${esc(b.reason || 'Bloqueado')}
+                </div>`).join('')}
               ${shown.map(a => `
                 <div class="month-appt" style="background:${a.professional_color || '#3B5848'};position:relative;padding-right:20px"
                   onclick="event.stopPropagation();openEditAppointment(${a.id})">
@@ -654,69 +691,292 @@ async function deleteBlockedTime(id) {
   }
 }
 
-function openBlockTimeModal() {
-  const activeProfId = getActiveAgendaProfId() || (currentUser && currentUser.professional_id);
+function openBlockTimeModal(prefill = {}) {
+  const activeProfId = prefill.profId || getActiveAgendaProfId() || (currentUser && currentUser.professional_id);
   const profOptions = agendaProfessionals.map(p =>
-    `<option value="${p.id}" ${activeProfId === p.id ? 'selected' : ''}>${esc(p.name)}</option>`
+    `<option value="${p.id}" ${String(activeProfId) === String(p.id) ? 'selected' : ''}>${esc(p.name)}</option>`
   ).join('');
 
-  const timeSlots = generateTimeSlots('07:00', '23:00', 30);
-  const timeOptions = timeSlots.map(t => `<option value="${t}">${t}</option>`).join('');
+  const startDateVal = prefill.startDate || agendaDate || getTodayStr();
+  const endDateVal   = prefill.endDate   || startDateVal;
+  const isAllDay     = prefill.allDay !== undefined ? prefill.allDay : true;
+  const startTimeVal = prefill.startTime || '08:00';
+  const endTimeVal   = prefill.endTime   || '12:00';
+  const reasonVal    = prefill.reason    || '';
 
   openModal('Bloquear Horário', `
     <form id="block-form">
-      <div class="form-group">
-        <label>Profissional *</label>
+      <div class="block-form-group">
+        <label for="block-prof">Profissional *</label>
         <select id="block-prof" required>${profOptions}</select>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Data *</label>
-          <input type="date" id="block-date" value="${agendaDate}" required />
+
+      <div class="block-form-row">
+        <div class="block-form-group" style="margin-bottom:0">
+          <label for="block-start-date">Data Início *</label>
+          <input type="date" id="block-start-date" value="${startDateVal}" required />
         </div>
-        <div class="form-group">
-          <label>Motivo</label>
-          <input type="text" id="block-reason" placeholder="Almoço, folga..." />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Início *</label>
-          <select id="block-start" required>${timeOptions}</select>
-        </div>
-        <div class="form-group">
-          <label>Fim *</label>
-          <select id="block-end" required>${timeOptions}</select>
+        <div class="block-form-group" style="margin-bottom:0">
+          <label for="block-end-date">Data Fim *</label>
+          <input type="date" id="block-end-date" value="${endDateVal}" min="${startDateVal}" required />
         </div>
       </div>
-      <div id="block-error" class="alert alert-error" style="display:none"></div>
-      <div class="modal-footer" style="padding:0;margin-top:16px">
-        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        <button type="submit" class="btn btn-primary"><i class="fa fa-ban"></i> Bloquear</button>
+
+      <label class="block-checkbox-wrapper" for="block-all-day">
+        <input type="checkbox" id="block-all-day" ${isAllDay ? 'checked' : ''} />
+        <span class="block-checkbox-label">Bloquear o dia inteiro</span>
+      </label>
+
+      <div class="block-form-row" id="block-time-row" style="${isAllDay ? 'display:none' : 'display:grid'}">
+        <div class="block-form-group" style="margin-bottom:0">
+          <label for="block-start-time">Horário Início *</label>
+          <input type="time" id="block-start-time" value="${startTimeVal}" ${isAllDay ? '' : 'required'} />
+        </div>
+        <div class="block-form-group" style="margin-bottom:0">
+          <label for="block-end-time">Horário Fim *</label>
+          <input type="time" id="block-end-time" value="${endTimeVal}" ${isAllDay ? '' : 'required'} />
+        </div>
+      </div>
+
+      <div class="block-form-group">
+        <label for="block-reason">Motivo / Observação</label>
+        <input type="text" id="block-reason" value="${esc(reasonVal)}" placeholder="Ex: Férias, Folga, Casamento..." autocomplete="off" />
+      </div>
+
+      <div id="block-error" class="alert alert-error" style="display:none;margin-bottom:12px"></div>
+
+      <div class="block-modal-footer">
+        <button type="button" class="btn-block-cancel" onclick="closeModal()">Cancelar</button>
+        <button type="submit" id="btn-submit-block" class="btn-block-submit">
+          <i class="fa fa-ban"></i> Bloquear Horário
+        </button>
       </div>
     </form>
-  `, 'modal-sm');
+  `, 'modal-block');
 
-  // Set default end time 1hr after start
-  document.getElementById('block-end').value = '08:00';
+  const form = document.getElementById('block-form');
+  const allDayCb = document.getElementById('block-all-day');
+  const timeRow = document.getElementById('block-time-row');
+  const startDateInput = document.getElementById('block-start-date');
+  const endDateInput = document.getElementById('block-end-date');
+  const startTimeInput = document.getElementById('block-start-time');
+  const endTimeInput = document.getElementById('block-end-time');
+  const errEl = document.getElementById('block-error');
 
-  document.getElementById('block-form').addEventListener('submit', async (e) => {
+  function showBlockError(msg) {
+    if (errEl) {
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    }
+  }
+
+  // Alterna campos de horário conforme o checkbox "Bloquear o dia inteiro"
+  allDayCb.addEventListener('change', () => {
+    if (allDayCb.checked) {
+      timeRow.style.display = 'none';
+      startTimeInput.removeAttribute('required');
+      endTimeInput.removeAttribute('required');
+    } else {
+      timeRow.style.display = 'grid';
+      startTimeInput.setAttribute('required', 'required');
+      endTimeInput.setAttribute('required', 'required');
+    }
+  });
+
+  // Ajusta data fim quando a data início muda
+  startDateInput.addEventListener('change', () => {
+    endDateInput.min = startDateInput.value;
+    if (!endDateInput.value || endDateInput.value < startDateInput.value) {
+      endDateInput.value = startDateInput.value;
+    }
+  });
+
+  // Submissão inteligente do formulário
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const errEl = document.getElementById('block-error');
     errEl.style.display = 'none';
+
+    const profId = document.getElementById('block-prof').value;
+    const sDate = startDateInput.value;
+    const eDate = endDateInput.value || sDate;
+    const isCheckedAllDay = allDayCb.checked;
+    const sTime = isCheckedAllDay ? '07:00' : startTimeInput.value;
+    const eTime = isCheckedAllDay ? '23:00' : endTimeInput.value;
+    const reason = document.getElementById('block-reason').value.trim();
+
+    if (!sDate) {
+      showBlockError('A data de início é obrigatória');
+      return;
+    }
+    if (eDate < sDate) {
+      showBlockError('A data final não pode ser anterior à data inicial');
+      return;
+    }
+    if (!isCheckedAllDay) {
+      if (!sTime || !eTime) {
+        showBlockError('Informe o horário de início e término');
+        return;
+      }
+      if (eTime <= sTime) {
+        showBlockError('O horário de término deve ser posterior ao horário de início');
+        return;
+      }
+    }
+
+    const submitBtn = document.getElementById('btn-submit-block');
+    const originalBtnHtml = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Verificando...';
+
+    try {
+      // Consulta agendamentos existentes no período selecionado
+      const checkRes = await api.checkBlockedTimeConflicts({
+        professional_id: profId,
+        start_date: sDate,
+        end_date: eDate,
+        all_day: isCheckedAllDay,
+        start_time: sTime,
+        end_time: eTime
+      });
+
+      const conflicts = (checkRes && checkRes.conflicts) || [];
+
+      if (conflicts.length === 0) {
+        // CENÁRIO A: NÃO HÁ agendamentos no intervalo selecionado:
+        // Salva o bloqueio diretamente, sem modais ou alertas adicionais.
+        await api.createBlockedTime({
+          professional_id: profId,
+          start_date: sDate,
+          end_date: eDate,
+          all_day: isCheckedAllDay,
+          start_time: sTime,
+          end_time: eTime,
+          reason: reason || null
+        });
+        toast('Horário bloqueado com sucesso', 'success');
+        closeModal();
+        loadAgendaView();
+      } else {
+        // CENÁRIO B: HÁ 1 ou mais agendamentos de clientes no período selecionado:
+        // Exibe tela de confirmação com listagem detalhada das clientes afetadas
+        renderBlockConfirmationView({
+          professional_id: profId,
+          start_date: sDate,
+          end_date: eDate,
+          all_day: isCheckedAllDay,
+          start_time: sTime,
+          end_time: eTime,
+          reason,
+          conflicts
+        }, () => {
+          // Callback para voltar ao formulário com os dados preservados
+          openBlockTimeModal({
+            profId,
+            startDate: sDate,
+            endDate: eDate,
+            allDay: isCheckedAllDay,
+            startTime: sTime,
+            endTime: eTime,
+            reason
+          });
+        });
+      }
+    } catch (err) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnHtml;
+      showBlockError(err.message || 'Erro ao processar bloqueio');
+    }
+  });
+}
+
+function renderBlockConfirmationView(blockData, onBack) {
+  document.getElementById('modal-title').textContent = 'Confirmar Bloqueio de Horário';
+  const modalBody = document.getElementById('modal-body');
+
+  const count = blockData.conflicts.length;
+  const countText = count === 1 ? '1 agendamento marcado' : `${count} agendamentos marcados`;
+
+  modalBody.innerHTML = `
+    <div class="block-conflict-alert">
+      <div class="block-conflict-title">
+        <i class="fa fa-exclamation-triangle" style="font-size:1.15rem;color:#d97706"></i>
+        <span>Atenção: Existem ${countText} neste período.</span>
+      </div>
+      <p class="block-conflict-desc">
+        Os agendamentos abaixo <strong>não serão excluídos</strong>. Eles permanecerão visíveis e clicáveis na sua agenda para atendimento, edição ou remarcação. O período ficará fechado para novos agendamentos.
+      </p>
+    </div>
+
+    <div style="font-size:0.85rem;font-weight:700;color:#334155;margin-bottom:6px">
+      Clientes com horário marcado:
+    </div>
+
+    <div class="block-conflict-list">
+      ${blockData.conflicts.map(a => `
+        <div class="block-conflict-item">
+          <div class="block-conflict-main">
+            <span class="block-conflict-time-badge">
+              ${blockData.start_date !== blockData.end_date ? formatDate(a.date).slice(0, 5) + ' ' : ''}${formatTime(a.start_time)}
+            </span>
+            <span class="block-conflict-name">${esc(a.client_name)}</span>
+            <span class="block-conflict-service">· ${esc(a.service_name)}</span>
+          </div>
+          ${a.client_phone ? `
+            <a href="${whatsappLink(a.client_phone, `Olá ${a.client_name}, tudo bem? Gostaria de falar sobre seu horário agendado no JT Nails.`)}"
+               target="_blank" class="btn btn-secondary btn-sm"
+               style="padding:3px 8px;font-size:11px;color:#16a34a;border-color:#bbf7d0;background:#f0fdf4;display:inline-flex;align-items:center;gap:4px"
+               title="Conversar no WhatsApp">
+              <i class="fab fa-whatsapp"></i> WhatsApp
+            </a>` : ''}
+        </div>
+      `).join('')}
+    </div>
+
+    <div id="block-confirm-error" class="alert alert-error" style="display:none;margin-bottom:12px"></div>
+
+    <div class="block-modal-footer">
+      <button type="button" id="btn-conflict-back" class="btn-block-cancel">
+        <i class="fa fa-arrow-left"></i> Voltar / Cancelar
+      </button>
+      <button type="button" id="btn-conflict-confirm" class="btn-block-submit">
+        <i class="fa fa-check"></i> Sim, confirmar bloqueio
+      </button>
+    </div>
+  `;
+
+  document.getElementById('btn-conflict-back').addEventListener('click', () => {
+    if (onBack) onBack();
+    else closeModal();
+  });
+
+  document.getElementById('btn-conflict-confirm').addEventListener('click', async () => {
+    const confirmBtn = document.getElementById('btn-conflict-confirm');
+    const backBtn = document.getElementById('btn-conflict-back');
+    const errEl = document.getElementById('block-confirm-error');
+    errEl.style.display = 'none';
+
+    confirmBtn.disabled = true;
+    backBtn.disabled = true;
+    confirmBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Salvando...';
+
     try {
       await api.createBlockedTime({
-        professional_id: document.getElementById('block-prof').value,
-        date: document.getElementById('block-date').value,
-        start_time: document.getElementById('block-start').value,
-        end_time: document.getElementById('block-end').value,
-        reason: document.getElementById('block-reason').value || null
+        professional_id: blockData.professional_id,
+        start_date: blockData.start_date,
+        end_date: blockData.end_date,
+        all_day: blockData.all_day,
+        start_time: blockData.start_time,
+        end_time: blockData.end_time,
+        reason: blockData.reason || null
       });
       toast('Horário bloqueado com sucesso', 'success');
       closeModal();
       loadAgendaView();
     } catch (err) {
-      errEl.textContent = err.message;
+      confirmBtn.disabled = false;
+      backBtn.disabled = false;
+      confirmBtn.innerHTML = '<i class="fa fa-check"></i> Sim, confirmar bloqueio';
+      errEl.textContent = err.message || 'Erro ao salvar bloqueio';
       errEl.style.display = '';
     }
   });
