@@ -2076,10 +2076,32 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .block-form-row {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 12px !important;
-  margin-bottom: 14px !important;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.block-form-row.hidden,
+#block-time-row.hidden,
+#block-time-row[style*="display:none"],
+#block-time-row[style*="display: none"] {
+  display: none !important;
+}
+
+@keyframes blockFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#block-time-row:not(.hidden) {
+  animation: blockFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .modal-block input:not([type="checkbox"]):not([type="radio"]),
@@ -2095,6 +2117,14 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   outline: none !important;
   box-sizing: border-box !important;
   transition: border-color 0.15s, box-shadow 0.15s !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.modal-block input[type="date"],
+.modal-block input[type="time"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
 }
 
 .modal-block input:not([type="checkbox"]):not([type="radio"]):focus,
@@ -2222,10 +2252,11 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   background: #f8fafc !important;
   border: 1px solid #e2e8f0 !important;
   border-radius: 8px !important;
-  max-height: 190px !important;
+  max-height: 200px !important;
   overflow-y: auto !important;
   padding: 4px 12px !important;
   margin-bottom: 14px !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 .block-conflict-item {
@@ -2248,6 +2279,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   gap: 8px !important;
   flex: 1 !important;
   min-width: 0 !important;
+  overflow: hidden !important;
 }
 
 .block-conflict-time-badge {
@@ -2258,6 +2290,16 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   border-radius: 6px !important;
   font-size: 0.8rem !important;
   white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+.block-conflict-info {
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
 }
 
 .block-conflict-name {
@@ -2266,12 +2308,115 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  max-width: 65% !important;
 }
 
 .block-conflict-service {
   color: #64748b !important;
   font-size: 0.8rem !important;
   white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+.block-conflict-wpp-btn {
+  padding: 4px 8px !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: #16a34a !important;
+  border: 1px solid #bbf7d0 !important;
+  background: #f0fdf4 !important;
+  border-radius: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  text-decoration: none !important;
+  transition: background 0.15s, border-color 0.15s !important;
+}
+
+.block-conflict-wpp-btn:hover {
+  background: #dcfce7 !important;
+  border-color: #86efac !important;
+}
+
+/* Responsividade Mobile / iOS para o Modal de Bloqueio */
+@media (max-width: 480px) {
+  .modal.modal-block,
+  #modal-container.modal-block {
+    padding: 20px 16px !important;
+    width: 94% !important;
+    max-width: 100% !important;
+    border-radius: 12px !important;
+  }
+
+  .modal-block .block-date-row {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .modal-block input[type="date"] {
+    font-size: 0.85rem !important;
+    padding: 0 10px !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    min-height: 42px !important;
+  }
+
+  .modal-block input[type="time"] {
+    font-size: 0.9rem !important;
+    padding: 0 8px !important;
+    min-height: 42px !important;
+  }
+
+  .block-conflict-item {
+    gap: 6px !important;
+    padding: 8px 0 !important;
+  }
+
+  .block-conflict-main {
+    gap: 6px !important;
+  }
+
+  .block-conflict-time-badge {
+    padding: 2px 5px !important;
+    font-size: 0.75rem !important;
+  }
+
+  .block-conflict-name {
+    font-size: 0.84rem !important;
+    max-width: 60% !important;
+  }
+
+  .block-conflict-service {
+    font-size: 0.75rem !important;
+  }
+
+  .block-conflict-wpp-btn {
+    padding: 4px 8px !important;
+    font-size: 0.75rem !important;
+  }
+
+  .modal-block .block-modal-footer {
+    gap: 8px !important;
+    margin-top: 16px !important;
+  }
+
+  .modal-block .btn-block-cancel {
+    padding: 9px 14px !important;
+    font-size: 0.88rem !important;
+  }
+
+  .modal-block .btn-block-submit {
+    padding: 9px 16px !important;
+    font-size: 0.88rem !important;
+  }
 }
 
 /* ===== TOAST ===== */

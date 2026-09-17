@@ -711,7 +711,7 @@ function openBlockTimeModal(prefill = {}) {
         <select id="block-prof" required>${profOptions}</select>
       </div>
 
-      <div class="block-form-row">
+      <div class="block-form-row block-date-row">
         <div class="block-form-group" style="margin-bottom:0">
           <label for="block-start-date">Data Início *</label>
           <input type="date" id="block-start-date" value="${startDateVal}" required />
@@ -727,7 +727,7 @@ function openBlockTimeModal(prefill = {}) {
         <span class="block-checkbox-label">Bloquear o dia inteiro</span>
       </label>
 
-      <div class="block-form-row" id="block-time-row" style="${isAllDay ? 'display:none' : 'display:grid'}">
+      <div class="block-form-row ${isAllDay ? 'hidden' : ''}" id="block-time-row" style="${isAllDay ? 'display:none' : 'display:grid'}">
         <div class="block-form-group" style="margin-bottom:0">
           <label for="block-start-time">Horário Início *</label>
           <input type="time" id="block-start-time" value="${startTimeVal}" ${isAllDay ? '' : 'required'} />
@@ -773,11 +773,13 @@ function openBlockTimeModal(prefill = {}) {
   // Alterna campos de horário conforme o checkbox "Bloquear o dia inteiro"
   allDayCb.addEventListener('change', () => {
     if (allDayCb.checked) {
-      timeRow.style.display = 'none';
+      timeRow.classList.add('hidden');
+      timeRow.style.setProperty('display', 'none', 'important');
       startTimeInput.removeAttribute('required');
       endTimeInput.removeAttribute('required');
     } else {
-      timeRow.style.display = 'grid';
+      timeRow.classList.remove('hidden');
+      timeRow.style.setProperty('display', 'grid', 'important');
       startTimeInput.setAttribute('required', 'required');
       endTimeInput.setAttribute('required', 'required');
     }
@@ -918,13 +920,14 @@ function renderBlockConfirmationView(blockData, onBack) {
             <span class="block-conflict-time-badge">
               ${blockData.start_date !== blockData.end_date ? formatDate(a.date).slice(0, 5) + ' ' : ''}${formatTime(a.start_time)}
             </span>
-            <span class="block-conflict-name">${esc(a.client_name)}</span>
-            <span class="block-conflict-service">· ${esc(a.service_name)}</span>
+            <div class="block-conflict-info">
+              <span class="block-conflict-name">${esc(a.client_name)}</span>
+              <span class="block-conflict-service">· ${esc(a.service_name)}</span>
+            </div>
           </div>
           ${a.client_phone ? `
             <a href="${whatsappLink(a.client_phone, `Olá ${a.client_name}, tudo bem? Gostaria de falar sobre seu horário agendado no JT Nails.`)}"
-               target="_blank" class="btn btn-secondary btn-sm"
-               style="padding:3px 8px;font-size:11px;color:#16a34a;border-color:#bbf7d0;background:#f0fdf4;display:inline-flex;align-items:center;gap:4px"
+               target="_blank" class="block-conflict-wpp-btn"
                title="Conversar no WhatsApp">
               <i class="fab fa-whatsapp"></i> WhatsApp
             </a>` : ''}
