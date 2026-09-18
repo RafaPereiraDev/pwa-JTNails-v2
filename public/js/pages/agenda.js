@@ -630,9 +630,9 @@ function renderMonthView(container, year, month, appointments, blocked = []) {
   });
 
   container.innerHTML = `
-    <div class="card">
-      <div style="display:grid;grid-template-columns:repeat(7,1fr)">
-        ${days.map(d => `<div class="month-day-header">${d}</div>`).join('')}
+    <div class="card calendar-month-container month-view-wrapper" style="overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%">
+      <div class="month-grid" style="display:grid;grid-template-columns:repeat(7, minmax(90px, 1fr));min-width:650px">
+        ${days.map(d => `<div class="month-day-header" style="min-width:90px">${d}</div>`).join('')}
         ${cells.map(cell => {
     const cellAppts = apptMap[cell.date] || [];
     const cellBlocked = blockedMap[cell.date] || [];
@@ -640,7 +640,7 @@ function renderMonthView(container, year, month, appointments, blocked = []) {
     const more = cellAppts.length - 3;
     const isPast = cell.date < today;
     return `
-            <div class="month-day ${cell.otherMonth ? 'other-month' : ''} ${cell.date === today ? 'today' : ''} ${isPast ? 'past-day' : ''}"
+            <div class="month-day ${cell.otherMonth ? 'other-month' : ''} ${cell.date === today ? 'today' : ''} ${isPast ? 'past-day' : ''}" style="min-width:90px"
               ${!isPast ? `onclick="goToDayView('${cell.date}')"` : ''}>
               <div class="day-num">${parseInt(cell.date.split('-')[2])}</div>
               ${cellBlocked.map(b => `

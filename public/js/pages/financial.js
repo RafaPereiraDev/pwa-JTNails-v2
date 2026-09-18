@@ -271,46 +271,48 @@ async function openExpenseModal(id = null) {
 
   document.getElementById('modal-body').innerHTML = `
     <form id="expense-form">
-      <div class="form-group">
-        <label>Descrição *</label>
-        <input type="text" id="ef-desc" value="${tx ? esc(tx.description) : ''}" required placeholder="Ex: Compra de esmaltes" />
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Categoria</label>
-          <select id="ef-category">
-            ${categories.map(c => `<option value="${c}" ${tx && tx.category === c ? 'selected' : ''}>${c}</option>`).join('')}
-          </select>
+      <div class="modal-form-body" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label>Descrição *</label>
+          <input type="text" id="ef-desc" value="${tx ? esc(tx.description) : ''}" required placeholder="Ex: Compra de esmaltes" />
         </div>
-        <div class="form-group">
-          <label>Valor (R$) *</label>
-          <input type="number" id="ef-amount" value="${tx ? tx.amount : ''}" step="0.01" min="0.01" required />
+        <div class="form-row" style="gap: 14px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label>Categoria</label>
+            <select id="ef-category">
+              ${categories.map(c => `<option value="${c}" ${tx && tx.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label>Valor (R$) *</label>
+            <input type="number" id="ef-amount" value="${tx ? tx.amount : ''}" step="0.01" min="0.01" required />
+          </div>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Data *</label>
-          <input type="date" id="ef-date" value="${tx ? tx.date : today}" required />
+        <div class="form-row" style="gap: 14px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label>Data *</label>
+            <input type="date" id="ef-date" value="${tx ? tx.date : today}" required />
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label>Forma de pagamento</label>
+            <select id="ef-payment">
+              <option value="">-</option>
+              <option value="pix" ${tx && tx.payment_method === 'pix' ? 'selected' : ''}>Pix</option>
+              <option value="cash" ${tx && tx.payment_method === 'cash' ? 'selected' : ''}>Dinheiro</option>
+              <option value="credit" ${tx && tx.payment_method === 'credit' ? 'selected' : ''}>Cartão de Crédito</option>
+              <option value="debit" ${tx && tx.payment_method === 'debit' ? 'selected' : ''}>Cartão de Débito</option>
+            </select>
+          </div>
         </div>
-        <div class="form-group">
-          <label>Forma de pagamento</label>
-          <select id="ef-payment">
-            <option value="">-</option>
-            <option value="pix" ${tx && tx.payment_method === 'pix' ? 'selected' : ''}>Pix</option>
-            <option value="cash" ${tx && tx.payment_method === 'cash' ? 'selected' : ''}>Dinheiro</option>
-            <option value="credit" ${tx && tx.payment_method === 'credit' ? 'selected' : ''}>Cartão de Crédito</option>
-            <option value="debit" ${tx && tx.payment_method === 'debit' ? 'selected' : ''}>Cartão de Débito</option>
-          </select>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label>Observações</label>
+          <textarea id="ef-notes">${tx ? esc(tx.notes || '') : ''}</textarea>
         </div>
+        <div id="ef-error" class="alert alert-error" style="display:none; margin: 0;"></div>
       </div>
-      <div class="form-group">
-        <label>Observações</label>
-        <textarea id="ef-notes">${tx ? esc(tx.notes || '') : ''}</textarea>
-      </div>
-      <div id="ef-error" class="alert alert-error" style="display:none"></div>
-      <div class="modal-footer" style="padding:0;margin-top:16px">
-        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar</button>
+      <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--gray-100); display: flex; justify-content: flex-end; gap: 12px; background: var(--white); border-radius: 0 0 16px 16px;">
+        <button type="button" class="btn btn-secondary btn-cancel" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary btn-appt-confirm"><i class="fa fa-save"></i> Salvar</button>
       </div>
     </form>
   `;

@@ -247,7 +247,7 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(233, 30, 140, 0.1);
+  box-shadow: 0 0 0 3px rgba(78, 103, 84, 0.18);
 }
 
 input::placeholder,
@@ -815,7 +815,8 @@ tbody tr:hover {
 }
 
 /* ===== MODAL ===== */
-.modal-overlay {
+.modal-overlay,
+.modal-backdrop {
   display: none;
   position: fixed;
   inset: 0;
@@ -823,11 +824,29 @@ tbody tr:hover {
   z-index: 1000;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 16px;
+  box-sizing: border-box;
 }
 
-.modal-overlay.open {
+.modal-overlay.open,
+.modal-backdrop.open {
   display: flex;
+}
+
+/* Container de sobreposição genérico */
+.modal:has(.modal-content),
+.modal:has(.modal-dialog) {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 16px;
+  box-sizing: border-box;
 }
 
 /* ===== MODAL BASE (ARQUITETURA FLEXBOX) ===== */
@@ -836,6 +855,7 @@ tbody tr:hover {
   display: flex !important;
   flex-direction: column !important;
   max-height: 90vh !important;
+  max-height: 90dvh !important;
   /* Não deixar o modal ultrapassar a altura da tela */
   overflow: hidden !important;
   /* O modal em si não rola, quem rola é apenas o corpo */
@@ -846,6 +866,23 @@ tbody tr:hover {
   max-width: 600px;
   box-shadow: var(--shadow-lg);
   animation: modalIn 0.2s ease;
+  margin: auto;
+  bottom: auto;
+}
+
+/* Corpo do modal (.modal-content, .modal-block) */
+.modal-content,
+.modal-block {
+  margin: auto;
+  bottom: auto;
+  margin-bottom: auto;
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 
 @keyframes modalIn {
@@ -932,6 +969,13 @@ tbody tr:hover {
   overflow: hidden !important;
   margin: 0 !important;
   padding: 0 !important;
+}
+
+/* Fallback: caso o formulário não tenha modal-form-body ou classes dedicadas, garante padding adequado */
+.modal-body > form:not(:has(.modal-form-body)):not(:has(.prof-form-body)):not(:has(.edit-role-body)) {
+  padding: 1.25rem 1.5rem !important;
+  overflow-y: auto !important;
+  gap: 14px;
 }
 
 /* Rolagem vertical exclusiva para o bloco de campos do formulário */
@@ -1548,11 +1592,14 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   .modal {
     max-width: 100% !important;
     max-height: 90vh !important;
-    border-radius: 16px 16px 0 0 !important;
+    max-height: 90dvh !important;
+    border-radius: 16px !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
     position: relative !important;
+    margin: auto !important;
+    bottom: auto !important;
   }
 
   .appt-layout {
@@ -1611,8 +1658,10 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
   .modal-footer {
     padding: 14px 20px !important;
+    padding-bottom: max(14px, env(safe-area-inset-bottom)) !important;
     gap: 12px !important;
     border-top: 1px solid #f1f5f9 !important;
+    border-radius: 0 0 16px 16px !important;
   }
 
   .modal-footer .btn {
@@ -2009,13 +2058,18 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 .modal.modal-block,
 #modal-container.modal-block {
   background: #ffffff !important;
-  border-radius: 12px !important;
+  border-radius: 16px !important;
   padding: 24px !important;
+  padding-bottom: max(24px, env(safe-area-inset-bottom)) !important;
   max-width: 480px !important;
   width: 90% !important;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25) !important;
-  overflow: visible !important;
-  max-height: 94vh !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  max-height: 90vh !important;
+  max-height: 90dvh !important;
+  margin: auto !important;
+  bottom: auto !important;
   border: none !important;
 }
 
@@ -2349,9 +2403,16 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   .modal.modal-block,
   #modal-container.modal-block {
     padding: 20px 16px !important;
+    padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
     width: 94% !important;
     max-width: 100% !important;
-    border-radius: 12px !important;
+    border-radius: 16px !important;
+    margin: auto !important;
+    bottom: auto !important;
+    max-height: 90vh !important;
+    max-height: 90dvh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 
   .modal-block .block-date-row {
@@ -3001,9 +3062,17 @@ div[onclick*="openEditAppointment"].appt-block {
 }
 
 /* Month view */
+.calendar-month-container,
+.month-view-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+
 .month-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(90px, 1fr));
+  min-width: 650px;
   border: 1px solid var(--gray-200);
   border-radius: var(--border-radius);
   overflow: hidden;
@@ -3019,10 +3088,14 @@ div[onclick*="openEditAppointment"].appt-block {
   text-transform: uppercase;
   background: var(--gray-50);
   border-bottom: 1px solid var(--gray-200);
+  min-width: 90px;
+  box-sizing: border-box;
 }
 
 .month-day {
   min-height: 100px;
+  min-width: 90px;
+  box-sizing: border-box;
   padding: 6px;
   border-right: 1px solid var(--gray-100);
   border-bottom: 1px solid var(--gray-100);
@@ -3364,13 +3437,39 @@ div[onclick*="openEditAppointment"].appt-block {
 }
 
 @media (max-width: 767px) {
-  .modal {
-    border-radius: 16px 16px 0 0;
+  .modal-overlay,
+  .modal-backdrop {
+    display: none;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    padding: 16px !important;
+    box-sizing: border-box !important;
   }
 
-  .modal-overlay {
-    align-items: flex-end;
-    padding: 0;
+  .modal-overlay.open,
+  .modal-backdrop.open {
+    display: flex !important;
+  }
+
+  .modal,
+  .modal-content,
+  .modal-block,
+  #modal-container {
+    border-radius: 16px !important;
+    margin: auto !important;
+    bottom: auto !important;
+    margin-bottom: auto !important;
+    max-height: 90vh !important;
+    max-height: 90dvh !important;
+  }
+
+  .modal-content,
+  .modal-block {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
   }
 }
 
@@ -3379,12 +3478,23 @@ div[onclick*="openEditAppointment"].appt-block {
     grid-template-columns: 1fr 1fr;
   }
 
+  .calendar-month-container,
+  .month-view-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+
   .month-grid {
     font-size: 11px;
+    min-width: 650px;
+    grid-template-columns: repeat(7, minmax(90px, 1fr));
   }
 
   .month-day {
     min-height: 60px;
+    min-width: 90px;
+    box-sizing: border-box;
     padding: 3px;
   }
 
@@ -3466,6 +3576,36 @@ div[onclick*="openEditAppointment"].appt-block {
   .appt-delete-btn-sm,
   .appt-done-btn-sm {
     opacity: 0.95 !important;
+  }
+
+  /* Modais no Mobile (<= 768px) */
+  .modal-overlay,
+  .modal-backdrop {
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    padding: 16px !important;
+    box-sizing: border-box !important;
+  }
+
+  .modal,
+  .modal-content,
+  .modal-block,
+  #modal-container {
+    border-radius: 16px !important;
+    margin: auto !important;
+    bottom: auto !important;
+    margin-bottom: auto !important;
+    max-height: 90vh !important;
+    max-height: 90dvh !important;
+  }
+
+  .modal-content,
+  .modal-block {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
   }
 }
 

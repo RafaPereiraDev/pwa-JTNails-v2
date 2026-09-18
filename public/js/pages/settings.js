@@ -569,18 +569,20 @@ async function openUserModal(id) {
 function openResetPassword(id, name) {
   openModal(`Redefinir Senha — ${name}`, `
     <form id="reset-pw-form">
-      <div class="form-group">
-        <label>Nova senha *</label>
-        <div class="input-icon">
-          <i class="fa fa-lock"></i>
-          <input type="password" id="reset-pw" required minlength="6" placeholder="Mínimo 6 caracteres" />
-          <button type="button" class="btn-eye" onclick="togglePw('reset-pw','eye-reset')"><i class="fa fa-eye" id="eye-reset"></i></button>
+      <div class="modal-form-body" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label>Nova senha *</label>
+          <div class="input-icon">
+            <i class="fa fa-lock"></i>
+            <input type="password" id="reset-pw" required minlength="6" placeholder="Mínimo 6 caracteres" />
+            <button type="button" class="btn-eye" onclick="togglePw('reset-pw','eye-reset')"><i class="fa fa-eye" id="eye-reset"></i></button>
+          </div>
         </div>
+        <div id="reset-error" class="alert alert-error" style="display:none; margin: 0;"></div>
       </div>
-      <div id="reset-error" class="alert alert-error" style="display:none"></div>
-      <div class="modal-footer" style="padding:0;margin-top:16px">
-        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        <button type="submit" class="btn btn-primary"><i class="fa fa-key"></i> Redefinir</button>
+      <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--gray-100); display: flex; justify-content: flex-end; gap: 12px; background: var(--white); border-radius: 0 0 16px 16px;">
+        <button type="button" class="btn btn-secondary btn-cancel" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary btn-appt-confirm"><i class="fa fa-key"></i> Redefinir</button>
       </div>
     </form>
   `, 'modal-sm');

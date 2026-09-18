@@ -4,7 +4,10 @@ async function loadServices() {
 
   container.innerHTML = `
     <div class="page-header">
-      <h2>Serviços</h2>
+      <div>
+        <h2>Serviços</h2>
+        <p class="text-sm text-muted">Gerencie o catálogo de procedimentos, valores e tempos de atendimento</p>
+      </div>
       ${isAdminLevel() ? `<button class="btn btn-primary" onclick="openServiceModal()">
         <i class="fa fa-plus"></i> Novo Serviço
       </button>` : ''}
@@ -46,19 +49,19 @@ async function renderServicesTable() {
               <table>
                 <thead>
                   <tr>
-                    <th>Serviço</th>
-                    <th>Descrição</th>
-                    <th>Preço</th>
-                    <th>Duração</th>
-                    <th>Status</th>
-                    ${isAdmin ? '<th style="text-align:center">Ações</th>' : ''}
+                    <th style="width:26%">Serviço</th>
+                    <th style="width:30%">Descrição</th>
+                    <th style="width:14%">Preço</th>
+                    <th style="width:12%">Duração</th>
+                    <th style="width:10%">Status</th>
+                    ${isAdmin ? '<th style="width:8%;text-align:center">Ações</th>' : ''}
                   </tr>
                 </thead>
                 <tbody>
                   ${activeServices.map(s => `
                     <tr>
                       <td class="font-semibold">${esc(s.name)}</td>
-                      <td class="text-sm text-muted">${esc(s.description || '-')}</td>
+                      <td class="text-sm text-muted">${esc(s.description || '—')}</td>
                       <td><span style="color:var(--primary);font-weight:700">${formatCurrency(s.price)}</span></td>
                       <td>${s.duration} min</td>
                       <td>
@@ -98,52 +101,47 @@ async function renderServicesTable() {
 
         ${inactiveServices.length === 0 ? `
           <div class="card" style="border: 1px dashed var(--gray-300); background: transparent; box-shadow: none">
-            <div class="card-body text-center text-muted" style="padding:20px;font-size:13px">
-              <i class="fa fa-info-circle" style="color:var(--gray-400);margin-right:6px"></i> Nenhum serviço inativo no momento.
+            <div class="card-body" style="padding: 24px; text-align: center; color: var(--gray-400); font-size: 13px">
+              <i class="fa fa-info-circle" style="margin-right: 6px"></i> Nenhum serviço inativo no momento.
             </div>
           </div>
         ` : `
-          <div class="card" style="opacity:0.95">
+          <div class="card" style="opacity: 0.85">
             <div class="table-wrapper">
               <table>
                 <thead>
                   <tr>
-                    <th>Serviço</th>
-                    <th>Descrição</th>
-                    <th>Preço</th>
-                    <th>Duração</th>
-                    <th>Status</th>
-                    ${isAdmin ? '<th style="text-align:center">Ações</th>' : ''}
+                    <th style="width:26%">Serviço</th>
+                    <th style="width:30%">Descrição</th>
+                    <th style="width:14%">Preço</th>
+                    <th style="width:12%">Duração</th>
+                    <th style="width:10%">Status</th>
+                    ${isAdmin ? '<th style="width:8%;text-align:center">Ações</th>' : ''}
                   </tr>
                 </thead>
                 <tbody>
                   ${inactiveServices.map(s => `
                     <tr>
-                      <td class="font-semibold text-muted" style="opacity:0.75">${esc(s.name)}</td>
-                      <td class="text-sm text-muted">${esc(s.description || '-')}</td>
-                      <td><span style="color:var(--gray-600);font-weight:600">${formatCurrency(s.price)}</span></td>
+                      <td class="font-semibold text-muted">${esc(s.name)}</td>
+                      <td class="text-sm text-muted">${esc(s.description || '—')}</td>
+                      <td class="text-muted">${formatCurrency(s.price)}</td>
                       <td class="text-muted">${s.duration} min</td>
                       <td>
                         <span class="badge badge-inactive">Inativo</span>
                       </td>
                       ${isAdmin ? `
                       <td style="text-align:center">
-                        <div style="display:flex;gap:6px;justify-content:center">
-                          <button class="btn btn-success btn-xs" onclick="reactivateService(${s.id})" title="Ativar serviço novamente">
-                            <i class="fa fa-undo"></i> Ativar
-                          </button>
-                          <button class="btn btn-secondary btn-xs" onclick="openServiceModal(${s.id})" title="Editar serviço">
-                            <i class="fa fa-edit"></i>
-                          </button>
-                        </div>
+                        <button class="btn btn-secondary btn-xs" onclick="reactivateService(${s.id})" title="Reativar serviço">
+                          <i class="fa fa-undo"></i> Reativar
+                        </button>
                       </td>` : ''}
                     </tr>
                   `).join('')}
                 </tbody>
               </table>
             </div>
-            <div style="padding:10px 16px;color:var(--gray-500);font-size:13px;border-top:1px solid var(--gray-100)">
-              Serviços inativos são mantidos para preservar o histórico financeiro e não aparecem na criação de novos agendamentos.
+            <div style="padding:10px 16px;color:var(--gray-400);font-size:13px;border-top:1px solid var(--gray-100)">
+              Serviços inativos não aparecem na criação de novos agendamentos nem para clientes online.
             </div>
           </div>
         `}
@@ -163,28 +161,38 @@ async function openServiceModal(id = null) {
 
   document.getElementById('modal-body').innerHTML = `
     <form id="service-form">
-      <div class="form-group">
-        <label>Nome *</label>
-        <input type="text" id="sf-name" value="${service ? esc(service.name) : ''}" required placeholder="Ex: Manicure" />
-      </div>
-      <div class="form-group">
-        <label>Descrição</label>
-        <input type="text" id="sf-desc" value="${service ? esc(service.description || '') : ''}" placeholder="Descrição opcional" />
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Preço (R$) *</label>
-          <input type="number" id="sf-price" value="${service ? service.price : ''}" step="0.01" min="0" required placeholder="0,00" />
+      <div class="modal-form-body" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 6px;">
+            <i class="fa fa-tag" style="color: var(--primary); font-size: 13px;"></i> Nome do Serviço *
+          </label>
+          <input type="text" id="sf-name" value="${service ? esc(service.name) : ''}" required placeholder="Ex: Manicure, Alongamento em Gel..." />
         </div>
-        <div class="form-group">
-          <label>Duração (min) *</label>
-          <input type="number" id="sf-duration" value="${service ? service.duration : 60}" min="5" required placeholder="60" />
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 6px;">
+            <i class="fa fa-align-left" style="color: var(--primary); font-size: 13px;"></i> Descrição
+          </label>
+          <input type="text" id="sf-desc" value="${service ? esc(service.description || '') : ''}" placeholder="Descrição opcional do procedimento" />
         </div>
+        <div class="form-row" style="gap: 14px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 6px;">
+              <i class="fa fa-dollar-sign" style="color: var(--primary); font-size: 13px;"></i> Preço (R$) *
+            </label>
+            <input type="number" id="sf-price" value="${service ? service.price : ''}" step="0.01" min="0" required placeholder="0,00" />
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 6px;">
+              <i class="fa fa-clock" style="color: var(--primary); font-size: 13px;"></i> Duração (min) *
+            </label>
+            <input type="number" id="sf-duration" value="${service ? service.duration : 60}" min="5" step="5" required placeholder="60" />
+          </div>
+        </div>
+        <div id="sf-error" class="alert alert-error" style="display:none; margin: 0;"></div>
       </div>
-      <div id="sf-error" class="alert alert-error" style="display:none"></div>
-      <div class="modal-footer" style="padding:0;margin-top:16px">
-        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-        <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar</button>
+      <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--gray-100); display: flex; justify-content: flex-end; gap: 12px; background: var(--white); border-radius: 0 0 16px 16px;">
+        <button type="button" class="btn btn-secondary btn-cancel" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary btn-appt-confirm"><i class="fa fa-check"></i> ${service ? 'Salvar Alterações' : 'Criar Serviço'}</button>
       </div>
     </form>
   `;
