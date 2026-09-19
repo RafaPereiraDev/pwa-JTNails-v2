@@ -1,7 +1,7 @@
 // ===== SETTINGS PAGE =====
 // Helper: alterna visibilidade de qualquer campo de senha
 function togglePw(inputId, iconId) {
-  const inp  = document.getElementById(inputId);
+  const inp = document.getElementById(inputId);
   const icon = document.getElementById(iconId);
   if (!inp) return;
   const show = inp.type === 'password';
@@ -155,7 +155,7 @@ async function loadSettings() {
       });
       toast('Senha alterada com sucesso!', 'success');
       e.target.reset();
-    } catch(err) {
+    } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
     }
@@ -177,7 +177,7 @@ function urlBase64ToUint8Array(base64String) {
 
 async function initNotificationToggles() {
   const newToggle = document.getElementById('notif-new');
-  const statusEl  = document.getElementById('notif-status');
+  const statusEl = document.getElementById('notif-status');
   if (!newToggle) return;
 
   const suportado = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
@@ -288,7 +288,7 @@ async function loadBirthdayMessageForm() {
   const textarea = document.getElementById('birthday-msg');
   if (!textarea) return;
 
-  const countEl   = document.getElementById('bmsg-count');
+  const countEl = document.getElementById('bmsg-count');
   const previewEl = document.getElementById('bmsg-preview');
   const previewTx = document.getElementById('bmsg-preview-text');
 
@@ -340,7 +340,7 @@ async function loadMyProfileForm() {
   let prof;
   try {
     prof = await api.getMyProfile();
-  } catch(e) {
+  } catch (e) {
     container.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
     return;
   }
@@ -404,7 +404,7 @@ async function loadMyProfileForm() {
       _profilePhotoData = await resizeImageToDataURL(file, 400, 0.85);
       const avatar = document.getElementById('profile-avatar');
       avatar.innerHTML = `<img src="${_profilePhotoData}" alt="Prévia" style="width:100%;height:100%;object-fit:cover" />`;
-    } catch(err) {
+    } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
     }
@@ -429,7 +429,7 @@ async function loadMyProfileForm() {
         applySidebarAvatar();
       }
       _profilePhotoData = null;
-    } catch(err) {
+    } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
     }
@@ -461,7 +461,7 @@ async function loadUsersTable() {
                 <tr>
                   <td class="font-semibold">${esc(u.name)}</td>
                   <td>${esc(u.email)}</td>
-                  <td><span class="badge badge-${u.role}">${ {master:'Mestre', admin:'Administradora', professional:'Profissional', receptionist:'Recepcionista'}[u.role] || esc(u.role) }</span></td>
+                  <td><span class="badge badge-${u.role}">${{ master: 'Mestre', admin: 'Administradora', professional: 'Profissional', receptionist: 'Recepcionista' }[u.role] || esc(u.role)}</span></td>
                   <td>${esc(u.professional_name || '-')}</td>
                   <td>
                     <button class="btn btn-xs ${u.active ? 'btn-success' : 'btn-secondary'}"
@@ -474,16 +474,16 @@ async function loadUsersTable() {
                   <td>
                     <div style="display:flex;gap:6px">
                       <button class="btn btn-secondary btn-xs" onclick="openUserModal(${u.id})" title="Editar função"><i class="fa fa-user-gear"></i> Função</button>
-                      ${isMaster() ? `<button class="btn btn-secondary btn-xs" onclick="openResetPassword(${u.id}, '${esc(u.name).replace(/'/g,'&#39;')}')" title="Redefinir senha"><i class="fa fa-key"></i></button>` : ''}
+                      ${isMaster() ? `<button class="btn btn-secondary btn-xs" onclick="openResetPassword(${u.id}, '${esc(u.name).replace(/'/g, '&#39;')}')" title="Redefinir senha"><i class="fa fa-key"></i></button>` : ''}
                       ${(() => {
-                        // Não mostra excluir para si mesmo. Admin não exclui admin/master; só master pode.
-                        const isSelf = currentUser && u.id === currentUser.id;
-                        const alvoAdmin = u.role === 'admin' || u.role === 'master';
-                        const podeExcluir = !isSelf && (isMaster() || !alvoAdmin);
-                        return podeExcluir
-                          ? `<button class="btn btn-danger btn-xs" onclick="deleteUserConfirm(${u.id}, '${esc(u.name).replace(/'/g,'&#39;')}')" title="Excluir usuário"><i class="fa fa-trash"></i></button>`
-                          : '';
-                      })()}
+        // Não mostra excluir para si mesmo. Admin não exclui admin/master; só master pode.
+        const isSelf = currentUser && u.id === currentUser.id;
+        const alvoAdmin = u.role === 'admin' || u.role === 'master';
+        const podeExcluir = !isSelf && (isMaster() || !alvoAdmin);
+        return podeExcluir
+          ? `<button class="btn btn-danger btn-xs" onclick="deleteUserConfirm(${u.id}, '${esc(u.name).replace(/'/g, '&#39;')}')" title="Excluir usuário"><i class="fa fa-trash"></i></button>`
+          : '';
+      })()}
                     </div>
                   </td>
                 </tr>
@@ -493,7 +493,7 @@ async function loadUsersTable() {
         </div>
       </div>
     `;
-  } catch(e) {
+  } catch (e) {
     container.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
   }
 }
@@ -506,7 +506,7 @@ async function openUserModal(id) {
   try {
     const users = await api.getUsers();
     user = users.find(u => u.id === id);
-  } catch(e) {}
+  } catch (e) { }
 
   if (!user) {
     document.getElementById('modal-body').innerHTML = `<div class="edit-role-body"><div class="alert alert-error">Usuário não encontrado</div></div>`;
@@ -559,7 +559,7 @@ async function openUserModal(id) {
       toast('Função atualizada!', 'success');
       closeModal();
       loadUsersTable();
-    } catch(err) {
+    } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
     }
@@ -594,7 +594,7 @@ function openResetPassword(id, name) {
       await api.resetUserPassword(id, document.getElementById('reset-pw').value);
       toast('Senha redefinida com sucesso!', 'success');
       closeModal();
-    } catch(err) {
+    } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
     }
@@ -609,7 +609,7 @@ async function deactivateUser(id) {
     toast('Usuário desativado', 'success');
     closeModal();
     loadUsersTable();
-  } catch(e) {
+  } catch (e) {
     toast(e.message, 'error');
   }
 }
@@ -622,7 +622,7 @@ async function toggleUserStatus(id, currentlyActive) {
     const res = await api.toggleUserStatus(id);
     toast(res.message, 'success');
     loadUsersTable();
-  } catch(e) {
+  } catch (e) {
     toast(e.message, 'error');
   }
 }
@@ -637,7 +637,7 @@ async function deleteUserConfirm(id, name) {
     const res = await api.deleteUser(id);
     toast(res.message || 'Usuário excluído', 'success');
     loadUsersTable();
-  } catch(e) {
+  } catch (e) {
     toast(e.message, 'error');
   }
 }

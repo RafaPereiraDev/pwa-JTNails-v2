@@ -1242,34 +1242,36 @@ function updateAppointmentSummary(knownMins = null, knownPrice = null) {
     const endTime = startTime && maxDur > 0 ? addMinutesToHHMM(startTime, maxDur) : '--:--';
 
     if (durEl) {
-      if (maxDur > 0) {
-        durEl.innerHTML = `
-          <span>${formatDurationBR(maxDur)}</span>
-          <small style="display:block;font-size:9px;color:var(--gray-500);font-weight:600;margin-top:1px">
-            ${esc(p1.name.split(' ')[0])}: ${dur1}m · ${esc(p2.name.split(' ')[0])}: ${dur2}m
-          </small>
-        `;
-      } else {
-        durEl.textContent = '0min';
-      }
+      durEl.textContent = maxDur > 0 ? formatDurationBR(maxDur) : '0min';
     }
 
     if (prEl) {
-      const activeProfName = state.activeTab === 1 ? esc(p1.name.split(' ')[0]) : esc(p2.name.split(' ')[0]);
-      const activeTabPrice = state.activeTab === 1 ? price1 : price2;
-      prEl.innerHTML = `
-        <span>${formatCurrency(totalPrice)}</span>
-        <small style="display:block;font-size:9px;color:var(--gray-500);font-weight:600;margin-top:1px">
-          Aba ${activeProfName}: ${formatCurrency(activeTabPrice)}
-        </small>
-      `;
+      prEl.textContent = formatCurrency(totalPrice);
     }
 
     if (banner) {
       if (dur1 > 0 && dur2 > 0) {
         banner.innerHTML = `
-          <i class="fa fa-users" style="color:var(--primary);flex-shrink:0"></i>
-          <span><strong>Simultâneo:</strong> ${esc(p1.name)} (${dur1}m · ${formatCurrency(price1)}) + ${esc(p2.name)} (${dur2}m · ${formatCurrency(price2)})</span>
+          <div class="appt-simultaneous-banner-header">
+            <i class="fa fa-users" style="color:var(--primary);flex-shrink:0"></i>
+            <strong>Atendimento Simultâneo:</strong>
+          </div>
+          <span class="appt-summary-detail-line">• <strong>${esc(p1.name)}:</strong> ${dur1}m · ${formatCurrency(price1)}</span>
+          <span class="appt-summary-detail-line">• <strong>${esc(p2.name)}:</strong> ${dur2}m · ${formatCurrency(price2)}</span>
+        `;
+        banner.style.display = 'flex';
+      } else if (dur1 > 0 || dur2 > 0) {
+        const activeName = dur1 > 0 ? esc(p1.name) : esc(p2.name);
+        const activeDur = dur1 > 0 ? dur1 : dur2;
+        const activePrice = dur1 > 0 ? price1 : price2;
+        const waitingName = dur1 > 0 ? esc(p2.name) : esc(p1.name);
+        banner.innerHTML = `
+          <div class="appt-simultaneous-banner-header">
+            <i class="fa fa-users" style="color:var(--primary);flex-shrink:0"></i>
+            <strong>Atendimento Simultâneo:</strong>
+          </div>
+          <span class="appt-summary-detail-line">• <strong>${activeName}:</strong> ${activeDur}m · ${formatCurrency(activePrice)}</span>
+          <span class="appt-summary-detail-line" style="color:#94a3b8">• <em>Aguardando serviços de ${waitingName}...</em></span>
         `;
         banner.style.display = 'flex';
       } else {
