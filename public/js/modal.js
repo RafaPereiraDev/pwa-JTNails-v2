@@ -332,9 +332,10 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
   const isEdit = !!appt;
   const today = getTodayStr();
 
-  // Lista de clientes disponível para o autocomplete de busca
+  // Lista de clientes e profissionais disponível globalmente
   window._apptClients = clients;
   window._apptProfessionals = professionals;
+  window._apptServices = services;
   const preSelected = appt
     ? clients.find(c => c.id === appt.client_id)
     : (prefillClientId ? clients.find(c => c.id === parseInt(prefillClientId, 10)) : null);
@@ -343,11 +344,6 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
   const profList = professionals;
 
   // Define qual profissional virá selecionada no select:
-  // 1. Se editando agendamento existente: a profissional do agendamento
-  // 2. Se prefillProfId veio definido: a profissional correspondente
-  // 3. Se filtro da agenda estiver ativo e não for 'all': a profissional do filtro
-  // 4. Se a usuária logada for uma profissional: ela mesma
-  // 5. Caso contrário: a primeira profissional da lista
   let targetProfId = null;
   if (appt) {
     targetProfId = appt.professional_id;
@@ -365,6 +361,25 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
   const selectedServiceIds = appt
     ? (appt.service_ids && appt.service_ids.length > 0 ? appt.service_ids : (appt.service_id ? [appt.service_id] : []))
     : (services.length > 0 ? [services[0].id] : []);
+
+  // Inicializa o estado de agendamento simultâneo para novos agendamentos
+  if (!isEdit) {
+    window._simultaneousState = {
+      activeTab: 1,
+      prof1: {
+        id: targetProfId,
+        serviceIds: [...selectedServiceIds],
+        customPrice: null
+      },
+      prof2: {
+        id: null,
+        serviceIds: [],
+        customPrice: null
+      }
+    };
+  } else {
+    window._simultaneousState = null;
+  }
 
   const profOptions = profList.map(p =>
     `<option value="${p.id}" ${targetProfId === p.id ? 'selected' : ''}>${esc(p.name)}</option>`
@@ -421,6 +436,9 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
                 ${selectedServiceIds.length} selecionado(s)
               </span>
             </div>
+
+            ${!isEdit ? '<div id="appt-prof-tabs-container" class="appt-prof-tabs-bar"></div>' : ''}
+
             <div class="multi-services-list" id="multi-services-list">
               ${services.map(s => {
                 const checked = selectedServiceIds.includes(s.id);
@@ -455,16 +473,17 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
                 <strong class="metric-value" id="summary-end-time">--:--</strong>
               </div>
             </div>
+            <div id="appt-simultaneous-banner" class="appt-simultaneous-banner" style="display:none"></div>
           </div>
 
           <div class="appt-prof-price-grid">
             <div class="form-group">
-              <label>Profissional *</label>
+              <label id="appt-prof-label">Profissional *</label>
               <select id="appt-professional" required>${profOptions}</select>
             </div>
 
             <div class="form-group">
-              <label>Valor (R$) *</label>
+              <label id="appt-price-label">Valor (R$) *</label>
               <div style="position:relative">
                 <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-weight:600;color:var(--gray-500);font-size:13px">R$</span>
                 <input type="number" id="appt-price" step="0.01" min="0" value="${appt ? appt.price : ''}" required style="padding-left:34px;font-weight:700;color:var(--dark);width:100%" />
@@ -556,6 +575,11 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
     </form>
   `;
 
+  // Renderiza as mini-abas no formulário de novo agendamento
+  if (!isEdit) {
+    renderProfTabs();
+  }
+
   // Listener para atualização do término previsto quando o horário de início é alterado
   const timeInput = document.getElementById('appt-time');
   if (timeInput) {
@@ -565,7 +589,46 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
 
   const profSelect = document.getElementById('appt-professional');
   if (profSelect) {
-    profSelect.addEventListener('change', () => updateAppointmentSummary());
+    profSelect.addEventListener('change', () => {
+      if (window._simultaneousState) {
+        const state = window._simultaneousState;
+        const newId = parseInt(profSelect.value, 10);
+        // Evita selecionar a mesma profissional em ambas as abas
+        if (state.activeTab === 1 && state.prof2.id && newId === state.prof2.id) {
+          toast('Esta profissional já está na 2ª aba. Selecione outra profissional.', 'warning');
+          profSelect.value = state.prof1.id;
+          return;
+        }
+        if (state.activeTab === 2 && newId === state.prof1.id) {
+          toast('Esta profissional já é a principal (1ª aba). Selecione outra profissional.', 'warning');
+          profSelect.value = state.prof2.id;
+          return;
+        }
+
+        if (state.activeTab === 1) {
+          state.prof1.id = newId;
+        } else {
+          state.prof2.id = newId;
+        }
+        renderProfTabs();
+        loadTabServicesAndPrice();
+      }
+      updateAppointmentSummary();
+    });
+  }
+
+  const priceInput = document.getElementById('appt-price');
+  if (priceInput) {
+    priceInput.addEventListener('input', () => {
+      if (window._simultaneousState) {
+        const state = window._simultaneousState;
+        const activeProf = state.activeTab === 1 ? state.prof1 : state.prof2;
+        if (activeProf) {
+          activeProf.customPrice = priceInput.value !== '' ? parseFloat(priceInput.value) : null;
+        }
+      }
+      updateAppointmentSummary();
+    });
   }
 
   const encaixeInput = document.getElementById('appt-encaixe');
@@ -590,25 +653,48 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       return;
     }
 
+    // Salva o estado da aba ativa antes de submeter
+    if (window._simultaneousState) {
+      saveActiveTabServicesAndPrice();
+    }
+
+    const isSimultaneous = window._simultaneousState &&
+      window._simultaneousState.prof2.id &&
+      window._simultaneousState.prof2.serviceIds.length > 0;
+
     const selectedCheckboxes = document.querySelectorAll('#multi-services-list .service-checkbox:checked');
     const selectedServiceIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value, 10)).filter(Boolean);
 
-    if (selectedServiceIds.length === 0) {
-      errEl.textContent = 'Selecione ao menos um serviço para o agendamento.';
-      errEl.style.display = '';
-      return;
+    if (isSimultaneous) {
+      const s1 = window._simultaneousState.prof1.serviceIds;
+      const s2 = window._simultaneousState.prof2.serviceIds;
+      if (s1.length === 0) {
+        errEl.textContent = 'Selecione ao menos um serviço para a 1ª profissional.';
+        errEl.style.display = '';
+        return;
+      }
+      if (s2.length === 0) {
+        errEl.textContent = 'Selecione ao menos um serviço para a 2ª profissional.';
+        errEl.style.display = '';
+        return;
+      }
+    } else {
+      if (selectedServiceIds.length === 0) {
+        errEl.textContent = 'Selecione ao menos um serviço para o agendamento.';
+        errEl.style.display = '';
+        return;
+      }
     }
 
     const planEl = document.getElementById('appt-plan');
     const encaixeEl = document.getElementById('appt-encaixe');
+    const dateVal = document.getElementById('appt-date').value;
+    const timeVal = document.getElementById('appt-time').value;
+
     const data = {
       client_id: parseInt(clientId),
-      professional_id: parseInt(document.getElementById('appt-professional').value),
-      service_id: selectedServiceIds[0],
-      service_ids: selectedServiceIds,
-      date: document.getElementById('appt-date').value,
-      start_time: document.getElementById('appt-time').value,
-      price: parseFloat(document.getElementById('appt-price').value),
+      date: dateVal,
+      start_time: timeVal,
       status: (document.getElementById('appt-status') ? document.getElementById('appt-status').value : 'scheduled') || 'scheduled',
       payment_method: document.getElementById('appt-payment').value || null,
       notes: document.getElementById('appt-notes').value || null,
@@ -616,9 +702,40 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       allow_overlap: encaixeEl ? encaixeEl.checked : false,
     };
 
+    if (isSimultaneous) {
+      const st = window._simultaneousState;
+      const p1Svcs = (window._apptServices || []).filter(s => st.prof1.serviceIds.includes(s.id));
+      const p2Svcs = (window._apptServices || []).filter(s => st.prof2.serviceIds.includes(s.id));
+      const p1DefPrice = p1Svcs.reduce((acc, s) => acc + parseFloat(s.price || 0), 0);
+      const p2DefPrice = p2Svcs.reduce((acc, s) => acc + parseFloat(s.price || 0), 0);
+      const price1 = st.prof1.customPrice !== null ? st.prof1.customPrice : p1DefPrice;
+      const price2 = st.prof2.customPrice !== null ? st.prof2.customPrice : p2DefPrice;
+
+      data.simultaneous = [
+        {
+          professional_id: st.prof1.id,
+          service_ids: st.prof1.serviceIds,
+          price: price1
+        },
+        {
+          professional_id: st.prof2.id,
+          service_ids: st.prof2.serviceIds,
+          price: price2
+        }
+      ];
+      // Retrocompatibilidade
+      data.professional_id = st.prof1.id;
+      data.service_ids = st.prof1.serviceIds;
+      data.service_id = st.prof1.serviceIds[0];
+      data.price = price1;
+    } else {
+      data.professional_id = parseInt(document.getElementById('appt-professional').value);
+      data.service_id = selectedServiceIds[0];
+      data.service_ids = selectedServiceIds;
+      data.price = parseFloat(document.getElementById('appt-price').value);
+    }
+
     // Não permite agendar em datas/horários que já passaram (usa fuso local).
-    // Aplica também ao concluir/reagendar, mas não bloqueia editar um agendamento
-    // que permanece no mesmo dia/horário já existente.
     const now = new Date();
     const todayStr = now.toLocaleDateString('en-CA');
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
@@ -641,35 +758,88 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       }
     }
 
-    // Validação de término previsto vs expediente da profissional selecionada
-    const selectedProf = (window._apptProfessionals || []).find(p => p.id === data.professional_id);
-    if (selectedProf && data.start_time) {
-      const totalDur = Array.from(selectedCheckboxes).reduce((acc, cb) => acc + (parseInt(cb.dataset.duration, 10) || 60), 0);
-      const calculatedEnd = addMinutesToHHMM(data.start_time, totalDur);
-      const profEndStr = (selectedProf.work_end_time || '19:30').slice(0, 5);
-      const [eh, em] = calculatedEnd.split(':').map(Number);
-      const endMins = eh * 60 + em;
-      const [peh, pem] = profEndStr.split(':').map(Number);
-      const profEndMins = peh * 60 + pem;
+    // Validação de término previsto vs expediente
+    if (!data.allow_overlap && data.start_time) {
+      if (isSimultaneous) {
+        const st = window._simultaneousState;
+        const profs = window._apptProfessionals || [];
+        const p1 = profs.find(p => p.id === st.prof1.id);
+        const p2 = profs.find(p => p.id === st.prof2.id);
+        const svcs1 = (window._apptServices || []).filter(s => st.prof1.serviceIds.includes(s.id));
+        const svcs2 = (window._apptServices || []).filter(s => st.prof2.serviceIds.includes(s.id));
+        const dur1 = svcs1.reduce((acc, s) => acc + (parseInt(s.duration, 10) || 60), 0);
+        const dur2 = svcs2.reduce((acc, s) => acc + (parseInt(s.duration, 10) || 60), 0);
 
-      if (endMins > profEndMins && !data.allow_overlap) {
-        errEl.innerHTML = `
-          O término previsto (<strong>${calculatedEnd}</strong>) ultrapassa o encerramento do expediente de <strong>${esc(selectedProf.name)}</strong> (${profEndStr}).<br>
-          <a href="#" id="enable-encaixe-link" style="font-weight:700;color:var(--primary);text-decoration:underline;display:inline-block;margin-top:6px">
-            <i class="fa fa-check-square"></i> Marcar "Permitir encaixe" para confirmar este agendamento
-          </a>
-        `;
-        errEl.style.display = '';
-        const link = document.getElementById('enable-encaixe-link');
-        if (link) {
-          link.onclick = (ev) => {
-            ev.preventDefault();
-            if (encaixeEl) encaixeEl.checked = true;
-            updateAppointmentSummary();
-            document.getElementById('appt-form').requestSubmit();
-          };
+        let shiftViolation = '';
+        if (p1 && dur1 > 0) {
+          const calcEnd1 = addMinutesToHHMM(data.start_time, dur1);
+          const p1EndStr = (p1.work_end_time || '19:30').slice(0, 5);
+          const [eh1, em1] = calcEnd1.split(':').map(Number);
+          const [peh1, pem1] = p1EndStr.split(':').map(Number);
+          if ((eh1 * 60 + em1) > (peh1 * 60 + pem1)) {
+            shiftViolation = `O término de <strong>${esc(p1.name)}</strong> (${calcEnd1}) ultrapassa seu expediente (${p1EndStr}).`;
+          }
         }
-        return;
+        if (!shiftViolation && p2 && dur2 > 0) {
+          const calcEnd2 = addMinutesToHHMM(data.start_time, dur2);
+          const p2EndStr = (p2.work_end_time || '19:30').slice(0, 5);
+          const [eh2, em2] = calcEnd2.split(':').map(Number);
+          const [peh2, pem2] = p2EndStr.split(':').map(Number);
+          if ((eh2 * 60 + em2) > (peh2 * 60 + pem2)) {
+            shiftViolation = `O término de <strong>${esc(p2.name)}</strong> (${calcEnd2}) ultrapassa seu expediente (${p2EndStr}).`;
+          }
+        }
+
+        if (shiftViolation) {
+          errEl.innerHTML = `
+            ${shiftViolation}<br>
+            <a href="#" id="enable-encaixe-link" style="font-weight:700;color:var(--primary);text-decoration:underline;display:inline-block;margin-top:6px">
+              <i class="fa fa-check-square"></i> Marcar "Permitir encaixe" para confirmar este agendamento
+            </a>
+          `;
+          errEl.style.display = '';
+          const link = document.getElementById('enable-encaixe-link');
+          if (link) {
+            link.onclick = (ev) => {
+              ev.preventDefault();
+              if (encaixeEl) encaixeEl.checked = true;
+              updateAppointmentSummary();
+              document.getElementById('appt-form').requestSubmit();
+            };
+          }
+          return;
+        }
+      } else {
+        const selectedProf = (window._apptProfessionals || []).find(p => p.id === data.professional_id);
+        if (selectedProf) {
+          const totalDur = Array.from(selectedCheckboxes).reduce((acc, cb) => acc + (parseInt(cb.dataset.duration, 10) || 60), 0);
+          const calculatedEnd = addMinutesToHHMM(data.start_time, totalDur);
+          const profEndStr = (selectedProf.work_end_time || '19:30').slice(0, 5);
+          const [eh, em] = calculatedEnd.split(':').map(Number);
+          const endMins = eh * 60 + em;
+          const [peh, pem] = profEndStr.split(':').map(Number);
+          const profEndMins = peh * 60 + pem;
+
+          if (endMins > profEndMins) {
+            errEl.innerHTML = `
+              O término previsto (<strong>${calculatedEnd}</strong>) ultrapassa o encerramento do expediente de <strong>${esc(selectedProf.name)}</strong> (${profEndStr}).<br>
+              <a href="#" id="enable-encaixe-link" style="font-weight:700;color:var(--primary);text-decoration:underline;display:inline-block;margin-top:6px">
+                <i class="fa fa-check-square"></i> Marcar "Permitir encaixe" para confirmar este agendamento
+              </a>
+            `;
+            errEl.style.display = '';
+            const link = document.getElementById('enable-encaixe-link');
+            if (link) {
+              link.onclick = (ev) => {
+                ev.preventDefault();
+                if (encaixeEl) encaixeEl.checked = true;
+                updateAppointmentSummary();
+                document.getElementById('appt-form').requestSubmit();
+              };
+            }
+            return;
+          }
+        }
       }
     }
 
@@ -685,8 +855,12 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
           'success'
         );
       } else {
-        await api.createAppointment(data);
-        toast('Agendamento criado!', 'success');
+        const r = await api.createAppointment(data);
+        if (r && r.simultaneous) {
+          toast('Agendamentos simultâneos criados com sucesso!', 'success');
+        } else {
+          toast('Agendamento criado!', 'success');
+        }
       }
       closeModal();
       refreshCurrentPage();
@@ -694,7 +868,7 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       // Conflito de horário: oferece o encaixe explícito (não vale para planos).
       if (err.status === 409 && !data.plan && !data.allow_overlap) {
         errEl.innerHTML =
-          'Este horário já está ocupado. ' +
+          (err.message || 'Este horário já está ocupado.') + ' ' +
           '<a href="#" id="do-encaixe" style="font-weight:700;color:var(--primary)">Encaixar mesmo assim?</a>';
         errEl.style.display = '';
         const link = document.getElementById('do-encaixe');
@@ -711,12 +885,218 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
   });
 }
 
+// ===== CONTROLE DE MINI-ABAS (AGENDAMENTO SIMULTÂNEO) =====
+function renderProfTabs() {
+  const container = document.getElementById('appt-prof-tabs-container');
+  if (!container || !window._simultaneousState) return;
+
+  const state = window._simultaneousState;
+  const profs = window._apptProfessionals || [];
+  const p1 = profs.find(p => p.id === state.prof1.id) || { name: 'Profissional 1', color: '#4E6754' };
+  const p2 = state.prof2.id ? profs.find(p => p.id === state.prof2.id) : null;
+
+  const count1 = state.prof1.serviceIds.length;
+  const count2 = state.prof2.serviceIds.length;
+
+  let html = `
+    <button type="button" class="appt-prof-tab-btn ${state.activeTab === 1 ? 'active' : ''}" onclick="switchApptProfTab(1)">
+      <span class="appt-prof-tab-dot" style="background:${p1.color || '#4E6754'}"></span>
+      <span>${esc(p1.name)}</span>
+      <span class="appt-prof-tab-badge" id="tab1-badge">${count1}</span>
+    </button>
+  `;
+
+  if (p2) {
+    html += `
+      <button type="button" class="appt-prof-tab-btn ${state.activeTab === 2 ? 'active' : ''}" onclick="switchApptProfTab(2)">
+        <span class="appt-prof-tab-dot" style="background:${p2.color || '#3b82f6'}"></span>
+        <span>${esc(p2.name)}</span>
+        <span class="appt-prof-tab-badge" id="tab2-badge">${count2}</span>
+        <span class="appt-prof-tab-remove" onclick="removeProf2Tab(event)" title="Remover 2ª profissional">
+          <i class="fa fa-times"></i>
+        </span>
+      </button>
+    `;
+  } else {
+    // Lista de profissionais disponíveis para a 2ª aba (exceto a principal)
+    const availableOthers = profs.filter(p => p.id !== state.prof1.id);
+    if (availableOthers.length > 0) {
+      html += `
+        <div class="appt-prof-tab-add-wrapper">
+          <button type="button" class="appt-prof-tab-add-btn" id="btn-add-prof2" onclick="toggleProf2Popover(event)">
+            <i class="fa fa-plus"></i> Incluir 2ª Profissional
+          </button>
+          <div class="appt-prof2-popover" id="appt-prof2-popover" style="display:none">
+            <div class="appt-prof2-popover-title">Selecionar colega:</div>
+            ${availableOthers.map(p => `
+              <button type="button" class="appt-prof2-popover-item" onclick="selectProf2Tab(${p.id})">
+                <span class="appt-prof-tab-dot" style="background:${p.color}"></span>
+                <span>${esc(p.name)}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  container.innerHTML = html;
+}
+
+function toggleProf2Popover(event) {
+  if (event) event.stopPropagation();
+  const pop = document.getElementById('appt-prof2-popover');
+  if (pop) {
+    pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+function selectProf2Tab(profId) {
+  if (!window._simultaneousState) return;
+  saveActiveTabServicesAndPrice();
+
+  const state = window._simultaneousState;
+  state.prof2.id = profId;
+  state.prof2.serviceIds = [];
+  state.prof2.customPrice = null;
+
+  // Fecha popover
+  const pop = document.getElementById('appt-prof2-popover');
+  if (pop) pop.style.display = 'none';
+
+  // Alterna imediatamente para a nova aba
+  state.activeTab = 2;
+  renderProfTabs();
+  loadTabServicesAndPrice();
+  updateAppointmentSummary();
+}
+
+function removeProf2Tab(event) {
+  if (event) event.stopPropagation();
+  if (!window._simultaneousState) return;
+
+  const state = window._simultaneousState;
+  state.prof2.id = null;
+  state.prof2.serviceIds = [];
+  state.prof2.customPrice = null;
+  state.activeTab = 1;
+
+  renderProfTabs();
+  loadTabServicesAndPrice();
+  updateAppointmentSummary();
+}
+
+function switchApptProfTab(tabNumber) {
+  if (!window._simultaneousState) return;
+  const state = window._simultaneousState;
+  if (state.activeTab === tabNumber) return;
+
+  saveActiveTabServicesAndPrice();
+  state.activeTab = tabNumber;
+  renderProfTabs();
+  loadTabServicesAndPrice();
+  updateAppointmentSummary();
+}
+
+function saveActiveTabServicesAndPrice() {
+  if (!window._simultaneousState) return;
+  const state = window._simultaneousState;
+  const activeProf = state.activeTab === 1 ? state.prof1 : state.prof2;
+  if (!activeProf) return;
+
+  const checkboxes = document.querySelectorAll('#multi-services-list .service-checkbox:checked');
+  activeProf.serviceIds = Array.from(checkboxes).map(cb => parseInt(cb.value, 10)).filter(Boolean);
+
+  const priceInput = document.getElementById('appt-price');
+  if (priceInput && priceInput.value !== '') {
+    activeProf.customPrice = parseFloat(priceInput.value) || 0;
+  }
+}
+
+function loadTabServicesAndPrice() {
+  if (!window._simultaneousState) return;
+  const state = window._simultaneousState;
+  const activeProf = state.activeTab === 1 ? state.prof1 : state.prof2;
+  const profs = window._apptProfessionals || [];
+  const p = profs.find(pr => pr.id === activeProf.id);
+
+  // Atualiza checkboxes
+  const checkboxes = document.querySelectorAll('#multi-services-list .service-checkbox');
+  let tabTotalPrice = 0;
+  let tabCount = 0;
+
+  checkboxes.forEach(cb => {
+    const id = parseInt(cb.value, 10);
+    const checked = activeProf.serviceIds.includes(id);
+    cb.checked = checked;
+    const parentLabel = cb.closest('.service-check-item');
+    if (checked) {
+      tabCount++;
+      if (parentLabel) parentLabel.classList.add('selected');
+      tabTotalPrice += parseFloat(cb.dataset.price) || 0;
+    } else {
+      if (parentLabel) parentLabel.classList.remove('selected');
+    }
+  });
+
+  const countBadge = document.getElementById('services-badge-count');
+  if (countBadge) {
+    countBadge.textContent = `${tabCount} selecionado(s)`;
+  }
+
+  // Atualiza select de profissional para refletir a profissional da aba
+  const profSelect = document.getElementById('appt-professional');
+  if (profSelect && activeProf.id) {
+    profSelect.value = activeProf.id;
+  }
+
+  // Atualiza labels para maior clareza quando a 2ª profissional estiver ativa
+  const profLabel = document.getElementById('appt-prof-label');
+  if (profLabel) {
+    profLabel.innerHTML = state.prof2.id
+      ? `Profissional (${state.activeTab === 1 ? '1ª' : '2ª'} - ${esc(p ? p.name : '')}) *`
+      : 'Profissional *';
+  }
+
+  const priceLabel = document.getElementById('appt-price-label');
+  if (priceLabel) {
+    priceLabel.innerHTML = state.prof2.id
+      ? `Valor ${esc(p ? p.name : '')} (R$) *`
+      : 'Valor (R$) *';
+  }
+
+  // Atualiza input de preço
+  const priceInput = document.getElementById('appt-price');
+  if (priceInput) {
+    const priceVal = (activeProf.customPrice !== null) ? activeProf.customPrice : tabTotalPrice;
+    priceInput.value = priceVal > 0 ? priceVal.toFixed(2) : '0.00';
+  }
+}
+
+// Torna os métodos de aba acessíveis globalmente aos atributos onclick
+window.toggleProf2Popover = toggleProf2Popover;
+window.selectProf2Tab = selectProf2Tab;
+window.removeProf2Tab = removeProf2Tab;
+window.switchApptProfTab = switchApptProfTab;
+
+// Fecha popover ao clicar fora
+document.addEventListener('click', (e) => {
+  const pop = document.getElementById('appt-prof2-popover');
+  const btn = document.getElementById('btn-add-prof2');
+  if (pop && pop.style.display !== 'none') {
+    if (!pop.contains(e.target) && (!btn || !btn.contains(e.target))) {
+      pop.style.display = 'none';
+    }
+  }
+});
+
 function onMultiServiceChange(autoFillPrice = true) {
   const checkboxes = document.querySelectorAll('#multi-services-list .service-checkbox');
   const countBadge = document.getElementById('services-badge-count');
-  let totalMinutes = 0;
-  let totalPrice = 0;
+  let currentTabMinutes = 0;
+  let currentTabPrice = 0;
   let count = 0;
+  const currentCheckedIds = [];
 
   checkboxes.forEach(cb => {
     const parentLabel = cb.closest('.service-check-item');
@@ -725,8 +1105,9 @@ function onMultiServiceChange(autoFillPrice = true) {
       if (parentLabel) parentLabel.classList.add('selected');
       const dur = parseInt(cb.dataset.duration, 10) || 60;
       const pr  = parseFloat(cb.dataset.price) || 0;
-      totalMinutes += dur;
-      totalPrice += pr;
+      currentTabMinutes += dur;
+      currentTabPrice += pr;
+      currentCheckedIds.push(parseInt(cb.value, 10));
     } else {
       if (parentLabel) parentLabel.classList.remove('selected');
     }
@@ -736,18 +1117,174 @@ function onMultiServiceChange(autoFillPrice = true) {
     countBadge.textContent = `${count} selecionado(s)`;
   }
 
-  // Preenche o valor sugerido se solicitado (ex: novo agendamento ou alteração na seleção)
+  // Sincroniza serviços e preço no estado da aba ativa
+  if (window._simultaneousState) {
+    const state = window._simultaneousState;
+    const activeProf = state.activeTab === 1 ? state.prof1 : state.prof2;
+    if (activeProf) {
+      activeProf.serviceIds = currentCheckedIds;
+      if (autoFillPrice) {
+        activeProf.customPrice = null;
+      }
+    }
+    const tabBadge = document.getElementById(`tab${state.activeTab}-badge`);
+    if (tabBadge) tabBadge.textContent = count;
+  }
+
   if (autoFillPrice) {
     const priceInput = document.getElementById('appt-price');
     if (priceInput) {
-      priceInput.value = totalPrice > 0 ? totalPrice.toFixed(2) : '0.00';
+      priceInput.value = currentTabPrice > 0 ? currentTabPrice.toFixed(2) : '0.00';
     }
   }
 
-  updateAppointmentSummary(totalMinutes, totalPrice);
+  updateAppointmentSummary();
 }
 
 function updateAppointmentSummary(knownMins = null, knownPrice = null) {
+  const timeInput = document.getElementById('appt-time');
+  const startTime = timeInput ? timeInput.value : '';
+  const durEl = document.getElementById('summary-total-duration');
+  const prEl = document.getElementById('summary-total-price');
+  const endEl = document.getElementById('summary-end-time');
+  const hintText = document.getElementById('appt-datetime-hint-text');
+  const shiftAlert = document.getElementById('appt-shift-alert');
+  const banner = document.getElementById('appt-simultaneous-banner');
+  const encaixeEl = document.getElementById('appt-encaixe');
+  const isEncaixe = encaixeEl ? encaixeEl.checked : false;
+
+  const profs = window._apptProfessionals || [];
+  const allSvcs = window._apptServices || [];
+
+  // Se agendamento simultâneo com 2ª profissional ativa
+  if (window._simultaneousState && window._simultaneousState.prof2.id) {
+    const state = window._simultaneousState;
+    const p1 = profs.find(p => p.id === state.prof1.id) || { name: 'Profissional 1', work_start_time: '08:00', work_end_time: '19:30' };
+    const p2 = profs.find(p => p.id === state.prof2.id) || { name: 'Profissional 2', work_start_time: '08:00', work_end_time: '19:30' };
+
+    const svcs1 = allSvcs.filter(s => state.prof1.serviceIds.includes(s.id));
+    const svcs2 = allSvcs.filter(s => state.prof2.serviceIds.includes(s.id));
+
+    const dur1 = svcs1.reduce((acc, s) => acc + (parseInt(s.duration, 10) || 60), 0);
+    const dur2 = svcs2.reduce((acc, s) => acc + (parseInt(s.duration, 10) || 60), 0);
+
+    const p1DefPrice = svcs1.reduce((acc, s) => acc + parseFloat(s.price || 0), 0);
+    const p2DefPrice = svcs2.reduce((acc, s) => acc + parseFloat(s.price || 0), 0);
+
+    const price1 = state.prof1.customPrice !== null ? state.prof1.customPrice : p1DefPrice;
+    const price2 = state.prof2.customPrice !== null ? state.prof2.customPrice : p2DefPrice;
+
+    // Duração simultânea = maior duração entre as duas profissionais
+    const maxDur = Math.max(dur1, dur2);
+    const totalPrice = price1 + price2;
+    const endTime = startTime && maxDur > 0 ? addMinutesToHHMM(startTime, maxDur) : '--:--';
+
+    if (durEl) {
+      if (maxDur > 0) {
+        durEl.innerHTML = `
+          <span>${formatDurationBR(maxDur)}</span>
+          <small style="display:block;font-size:9px;color:var(--gray-500);font-weight:600;margin-top:1px">
+            ${esc(p1.name.split(' ')[0])}: ${dur1}m · ${esc(p2.name.split(' ')[0])}: ${dur2}m
+          </small>
+        `;
+      } else {
+        durEl.textContent = '0min';
+      }
+    }
+
+    if (prEl) {
+      const activeProfName = state.activeTab === 1 ? esc(p1.name.split(' ')[0]) : esc(p2.name.split(' ')[0]);
+      const activeTabPrice = state.activeTab === 1 ? price1 : price2;
+      prEl.innerHTML = `
+        <span>${formatCurrency(totalPrice)}</span>
+        <small style="display:block;font-size:9px;color:var(--gray-500);font-weight:600;margin-top:1px">
+          Aba ${activeProfName}: ${formatCurrency(activeTabPrice)}
+        </small>
+      `;
+    }
+
+    if (banner) {
+      if (dur1 > 0 && dur2 > 0) {
+        banner.innerHTML = `
+          <i class="fa fa-users" style="color:var(--primary);flex-shrink:0"></i>
+          <span><strong>Simultâneo:</strong> ${esc(p1.name)} (${dur1}m · ${formatCurrency(price1)}) + ${esc(p2.name)} (${dur2}m · ${formatCurrency(price2)})</span>
+        `;
+        banner.style.display = 'flex';
+      } else {
+        banner.style.display = 'none';
+        banner.innerHTML = '';
+      }
+    }
+
+    // Checagem de expediente individual para ambas as profissionais
+    let exceedsShift = false;
+    let shiftMsg = '';
+    if (startTime && maxDur > 0 && endTime !== '--:--') {
+      if (dur1 > 0) {
+        const end1 = addMinutesToHHMM(startTime, dur1);
+        const p1EndStr = (p1.work_end_time || '19:30').slice(0, 5);
+        const [eh1, em1] = end1.split(':').map(Number);
+        const [peh1, pem1] = p1EndStr.split(':').map(Number);
+        if ((eh1 * 60 + em1) > (peh1 * 60 + pem1)) {
+          exceedsShift = true;
+          shiftMsg += `Término de <strong>${esc(p1.name)}</strong> (${end1}) ultrapassa expediente (${p1EndStr}). `;
+        }
+      }
+      if (dur2 > 0) {
+        const end2 = addMinutesToHHMM(startTime, dur2);
+        const p2EndStr = (p2.work_end_time || '19:30').slice(0, 5);
+        const [eh2, em2] = end2.split(':').map(Number);
+        const [peh2, pem2] = p2EndStr.split(':').map(Number);
+        if ((eh2 * 60 + em2) > (peh2 * 60 + pem2)) {
+          exceedsShift = true;
+          shiftMsg += `Término de <strong>${esc(p2.name)}</strong> (${end2}) ultrapassa expediente (${p2EndStr}). `;
+        }
+      }
+    }
+
+    if (hintText) {
+      if (startTime && maxDur > 0) {
+        hintText.innerHTML = `Atendimento simultâneo das <strong>${startTime}</strong> às <strong>${endTime}</strong> (duração máx: <strong>${formatDurationBR(maxDur)}</strong>).`;
+      } else {
+        hintText.innerHTML = 'A duração total corresponde ao serviço de maior tempo entre as duas profissionais.';
+      }
+    }
+
+    if (exceedsShift) {
+      if (!isEncaixe) {
+        if (shiftAlert) {
+          shiftAlert.className = 'alert alert-error';
+          shiftAlert.innerHTML = `<i class="fa fa-exclamation-triangle"></i> ${shiftMsg} Marque <strong>"Permitir encaixe (sobrepor horário)"</strong> se deseja prosseguir.`;
+          shiftAlert.style.display = 'block';
+        }
+        if (endEl) endEl.innerHTML = `<span style="color:var(--danger)">${endTime} ⚠️</span>`;
+      } else {
+        if (shiftAlert) {
+          shiftAlert.className = 'alert alert-info';
+          shiftAlert.style.background = '#f0fdf4';
+          shiftAlert.style.borderColor = '#bbf7d0';
+          shiftAlert.style.color = '#166534';
+          shiftAlert.innerHTML = `<i class="fa fa-check-circle" style="color:var(--success)"></i> Encaixe ativado: término às <strong>${endTime}</strong> permitido além do expediente.`;
+          shiftAlert.style.display = 'block';
+        }
+        if (endEl) endEl.innerHTML = `<span style="color:var(--primary)">${endTime} <small style="font-weight:600;font-size:11px">(Encaixe)</small></span>`;
+      }
+    } else {
+      if (shiftAlert) {
+        shiftAlert.style.display = 'none';
+        shiftAlert.innerHTML = '';
+      }
+      if (endEl) endEl.textContent = endTime;
+    }
+    return;
+  }
+
+  // Fluxo normal (única profissional ou modo edição)
+  if (banner) {
+    banner.style.display = 'none';
+    banner.innerHTML = '';
+  }
+
   let totalMinutes = knownMins;
   let totalPrice = knownPrice;
 
@@ -761,26 +1298,13 @@ function updateAppointmentSummary(knownMins = null, knownPrice = null) {
     });
   }
 
-  const durEl = document.getElementById('summary-total-duration');
   if (durEl) durEl.textContent = formatDurationBR(totalMinutes);
-
-  const prEl = document.getElementById('summary-total-price');
   if (prEl) prEl.textContent = formatCurrency(totalPrice);
 
-  const timeInput = document.getElementById('appt-time');
-  const startTime = timeInput ? timeInput.value : '';
   const endTime = startTime && totalMinutes > 0 ? addMinutesToHHMM(startTime, totalMinutes) : '--:--';
-
-  const endEl = document.getElementById('summary-end-time');
-  const hintText = document.getElementById('appt-datetime-hint-text');
-  const shiftAlert = document.getElementById('appt-shift-alert');
-
   const profSelect = document.getElementById('appt-professional');
   const profId = profSelect ? parseInt(profSelect.value, 10) : null;
-  const prof = (window._apptProfessionals || []).find(p => p.id === profId);
-
-  const encaixeEl = document.getElementById('appt-encaixe');
-  const isEncaixe = encaixeEl ? encaixeEl.checked : false;
+  const prof = profs.find(p => p.id === profId);
 
   let exceedsShift = false;
   let profEndStr = '19:30';
@@ -816,9 +1340,7 @@ function updateAppointmentSummary(knownMins = null, knownPrice = null) {
         shiftAlert.innerHTML = `<i class="fa fa-exclamation-triangle"></i> Término previsto (<strong>${endTime}</strong>) ultrapassa o expediente de <strong>${esc(prof ? prof.name : '')}</strong> (encerra às <strong>${profEndStr}</strong>). Marque <strong>"Permitir encaixe (sobrepor horário)"</strong> abaixo se deseja prosseguir.`;
         shiftAlert.style.display = 'block';
       }
-      if (endEl) {
-        endEl.innerHTML = `<span style="color:var(--danger)">${endTime} ⚠️</span>`;
-      }
+      if (endEl) endEl.innerHTML = `<span style="color:var(--danger)">${endTime} ⚠️</span>`;
     } else {
       if (shiftAlert) {
         shiftAlert.className = 'alert alert-info';
@@ -828,18 +1350,14 @@ function updateAppointmentSummary(knownMins = null, knownPrice = null) {
         shiftAlert.innerHTML = `<i class="fa fa-check-circle" style="color:var(--success)"></i> Encaixe ativado: término às <strong>${endTime}</strong> permitido além do expediente (${profEndStr}).`;
         shiftAlert.style.display = 'block';
       }
-      if (endEl) {
-        endEl.innerHTML = `<span style="color:var(--primary)">${endTime} <small style="font-weight:600;font-size:11px">(Encaixe)</small></span>`;
-      }
+      if (endEl) endEl.innerHTML = `<span style="color:var(--primary)">${endTime} <small style="font-weight:600;font-size:11px">(Encaixe)</small></span>`;
     }
   } else {
     if (shiftAlert) {
       shiftAlert.style.display = 'none';
       shiftAlert.innerHTML = '';
     }
-    if (endEl) {
-      endEl.textContent = endTime;
-    }
+    if (endEl) endEl.textContent = endTime;
   }
 }
 

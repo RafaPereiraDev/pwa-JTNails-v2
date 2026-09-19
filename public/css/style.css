@@ -1188,6 +1188,177 @@ select.form-control:focus {
   align-items: flex-start;
 }
 
+/* ===== MINI-ABAS DE PROFISSIONAIS (AGENDAMENTO SIMULTÂNEO MÃO + PÉ) ===== */
+.appt-prof-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  position: relative;
+  flex-wrap: wrap;
+}
+
+.appt-prof-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 18px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  color: var(--gray-600, #475569);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+  user-select: none;
+}
+
+.appt-prof-tab-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: var(--dark, #212F27);
+}
+
+.appt-prof-tab-btn.active {
+  background: rgba(78, 103, 84, 0.1);
+  border-color: var(--primary, #4E6754);
+  color: var(--primary, #4E6754);
+  font-weight: 700;
+}
+
+.appt-prof-tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.appt-prof-tab-badge {
+  font-size: 10px;
+  background: rgba(0, 0, 0, 0.08);
+  padding: 1px 5px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.appt-prof-tab-btn.active .appt-prof-tab-badge {
+  background: var(--primary, #4E6754);
+  color: #ffffff;
+}
+
+.appt-prof-tab-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  margin-left: 2px;
+  font-size: 9px;
+  color: #94a3b8;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.appt-prof-tab-remove:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.appt-prof-tab-add-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.appt-prof-tab-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 18px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1.5px dashed #94a3b8;
+  background: #ffffff;
+  color: var(--primary, #4E6754);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.appt-prof-tab-add-btn:hover {
+  border-color: var(--primary, #4E6754);
+  background: rgba(78, 103, 84, 0.06);
+}
+
+.appt-prof2-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  padding: 6px;
+  min-width: 170px;
+  animation: apptPopFadeIn 0.15s ease;
+}
+
+@keyframes apptPopFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.appt-prof2-popover-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  padding: 3px 6px 5px;
+}
+
+.appt-prof2-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dark, #212F27);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.appt-prof2-popover-item:hover {
+  background: #f1f5f9;
+  color: var(--primary, #4E6754);
+}
+
+/* Banner explicativo de agendamento simultâneo */
+.appt-simultaneous-banner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  padding: 5px 9px;
+  background: rgba(78, 103, 84, 0.08);
+  border: 1px solid rgba(78, 103, 84, 0.2);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--primary, #4E6754);
+  line-height: 1.3;
+}
+
 /* Seletor de Serviços Compacto e Moderno */
 .multi-services-list {
   display: flex;

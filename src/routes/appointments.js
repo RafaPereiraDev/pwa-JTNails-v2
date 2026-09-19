@@ -359,15 +359,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { client_id, professional_id, service_id, service_ids, date, start_time,
-            price, payment_method, notes, status, plan, allow_overlap } = req.body;
+            price, payment_method, notes, status, plan, allow_overlap, simultaneous } = req.body;
 
-    let sIds = Array.isArray(service_ids) ? service_ids.map(Number).filter(Boolean) : [];
-    if (sIds.length === 0 && service_id) {
-      sIds = [parseInt(service_id, 10)].filter(Boolean);
-    }
-
-    if (!client_id || !professional_id || sIds.length === 0 || !date || !start_time)
-      return res.status(400).json({ error: 'Cliente, profissional, serviço, data e horário são obrigatórios' });
+    if (!client_id || !date || !start_time)
+      return res.status(400).json({ error: 'Cliente, data e horário são obrigatórios' });
 
     // Valida formato de data e hora (igual ao endpoint público)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
@@ -388,6 +383,127 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Não é possível agendar em uma data que já passou' });
     if (date === today && startMin <= nowMin)
       return res.status(400).json({ error: 'Não é possível agendar em um horário que já passou hoje' });
+
+    // ── AGENDAMENTO SIMULTÂNEO (2 profissionais no mesmo horário) ───────────
+    const isSimultaneous = Array.isArray(simultaneous) && simultaneous.length >= 2 &&
+      simultaneous.every(item => item.professional_id && (
+        (Array.isArray(item.service_ids) && item.service_ids.length > 0) || item.service_id
+      ));
+
+    if (isSimultaneous) {
+      const profIds = simultaneous.map(s => parseInt(s.professional_id, 10));
+      if (new Set(profIds).size !== profIds.length) {
+        return res.status(400).json({ error: 'Selecione profissionais distintas para o agendamento simultâneo' });
+      }
+
+      const overlap = allow_overlap === true || allow_overlap === 'true';
+      const simultaneousItems = [];
+
+      for (const item of simultaneous) {
+        const pId = parseInt(item.professional_id, 10);
+        let itemSIds = Array.isArray(item.service_ids) ? item.service_ids.map(Number).filter(Boolean) : [];
+        if (itemSIds.length === 0 && item.service_id) {
+          itemSIds = [parseInt(item.service_id, 10)].filter(Boolean);
+        }
+        if (itemSIds.length === 0) {
+          return res.status(400).json({ error: 'Cada profissional deve ter ao menos um serviço selecionado' });
+        }
+
+        const prof = await getOne(
+          'SELECT id, name, work_start_time::text AS work_start_time, work_end_time::text AS work_end_time FROM professionals WHERE id = $1',
+          [pId]
+        );
+        if (!prof) {
+          return res.status(404).json({ error: `Profissional #${pId} não encontrada` });
+        }
+
+        const svcs = await getAll('SELECT * FROM services WHERE id = ANY($1::int[]) AND active = TRUE ORDER BY id', [itemSIds]);
+        if (!svcs || svcs.length === 0) {
+          return res.status(404).json({ error: `Nenhum serviço válido ou ativo selecionado para ${prof.name}` });
+        }
+
+        const totalDuration = svcs.reduce((acc, s) => acc + (parseInt(s.duration, 10) || 60), 0);
+        const totalDefaultPrice = svcs.reduce((acc, s) => acc + parseFloat(s.price || 0), 0);
+        const servicesSummary = svcs.map(s => s.name).join(' + ');
+        const primaryServiceId = svcs[0].id;
+        const finalPrice = item.price !== undefined && item.price !== null && item.price !== '' ? parseFloat(item.price) : totalDefaultPrice;
+        const end_time = calcEndTime(start_time, totalDuration);
+
+        // Valida expediente se não for encaixe
+        if (!overlap) {
+          const profEndStr = (prof.work_end_time || '19:30').slice(0, 5);
+          const [peh, pem] = profEndStr.split(':').map(Number);
+          const profEndMins = peh * 60 + pem;
+          const [eh, em] = end_time.split(':').map(Number);
+          const endMins = eh * 60 + em;
+          if (endMins > profEndMins) {
+            return res.status(400).json({
+              error: `O término previsto (${end_time}) ultrapassa o encerramento do expediente de ${prof.name} (${profEndStr}). Marque "Permitir encaixe" para confirmar.`
+            });
+          }
+        }
+
+        // Valida conflito na agenda de cada profissional se não for encaixe
+        if (!overlap && await hasConflict(pId, date, start_time, end_time)) {
+          return res.status(409).json({
+            error: `Horário conflitante na agenda de ${prof.name}. A profissional já tem um compromisso neste horário.`
+          });
+        }
+
+        simultaneousItems.push({
+          professional_id: pId,
+          prof,
+          svcs,
+          primaryServiceId,
+          totalDuration,
+          finalPrice,
+          end_time,
+          servicesSummary
+        });
+      }
+
+      // Cria ambos os agendamentos em transação
+      const createdApptIds = await withTransaction(async (client) => {
+        const ids = [];
+        for (const item of simultaneousItems) {
+          const result = await client.query(`
+            INSERT INTO appointments
+              (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes,is_encaixe,services_summary)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            RETURNING id
+          `, [client_id, item.professional_id, item.primaryServiceId, date, start_time, item.end_time,
+              item.finalPrice, status || 'scheduled', payment_method || null, notes || null, overlap, item.servicesSummary]);
+
+          const apptId = result.rows[0].id;
+          ids.push(apptId);
+
+          for (const s of item.svcs) {
+            await client.query(
+              `INSERT INTO appointment_services (appointment_id, service_id, price, duration) VALUES ($1, $2, $3, $4)`,
+              [apptId, s.id, s.price, s.duration]
+            );
+          }
+        }
+        return ids;
+      });
+
+      const createdRows = await getAll(APPT_SELECT + ' WHERE a.id = ANY($1::int[]) ORDER BY a.id', [createdApptIds]);
+      return res.status(201).json({
+        message: 'Agendamentos simultâneos criados com sucesso!',
+        simultaneous: true,
+        created: createdRows.length,
+        appointments: createdRows,
+        primary: createdRows[0] || null
+      });
+    }
+
+    // ── Validação para agendamento individual ──────────────────────────────
+    let sIds = Array.isArray(service_ids) ? service_ids.map(Number).filter(Boolean) : [];
+    if (sIds.length === 0 && service_id) {
+      sIds = [parseInt(service_id, 10)].filter(Boolean);
+    }
+    if (!professional_id || sIds.length === 0)
+      return res.status(400).json({ error: 'Profissional e serviço são obrigatórios' });
 
     const svcs = await getAll('SELECT * FROM services WHERE id = ANY($1::int[]) AND active = TRUE ORDER BY id', [sIds]);
     if (!svcs || svcs.length === 0) return res.status(404).json({ error: 'Nenhum serviço válido ou ativo selecionado' });
