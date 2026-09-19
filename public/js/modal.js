@@ -437,7 +437,7 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
               </span>
             </div>
 
-            ${!isEdit ? '<div id="appt-prof-tabs-container" class="appt-prof-tabs-bar"></div>' : ''}
+            ${!isEdit ? '<div id="appt-prof-tabs-container" class="appt-prof-tabs-bar tab-professional-container"></div>' : ''}
 
             <div class="multi-services-list" id="multi-services-list">
               ${services.map(s => {
@@ -899,7 +899,69 @@ function renderProfTabs() {
   const count2 = state.prof2.serviceIds.length;
 
   let html = `
-    <button type="button" class="appt-prof-tab-btn ${state.activeTab === 1 ? 'active' : ''}" onclick="switchApptProfTab(1)">
+    <style>
+      #appt-prof-tabs-container, .appt-prof-tabs-bar, .tab-professional-container {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        margin-bottom: 8px !important;
+        position: relative !important;
+        flex-wrap: wrap !important;
+      }
+      .appt-prof-tab-btn, .tab-professional {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 6px !important;
+        padding: 6px 12px !important;
+        border-radius: 20px !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        border: 1.5px solid #e2e8f0 !important;
+        background-color: #f8fafc !important;
+        color: #374151 !important;
+        cursor: pointer !important;
+        outline: none !important;
+        line-height: 1.2 !important;
+        user-select: none !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+        white-space: nowrap !important;
+      }
+      .appt-prof-tab-btn:hover, .tab-professional:hover {
+        background-color: #f1f5f9 !important;
+        border-color: #cbd5e1 !important;
+        color: #212F27 !important;
+      }
+      .appt-prof-tab-btn.active, .tab-professional.active {
+        background-color: rgba(78, 103, 84, 0.12) !important;
+        border-color: #4E6754 !important;
+        color: #4E6754 !important;
+        font-weight: 700 !important;
+      }
+      .appt-prof-tab-add-btn, .btn-add-partner {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 6px !important;
+        padding: 6px 12px !important;
+        border-radius: 20px !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        border: 1.5px dashed #94a3b8 !important;
+        background-color: #ffffff !important;
+        color: #4E6754 !important;
+        cursor: pointer !important;
+        outline: none !important;
+        line-height: 1.2 !important;
+        user-select: none !important;
+        white-space: nowrap !important;
+      }
+      .appt-prof-tab-add-btn:hover, .btn-add-partner:hover {
+        border-color: #4E6754 !important;
+        background-color: rgba(78, 103, 84, 0.08) !important;
+      }
+    </style>
+    <button type="button" class="appt-prof-tab-btn tab-professional ${state.activeTab === 1 ? 'active' : ''}" onclick="switchApptProfTab(1)">
       <span class="appt-prof-tab-dot" style="background:${p1.color || '#4E6754'}"></span>
       <span>${esc(p1.name)}</span>
       <span class="appt-prof-tab-badge" id="tab1-badge">${count1}</span>
@@ -908,7 +970,7 @@ function renderProfTabs() {
 
   if (p2) {
     html += `
-      <button type="button" class="appt-prof-tab-btn ${state.activeTab === 2 ? 'active' : ''}" onclick="switchApptProfTab(2)">
+      <button type="button" class="appt-prof-tab-btn tab-professional ${state.activeTab === 2 ? 'active' : ''}" onclick="switchApptProfTab(2)">
         <span class="appt-prof-tab-dot" style="background:${p2.color || '#3b82f6'}"></span>
         <span>${esc(p2.name)}</span>
         <span class="appt-prof-tab-badge" id="tab2-badge">${count2}</span>
@@ -923,7 +985,7 @@ function renderProfTabs() {
     if (availableOthers.length > 0) {
       html += `
         <div class="appt-prof-tab-add-wrapper">
-          <button type="button" class="appt-prof-tab-add-btn" id="btn-add-prof2" onclick="toggleProf2Popover(event)">
+          <button type="button" class="appt-prof-tab-add-btn btn-add-partner" id="btn-add-prof2" onclick="toggleProf2Popover(event)">
             <i class="fa fa-plus"></i> Incluir 2ª Profissional
           </button>
           <div class="appt-prof2-popover" id="appt-prof2-popover" style="display:none">

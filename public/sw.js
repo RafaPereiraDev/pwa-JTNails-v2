@@ -1,5 +1,5 @@
 // ===== SERVICE WORKER — Juliana & Tainara Atelier Nails =====
-const CACHE_NAME = 'atelier-nails-v69';
+const CACHE_NAME = 'jtnails-v1.2.5';
 
 // Assets estáticos que serão cacheados na instalação
 const STATIC_ASSETS = [
@@ -59,10 +59,10 @@ self.addEventListener('activate', (event) => {
 
 // ── FETCH ────────────────────────────────────────────────────────────────────
 // - API: sempre rede (nunca cacheia dados)
-// - Scripts de lógica (.js) e HTML: NETWORK-FIRST — pega sempre a versão nova da
-//   rede e só usa o cache como fallback offline. Isso descarta imediatamente
-//   scripts antigos (como um clients.js desatualizado) sem esperar recarregar.
-// - Demais assets (CSS, imagens, fontes): CACHE-FIRST (rápido, atualiza em bg).
+// - Scripts de lógica (.js), folhas de estilo (.css) e HTML: NETWORK-FIRST — pega
+//   sempre a versão nova da rede e só usa o cache como fallback offline. Isso
+//   descarta imediatamente assets antigos sem esperar recarregar.
+// - Demais assets (imagens, fontes): CACHE-FIRST (rápido, atualiza em bg).
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -75,6 +75,7 @@ self.addEventListener('fetch', (event) => {
   const isLogicAsset =
     url.origin === self.location.origin &&
     (url.pathname.endsWith('.js') ||
+     url.pathname.endsWith('.css') ||
      url.pathname.endsWith('.html') ||
      url.pathname === '/' ||
      url.pathname === '/agendar');
