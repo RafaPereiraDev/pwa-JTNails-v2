@@ -618,7 +618,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
 
     const { client_id, professional_id, service_id, service_ids, date, start_time,
-            price, payment_method, notes, status } = req.body;
+            price, payment_method, notes, status, update_scope } = req.body;
 
     // Valida formato de data e hora se fornecidos
     if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date))
@@ -651,6 +651,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
       const svc = await getOne('SELECT * FROM services WHERE id = $1', [newSvcId]);
       newDuration = svc ? svc.duration : 60;
       newSummary = appt.services_summary || svc?.name || null;
+      if (svc) {
+        svcs = [svc];
+      }
     }
 
     // Se a data/horário estiver sendo ALTERADA, não permite mover para o passado.
@@ -694,6 +697,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (!allowOverlap && await hasConflict(newProfId, newDate, newStart, newEnd, appt.id))
       return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
 
+    const targetScope = (update_scope === 'future') ? 'future' : 'single';
+    let futureCount = 0;
+
     await withTransaction(async (client) => {
       await client.query(`
         UPDATE appointments SET
@@ -718,6 +724,47 @@ router.put('/:id', authenticateToken, async (req, res) => {
             'INSERT INTO appointment_services (appointment_id, service_id, price, duration) VALUES ($1, $2, $3, $4)',
             [req.params.id, s.id, s.price, s.duration]
           );
+        }
+      }
+
+      if (targetScope === 'future' && appt.series_id) {
+        // Localiza agendamentos futuros da mesma série
+        // Preserva datas anteriores à data do agendamento atual
+        const futureRes = await client.query(`
+          SELECT id, date::text AS date, start_time::text AS start_time
+          FROM appointments
+          WHERE series_id = $1
+            AND id != $2
+            AND (date > $3::date OR (date = $3::date AND start_time > $4::time))
+            AND status != 'cancelled'
+          ORDER BY date ASC, start_time ASC
+        `, [appt.series_id, req.params.id, appt.date, appt.start_time]);
+
+        const futureAppts = futureRes.rows;
+        futureCount = futureAppts.length;
+
+        for (const fut of futureAppts) {
+          const futStart = String(fut.start_time).slice(0, 5);
+          const futEnd = calcEndTime(futStart, newDuration);
+
+          await client.query(`
+            UPDATE appointments SET
+              service_id = $1,
+              services_summary = $2,
+              price = $3,
+              end_time = $4
+            WHERE id = $5
+          `, [newSvcId, newSummary, newPrice, futEnd, fut.id]);
+
+          if (svcs.length > 0) {
+            await client.query('DELETE FROM appointment_services WHERE appointment_id = $1', [fut.id]);
+            for (const s of svcs) {
+              await client.query(
+                'INSERT INTO appointment_services (appointment_id, service_id, price, duration) VALUES ($1, $2, $3, $4)',
+                [fut.id, s.id, s.price, s.duration]
+              );
+            }
+          }
         }
       }
     });
@@ -756,7 +803,21 @@ router.put('/:id', authenticateToken, async (req, res) => {
       await recalculateClientReliability(client_id || appt.client_id);
     }
 
-    res.json({ message: 'Agendamento atualizado com sucesso' });
+    if (targetScope === 'future' && futureCount > 0) {
+      return res.json({
+        message: `Este e mais ${futureCount} agendamentos futuros foram atualizados com o novo serviço!`,
+        updated_count: futureCount + 1,
+        future_count: futureCount,
+        scope: 'future'
+      });
+    }
+
+    res.json({
+      message: 'Agendamento atualizado com sucesso!',
+      updated_count: 1,
+      future_count: 0,
+      scope: 'single'
+    });
   } catch (e) {
     console.error('[appointments PUT /:id]', e.message);
     res.status(500).json({ error: 'Erro interno' });

@@ -1052,6 +1052,90 @@ tbody tr:hover {
   background-color: #f1f5f9 !important;
 }
 
+/* Botão Excluir no rodapé do modal de agendamento (Desktop) */
+.modal-footer .btn-appt-delete {
+  margin-right: auto;
+  border-radius: 10px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  height: 42px;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 10px 18px !important;
+}
+
+/* Responsividade do rodapé do modal no mobile (< 480px) */
+@media (max-width: 480px) {
+  .modal-footer,
+  .modal-footer-appt,
+  #appt-form .modal-footer {
+    padding: 16px 20px !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    justify-content: space-between !important;
+    align-items: stretch !important;
+  }
+
+  /* Linha 1: Botão Salvar Alterações ocupando 100% de largura */
+  .modal-footer .btn-appt-confirm,
+  .modal-footer-appt .btn-appt-confirm,
+  #appt-form .modal-footer button[type="submit"] {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    order: 1 !important;
+    height: 44px !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Linha 2: Botões Cancelar e Excluir lado a lado dividindo o espaço igualmente */
+  .modal-footer .btn-cancel,
+  .modal-footer-appt .btn-cancel,
+  #appt-form .modal-footer .btn-secondary {
+    flex: 1 1 calc(50% - 5px) !important;
+    max-width: calc(50% - 5px) !important;
+    order: 2 !important;
+    height: 44px !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    padding: 10px 12px !important;
+    font-size: 13.5px !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+  }
+
+  .modal-footer .btn-danger,
+  .modal-footer .btn-appt-delete,
+  .modal-footer-appt .btn-appt-delete,
+  #appt-form .modal-footer .btn-danger {
+    flex: 1 1 calc(50% - 5px) !important;
+    max-width: calc(50% - 5px) !important;
+    order: 3 !important;
+    height: 44px !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    margin-right: 0 !important;
+    padding: 10px 12px !important;
+    font-size: 13.5px !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Quando houver apenas Cancelar e Salvar, Cancelar ocupa 100% */
+  .modal-footer:not(:has(.btn-danger)):not(:has(.btn-appt-delete)) .btn-cancel,
+  .modal-footer:not(:has(.btn-danger)):not(:has(.btn-appt-delete)) .btn-secondary,
+  .modal-footer-appt:not(:has(.btn-appt-delete)) .btn-cancel {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+  }
+}
+
 /* ===== MODAL EDITAR FUNÇÃO (CONFIGURAÇÕES > USUÁRIOS) ===== */
 .modal-edit-role .modal-body {
   padding: 0 !important;

@@ -265,6 +265,109 @@ async function cancelAppointmentFlow(id, seriesId, onSuccess) {
   }
 }
 
+function showRecurrenceScopeDialog() {
+  return new Promise((resolve) => {
+    const prev = document.getElementById('recurrence-scope-overlay');
+    if (prev) prev.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'recurrence-scope-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+    overlay.innerHTML = `
+      <div class="recurrence-scope-card" style="background:#fff;border-radius:18px;width:100%;max-width:440px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25);box-sizing:border-box;overflow:hidden;animation:fadeIn .15s ease-out">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="width:40px;height:40px;border-radius:12px;background:rgba(59,88,72,0.12);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">
+            <i class="fa fa-sync-alt"></i>
+          </div>
+          <div>
+            <h3 style="font-size:17px;font-weight:700;margin:0;color:var(--dark,#1f2937)">Atualizar Recorrência</h3>
+            <span style="font-size:12px;color:var(--gray-500,#6b7280)">Plano Anual / Série de Agendamentos</span>
+          </div>
+        </div>
+
+        <p style="font-size:13.5px;color:#4b5563;margin:0 0 18px 0;line-height:1.45">
+          Este agendamento faz parte de uma série. Você alterou serviços, duração ou valor. Como deseja aplicar?
+        </p>
+
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
+          <!-- Opção 1: Apenas este agendamento -->
+          <label id="label-scope-single" style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:2px solid #e5e7eb;border-radius:14px;cursor:pointer;background:#f9fafb;transition:all .15s ease">
+            <input type="radio" name="rec_scope" value="single" id="rec-scope-single" style="margin-top:3px;accent-color:var(--primary);width:16px;height:16px;cursor:pointer" />
+            <div style="flex:1">
+              <strong style="display:block;font-size:13.5px;color:#1f2937;line-height:1.3">Apenas este agendamento</strong>
+              <small style="display:block;font-size:12px;color:#6b7280;margin-top:2px;line-height:1.35">Altera somente o atendimento do dia selecionado.</small>
+            </div>
+          </label>
+
+          <!-- Opção 2: Deste em diante -->
+          <label id="label-scope-future" style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:2px solid var(--primary);border-radius:14px;cursor:pointer;background:rgba(59,88,72,0.06);transition:all .15s ease">
+            <input type="radio" name="rec_scope" value="future" id="rec-scope-future" checked style="margin-top:3px;accent-color:var(--primary);width:16px;height:16px;cursor:pointer" />
+            <div style="flex:1">
+              <strong style="display:block;font-size:13.5px;color:var(--primary);line-height:1.3">Deste em diante (este e todos os próximos)</strong>
+              <small style="display:block;font-size:12px;color:#4b5563;margin-top:2px;line-height:1.35">Atualiza o serviço, tempo e valor deste agendamento e de todos os atendimentos futuros da mesma série/plano.</small>
+            </div>
+          </label>
+        </div>
+
+        <div style="display:flex;gap:10px">
+          <button type="button" id="scope-btn-cancel" class="btn btn-secondary" style="flex:1;padding:10px 16px;font-size:13.5px">Cancelar</button>
+          <button type="button" id="scope-btn-confirm" class="btn btn-primary" style="flex:1;padding:10px 16px;font-size:13.5px;font-weight:700">Confirmar</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const rSingle = overlay.querySelector('#rec-scope-single');
+    const rFuture = overlay.querySelector('#rec-scope-future');
+    const lSingle = overlay.querySelector('#label-scope-single');
+    const lFuture = overlay.querySelector('#label-scope-future');
+
+    function updateCardStyles() {
+      if (rSingle.checked) {
+        lSingle.style.borderColor = 'var(--primary)';
+        lSingle.style.background = 'rgba(59,88,72,0.06)';
+        lFuture.style.borderColor = '#e5e7eb';
+        lFuture.style.background = '#f9fafb';
+      } else {
+        lFuture.style.borderColor = 'var(--primary)';
+        lFuture.style.background = 'rgba(59,88,72,0.06)';
+        lSingle.style.borderColor = '#e5e7eb';
+        lSingle.style.background = '#f9fafb';
+      }
+    }
+
+    rSingle.addEventListener('change', updateCardStyles);
+    rFuture.addEventListener('change', updateCardStyles);
+
+    function cleanup(val) {
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+      resolve(val);
+    }
+
+    function onKey(e) {
+      if (e.key === 'Escape') {
+        cleanup(null);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const selected = rFuture.checked ? 'future' : 'single';
+        cleanup(selected);
+      }
+    }
+    document.addEventListener('keydown', onKey);
+
+    overlay.querySelector('#scope-btn-cancel').onclick = () => cleanup(null);
+    overlay.querySelector('#scope-btn-confirm').onclick = () => {
+      const selected = rFuture.checked ? 'future' : 'single';
+      cleanup(selected);
+    };
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) cleanup(null);
+    });
+  });
+}
+
 function openCompleteModal(id) {
   openModal('Concluir Atendimento', `
     <p style="margin-bottom:16px;color:#6b7280">Registre o pagamento para concluir o atendimento.</p>
@@ -399,6 +502,12 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
   document.getElementById('modal-body').innerHTML = `
     <form id="appt-form">
       <div class="modal-form-body">
+        ${isEdit && (appt && (appt.series_id || appt.recurrence_group_id || appt.parent_id)) ? `
+          <div style="background:rgba(59,88,72,0.07);border:1px solid rgba(59,88,72,0.2);border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--primary)">
+            <i class="fa fa-sync-alt" style="font-size:14px;flex-shrink:0"></i>
+            <span><strong>Agendamento Recorrente:</strong> Este atendimento faz parte de uma série/plano. Ao alterar serviços ou valor, você poderá estender para os agendamentos futuros.</span>
+          </div>
+        ` : ''}
         <div class="appt-layout">
           <!-- BLOCO 1: Cliente & Serviços -->
         <div class="appt-block">
@@ -567,8 +676,8 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
         <div id="appt-error" class="alert alert-error" style="display:none;margin-top:16px"></div>
       </div>
 
-      <div class="modal-footer">
-        ${isEdit ? `<button type="button" class="btn btn-danger" onclick="quickCancel(${appt.id}, ${appt.series_id ? `'${appt.series_id}'` : 'null'})" style="margin-right:auto"><i class="fa fa-trash"></i> Excluir</button>` : ''}
+      <div class="modal-footer modal-footer-appt">
+        ${isEdit ? `<button type="button" class="btn btn-danger btn-appt-delete" onclick="quickCancel(${appt.id}, ${appt.series_id ? `'${appt.series_id}'` : 'null'})"><i class="fa fa-trash"></i> Excluir</button>` : ''}
         <button type="button" class="btn btn-secondary btn-cancel" onclick="closeModal()">Cancelar</button>
         <button type="submit" class="btn btn-appt-confirm"><i class="fa fa-check"></i> ${isEdit ? 'Salvar Alterações' : 'Confirmar Agendamento'}</button>
       </div>
@@ -843,10 +952,46 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       }
     }
 
+    if (isEdit) {
+      const isRecurring = !!(appt && (appt.series_id || appt.recurrence_group_id || appt.parent_id));
+      if (isRecurring) {
+        // 1. Verifica se os serviços selecionados mudaram
+        const origSvcIds = (appt.service_ids && appt.service_ids.length > 0 ? appt.service_ids : (appt.service_id ? [appt.service_id] : [])).map(Number).sort();
+        const currSvcIds = (data.service_ids || []).map(Number).sort();
+        const servicesChanged = origSvcIds.length !== currSvcIds.length || origSvcIds.some((id, idx) => id !== currSvcIds[idx]);
+
+        // 2. Verifica se o preço mudou
+        const origPrice = parseFloat(appt.price || 0);
+        const currPrice = parseFloat(data.price || 0);
+        const priceChanged = Math.abs(origPrice - currPrice) > 0.009;
+
+        // 3. Verifica se a duração total mudou
+        const origDuration = parseInt(appt.service_duration, 10) || 60;
+        const currDuration = Array.from(selectedCheckboxes).reduce((acc, cb) => acc + (parseInt(cb.dataset.duration, 10) || 60), 0);
+        const durationChanged = origDuration !== currDuration;
+
+        if (servicesChanged || priceChanged || durationChanged) {
+          const chosenScope = await showRecurrenceScopeDialog();
+          if (!chosenScope) {
+            // Usuário cancelou ou fechou a caixa de diálogo -> mantém na tela de edição
+            return;
+          }
+          data.update_scope = chosenScope;
+        } else {
+          data.update_scope = 'single';
+        }
+      } else {
+        data.update_scope = 'single';
+      }
+    }
+
     try {
       if (isEdit) {
-        await api.updateAppointment(appt.id, data);
-        toast('Agendamento atualizado!', 'success');
+        const r = await api.updateAppointment(appt.id, data);
+        const msg = (r && r.message) ? r.message : (data.update_scope === 'future' && r && r.future_count
+          ? `Este e mais ${r.future_count} agendamentos futuros foram atualizados com o novo serviço!`
+          : 'Agendamento atualizado com sucesso!');
+        toast(msg, 'success');
       } else if (data.plan) {
         const r = await api.createAppointment(data);
         const skipped = (r && r.skipped) ? r.skipped.length : 0;
