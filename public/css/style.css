@@ -4284,22 +4284,28 @@ div[onclick*="openEditAppointment"].appt-block {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
   padding: 16px;
   box-sizing: border-box;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 #pending-box {
   background: #ffffff;
   border-radius: 16px;
+  margin: auto;
   width: 100%;
-  max-width: 560px;
+  max-width: 480px;
   max-height: 90vh;
   max-height: 90dvh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
-  overflow: hidden;
+  overflow-y: auto;
   box-sizing: border-box;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
 #pending-header {
@@ -4307,6 +4313,8 @@ div[onclick*="openEditAppointment"].appt-block {
   border-bottom: 1px solid #e5e7eb;
   background: linear-gradient(135deg, #fdf2f8, #ffffff);
   flex-shrink: 0;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
 }
 
 #pending-header h3 {
@@ -4548,8 +4556,7 @@ div[onclick*="openEditAppointment"].appt-block {
 }
 
 #pending-footer {
-  padding: 14px 16px;
-  padding-bottom: max(14px, env(safe-area-inset-bottom, 14px));
+  padding: 14px 16px 0;
   border-top: 1px solid #e5e7eb;
   display: flex;
   gap: 8px;
@@ -4609,18 +4616,31 @@ div[onclick*="openEditAppointment"].appt-block {
 /* Blindagem Mobile: @media (max-width: 480px) */
 @media (max-width: 480px) {
   #pending-overlay {
-    padding: 8px;
-    align-items: flex-end;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 16px;
+    box-sizing: border-box;
   }
 
   #pending-box {
-    max-height: 94dvh;
-    border-radius: 16px 16px 12px 12px;
+    margin: auto;
     width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    max-height: 90dvh;
+    border-radius: 16px;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
   }
 
   #pending-header {
     padding: 16px 16px 12px;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
   }
 
   #pending-header h3 {
@@ -4677,8 +4697,7 @@ div[onclick*="openEditAppointment"].appt-block {
   }
 
   #pending-footer {
-    padding: 12px 14px;
-    padding-bottom: max(14px, env(safe-area-inset-bottom, 14px));
+    padding: 12px 14px 0;
     gap: 8px;
   }
 
