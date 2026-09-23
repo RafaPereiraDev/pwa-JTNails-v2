@@ -16,11 +16,18 @@ function closeModal(e) {
   if (e && e.target !== document.getElementById('modal-overlay')) return;
   document.getElementById('modal-overlay').classList.remove('open');
   document.getElementById('modal-body').innerHTML = '';
+  if (window._editFormOptions && typeof window._editFormOptions.onCancel === 'function') {
+    const cb = window._editFormOptions.onCancel;
+    window._editFormOptions = null;
+    cb();
+  }
 }
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    document.getElementById('modal-overlay').classList.remove('open');
+    if (document.getElementById('modal-overlay')?.classList.contains('open')) {
+      closeModal();
+    }
   }
 });
 
@@ -416,7 +423,8 @@ function sendReminderWpp(phone, name, date, time, service) {
   window.open(whatsappLink(phone, msg), '_blank');
 }
 
-async function openEditForm(id) {
+async function openEditForm(id, options = {}) {
+  window._editFormOptions = options || {};
   openModal('Editar Agendamento', '<div class="loading"><i class="fa fa-spinner fa-spin"></i></div>', 'modal-appt');
   try {
     const [appt, clients, professionals, services] = await Promise.all([
@@ -434,6 +442,21 @@ async function openEditForm(id) {
 function renderAppointmentForm(appt, { clients, professionals, services, prefillDate, prefillProfId, prefillClientId, prefillTime }) {
   const isEdit = !!appt;
   const today = getTodayStr();
+  const isFromPending = !!(window._editFormOptions && window._editFormOptions.fromPending);
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const isPast = isEdit && appt && (
+    String(appt.date).slice(0, 10) < today ||
+    (String(appt.date).slice(0, 10) === today && (() => {
+      const m = String(appt.end_time || appt.start_time || '').match(/^(\d{1,2}):(\d{2})/);
+      return m ? (Number(m[1]) * 60 + Number(m[2]) <= nowMinutes) : false;
+    })())
+  );
+  const isPendingOrPast = isFromPending || isPast;
+
+  if (isPendingOrPast) {
+    document.getElementById('modal-title').textContent = 'Editar Serviços e Valor';
+  }
 
   // Lista de clientes e profissionais disponível globalmente
   window._apptClients = clients;
@@ -499,7 +522,111 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
     ['credit','Cartão de Crédito'],['debit','Cartão de Débito'],['other','Outro']
   ].map(([v,l]) => `<option value="${v}" ${appt && appt.payment_method === v ? 'selected' : ''}>${l}</option>`).join('');
 
-  document.getElementById('modal-body').innerHTML = `
+  if (isPendingOrPast) {
+    document.getElementById('modal-body').innerHTML = `
+      <form id="appt-form">
+        <div class="modal-form-body">
+          <!-- Cabeçalho Informativo do Atendimento -->
+          <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div style="min-width:0;flex:1">
+              <div style="font-weight:700;font-size:15px;color:#1e293b;display:flex;align-items:center;gap:6px">
+                <i class="fa fa-user-circle" style="color:var(--primary)"></i>
+                <span style="word-break:break-word">${esc(preSelected ? preSelected.name : (appt.client_name || 'Cliente'))}</span>
+              </div>
+              <div style="font-size:12px;color:#64748b;margin-top:3px;line-height:1.4">
+                <i class="fa fa-clock" style="font-size:10.5px"></i> ${formatDate(appt.date)} às ${formatTime(appt.start_time)}
+                ${appt.professional_name ? ` · <i class="fa fa-user" style="font-size:10.5px"></i> ${esc(appt.professional_name)}` : ''}
+              </div>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:#0369a1;background:#e0f2fe;padding:4px 10px;border-radius:20px;white-space:nowrap">
+              Atendimento encerrado
+            </span>
+          </div>
+
+          <!-- Campos ocultos preservando valores originais -->
+          <input type="hidden" id="appt-client" value="${appt.client_id}" />
+          <input type="hidden" id="appt-professional" value="${appt.professional_id}" />
+          <input type="hidden" id="appt-date" value="${appt.date}" />
+          <input type="hidden" id="appt-time" value="${appt.start_time}" />
+          <input type="hidden" id="appt-status" value="${appt.status || 'completed'}" />
+          <input type="hidden" id="appt-payment" value="${appt.payment_method || ''}" />
+          <textarea id="appt-notes" style="display:none">${esc(appt.notes || '')}</textarea>
+
+          <!-- Seção Única: Serviços Realizados e Valor -->
+          <div class="appt-block" style="margin-bottom:0">
+            <div class="appt-block-header">
+              <i class="fa fa-hand-sparkles"></i>
+              <span>Serviços Realizados</span>
+            </div>
+
+            <div class="form-group" style="margin-top:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <label style="margin:0;font-size:13px;font-weight:600;color:var(--gray-700)">
+                  Selecione os serviços *
+                </label>
+                <span id="services-badge-count" style="font-size:11px;font-weight:700;color:var(--primary);background:var(--primary-light);padding:2px 8px;border-radius:12px">
+                  ${selectedServiceIds.length} selecionado(s)
+                </span>
+              </div>
+
+              <div class="multi-services-list" id="multi-services-list">
+                ${services.map(s => {
+                  const checked = selectedServiceIds.includes(s.id);
+                  return `
+                    <label class="service-check-item ${checked ? 'selected' : ''}" data-service-id="${s.id}">
+                      <input type="checkbox" class="service-checkbox" value="${s.id}"
+                        data-price="${s.price}" data-duration="${s.duration}" data-name="${esc(s.name)}"
+                        ${checked ? 'checked' : ''} onchange="onMultiServiceChange()" />
+                      <span class="service-check-name" title="${esc(s.name)}">${esc(s.name)}</span>
+                      <span class="service-check-meta">
+                        <span class="service-check-duration">${formatDurationBR(s.duration)}</span>
+                        <span class="service-check-dot">•</span>
+                        <span class="service-check-price">${formatCurrency(s.price)}</span>
+                      </span>
+                    </label>
+                  `;
+                }).join('')}
+              </div>
+
+              <!-- Resumo Dinâmico em Tempo Real -->
+              <div class="appt-services-summary-box" id="appt-services-summary-box" style="margin-top:10px">
+                <div class="summary-metric">
+                  <span class="metric-label"><i class="fa fa-tag"></i> Valor Sugerido</span>
+                  <strong class="metric-value" id="summary-total-price">R$ 0,00</strong>
+                </div>
+                <div class="summary-metric">
+                  <span class="metric-label"><i class="fa fa-clock"></i> Duração Total</span>
+                  <strong class="metric-value" id="summary-total-duration">0min</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-top:14px">
+              <label id="appt-price-label" style="font-weight:600;font-size:13px;color:var(--gray-700);margin-bottom:6px">
+                Valor Final Cobrado (R$) *
+              </label>
+              <div style="position:relative">
+                <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-weight:700;color:var(--gray-500);font-size:14px">R$</span>
+                <input type="number" id="appt-price" step="0.01" min="0" value="${appt ? appt.price : ''}" required
+                  style="padding-left:38px;font-size:16px;font-weight:700;color:var(--dark);width:100%;height:46px;border-radius:8px;border:1.5px solid #d1d5db;box-sizing:border-box" />
+              </div>
+              <small style="color:#6b7280;font-size:11.5px;margin-top:4px;display:block">
+                Preenchido automaticamente pela soma dos serviços selecionados, mas você pode editar se concedeu desconto ou cobrou taxa extra.
+              </small>
+            </div>
+          </div>
+
+          <div id="appt-error" class="alert alert-error" style="display:none;margin-top:14px"></div>
+        </div>
+
+        <div class="modal-footer modal-footer-appt" style="padding:14px 16px;display:flex;gap:8px;justify-content:flex-end">
+          <button type="button" class="btn btn-secondary btn-cancel" onclick="closeModal()" style="min-height:44px;flex:1">Cancelar</button>
+          <button type="submit" class="btn btn-appt-confirm" style="min-height:44px;flex:1"><i class="fa fa-check"></i> Salvar Alterações</button>
+        </div>
+      </form>
+    `;
+  } else {
+    document.getElementById('modal-body').innerHTML = `
     <form id="appt-form">
       <div class="modal-form-body">
         ${isEdit && (appt && (appt.series_id || appt.recurrence_group_id || appt.parent_id)) ? `
@@ -683,6 +810,7 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       </div>
     </form>
   `;
+  }
 
   // Renderiza as mini-abas no formulário de novo agendamento
   if (!isEdit) {
@@ -805,8 +933,8 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       date: dateVal,
       start_time: timeVal,
       status: (document.getElementById('appt-status') ? document.getElementById('appt-status').value : 'scheduled') || 'scheduled',
-      payment_method: document.getElementById('appt-payment').value || null,
-      notes: document.getElementById('appt-notes').value || null,
+      payment_method: document.getElementById('appt-payment') ? (document.getElementById('appt-payment').value || null) : null,
+      notes: document.getElementById('appt-notes') ? (document.getElementById('appt-notes').value || null) : null,
       plan: planEl ? (planEl.value || null) : null,
       allow_overlap: encaixeEl ? encaixeEl.checked : false,
     };
@@ -852,9 +980,20 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       const m = String(data.start_time || '').match(/^(\d{1,2}):(\d{2})/);
       return m ? Number(m[1]) * 60 + Number(m[2]) : null;
     })();
-    const isSameAsSaved = isEdit && appt && data.date === appt.date &&
-      String(data.start_time) === String(appt.start_time).slice(0, 5);
-    if (!isSameAsSaved) {
+
+    const isPastAppt = isEdit && appt && (
+      String(appt.date).slice(0, 10) < todayStr ||
+      (String(appt.date).slice(0, 10) === todayStr && (() => {
+        const m = String(appt.end_time || appt.start_time || '').match(/^(\d{1,2}):(\d{2})/);
+        return m ? (Number(m[1]) * 60 + Number(m[2]) <= nowMinutes) : false;
+      })())
+    );
+
+    const isSameAsSaved = isEdit && appt &&
+      String(data.date).slice(0, 10) === String(appt.date).slice(0, 10) &&
+      String(data.start_time).slice(0, 5) === String(appt.start_time).slice(0, 5);
+
+    if (!isSameAsSaved && !isPastAppt) {
       if (data.date < todayStr) {
         errEl.textContent = 'Não é possível agendar em uma data que já passaram.';
         errEl.style.display = '';
@@ -867,8 +1006,8 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       }
     }
 
-    // Validação de término previsto vs expediente
-    if (!data.allow_overlap && data.start_time) {
+    // Validação de término previsto vs expediente (ignora para agendamentos que já transcorreram)
+    if (!isPastAppt && !data.allow_overlap && data.start_time) {
       if (isSimultaneous) {
         const st = window._simultaneousState;
         const profs = window._apptProfessionals || [];
@@ -952,7 +1091,9 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       }
     }
 
-    if (isEdit) {
+    if (isPendingOrPast) {
+      data.update_scope = 'single';
+    } else if (isEdit) {
       const isRecurring = !!(appt && (appt.series_id || appt.recurrence_group_id || appt.parent_id));
       if (isRecurring) {
         // 1. Verifica se os serviços selecionados mudaram
@@ -992,6 +1133,20 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
           ? `Este e mais ${r.future_count} agendamentos futuros foram atualizados com o novo serviço!`
           : 'Agendamento atualizado com sucesso!');
         toast(msg, 'success');
+
+        if (window._editFormOptions && typeof window._editFormOptions.onSave === 'function') {
+          const onSaveCb = window._editFormOptions.onSave;
+          window._editFormOptions = null;
+          closeModal();
+          let freshAppt = null;
+          try {
+            freshAppt = await api.getAppointment(appt.id);
+          } catch (_) {
+            freshAppt = { ...appt, ...data, price: data.price };
+          }
+          onSaveCb(freshAppt || { ...appt, ...data });
+          return;
+        }
       } else if (data.plan) {
         const r = await api.createAppointment(data);
         const skipped = (r && r.skipped) ? r.skipped.length : 0;

@@ -229,7 +229,7 @@ router.post('/bulk-confirm', authenticateToken, async (req, res) => {
     const profId   = isMaster ? null : (req.user.professional_id ? parseInt(req.user.professional_id, 10) : -1);
 
     await withTransaction(async (client) => {
-      for (const { id, status, payment_method } of updates) {
+      for (const { id, status, payment_method, price } of updates) {
         if (!id || !['completed','no_show','cancelled'].includes(status)) continue;
 
         const appt = (await client.query(
@@ -244,31 +244,42 @@ router.post('/bulk-confirm', authenticateToken, async (req, res) => {
           continue;
         }
 
-        await client.query(
-          'UPDATE appointments SET status=$1, payment_method=COALESCE($2, payment_method) WHERE id=$3',
-          [status, payment_method || null, id]
-        );
+        const finalPrice = (price !== undefined && price !== null && !isNaN(Number(price))) ? Number(price) : appt.price;
 
-        if (status === 'completed' && appt.status !== 'completed') {
+        await client.query(
+          'UPDATE appointments SET status=$1, payment_method=COALESCE($2, payment_method), price=$3 WHERE id=$4',
+          [status, payment_method || null, finalPrice, id]
+        );
+        appt.price = finalPrice;
+
+        if (status === 'completed') {
           const existing = (await client.query(
             `SELECT id FROM transactions WHERE appointment_id=$1 AND type='income'`, [id]
           )).rows[0];
+          const cl = (await client.query('SELECT name FROM clients WHERE id=$1', [appt.client_id])).rows[0];
+          const sv = appt.service_id ? (await client.query('SELECT name FROM services WHERE id=$1', [appt.service_id])).rows[0] : null;
+          const svcTitle = appt.services_summary || sv?.name || 'Serviço';
+          const clTitle  = cl?.name || 'Cliente';
+          const finalPay = payment_method || appt.payment_method || null;
           if (!existing) {
-            const cl = (await client.query('SELECT name FROM clients WHERE id=$1', [appt.client_id])).rows[0];
-            const sv = appt.service_id ? (await client.query('SELECT name FROM services WHERE id=$1', [appt.service_id])).rows[0] : null;
-            const svcTitle = sv?.name || 'Serviço';
-            const clTitle  = cl?.name || 'Cliente';
             await client.query(
               `INSERT INTO transactions
                  (type,appointment_id,professional_id,description,category,amount,payment_method,date)
                VALUES ('income',$1,$2,$3,'Serviço',$4,$5,$6)`,
               [id, appt.professional_id, `${svcTitle} - ${clTitle}`,
-               appt.price, payment_method || appt.payment_method || null, appt.date]
+               appt.price, finalPay, appt.date]
+            );
+          } else {
+            await client.query(
+              `UPDATE transactions
+               SET description=$1, amount=$2, payment_method=$3, professional_id=$4, date=$5
+               WHERE id=$6`,
+              [`${svcTitle} - ${clTitle}`, appt.price, finalPay, appt.professional_id, appt.date, existing.id]
             );
           }
         }
 
-        if (['no_show','cancelled'].includes(status) && appt.status === 'completed') {
+        if (['no_show','cancelled'].includes(status)) {
           await client.query(
             `DELETE FROM transactions WHERE appointment_id=$1 AND type='income'`, [id]
           );
@@ -617,7 +628,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     );
     if (!appt) return res.status(404).json({ error: 'Agendamento não encontrado' });
 
-    const { client_id, professional_id, service_id, service_ids, date, start_time,
+    const { client_id, professional_id, service_id, service_ids, services_summary, date, start_time,
             price, payment_method, notes, status, update_scope } = req.body;
 
     // Valida formato de data e hora se fornecidos
@@ -656,15 +667,27 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    // Se a data/horário estiver sendo ALTERADA, não permite mover para o passado.
-    // Mudanças que mantêm a data/hora original (ex.: só trocar status) são permitidas.
+    if (services_summary !== undefined && services_summary !== null) {
+      newSummary = services_summary;
+    }
+
+    const nowRow   = await getOne(`SELECT NOW() AT TIME ZONE 'America/Sao_Paulo' AS now_local`);
+    const nowLocal = new Date(nowRow.now_local);
+    const today    = nowLocal.toLocaleDateString('en-CA');
+    const nowMin   = nowLocal.getHours() * 60 + nowLocal.getMinutes();
+
+    const isPastAppt = appt.date < today || (
+      appt.date === today && (() => {
+        const [ah, am] = String(appt.end_time || appt.start_time).slice(0, 5).split(':').map(Number);
+        return (ah * 60 + am) <= nowMin;
+      })()
+    );
+
+    // Se a data/horário estiver sendo ALTERADA, não permite mover agendamento futuro para o passado.
+    // Edições em agendamentos que já transcorreram são sempre permitidas.
     const dateOrTimeChanged = (date && date !== appt.date) ||
-      (start_time && start_time !== String(appt.start_time).slice(0, 5));
-    if (dateOrTimeChanged) {
-      const nowRow   = await getOne(`SELECT NOW() AT TIME ZONE 'America/Sao_Paulo' AS now_local`);
-      const nowLocal = new Date(nowRow.now_local);
-      const today    = nowLocal.toLocaleDateString('en-CA');
-      const nowMin   = nowLocal.getHours() * 60 + nowLocal.getMinutes();
+      (start_time && String(start_time).slice(0, 5) !== String(appt.start_time).slice(0, 5));
+    if (dateOrTimeChanged && !isPastAppt) {
       const [sh, sm] = String(newStart).slice(0, 5).split(':').map(Number);
       const startMin = sh * 60 + sm;
       if (newDate < today || (newDate === today && startMin <= nowMin))
@@ -676,26 +699,28 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     const allowOverlap = req.body.allow_overlap === true || req.body.allow_overlap === 'true';
 
-    // Valida encerramento de expediente da profissional se não for encaixe
-    const prof = await getOne(
-      'SELECT id, name, work_start_time::text AS work_start_time, work_end_time::text AS work_end_time FROM professionals WHERE id = $1',
-      [newProfId]
-    );
-    if (prof) {
-      const profEndStr = (prof.work_end_time || '19:30').slice(0, 5);
-      const [peh, pem] = profEndStr.split(':').map(Number);
-      const profEndMins = peh * 60 + pem;
-      const [eh, em] = newEnd.split(':').map(Number);
-      const endMins = eh * 60 + em;
-      if (!allowOverlap && endMins > profEndMins) {
-        return res.status(400).json({
-          error: `O término previsto (${newEnd}) ultrapassa o encerramento do expediente de ${prof.name} (${profEndStr}). Marque "Permitir encaixe" para salvar.`
-        });
+    // Valida encerramento de expediente da profissional se não for encaixe e se o agendamento não for passado
+    if (!isPastAppt && !allowOverlap) {
+      const prof = await getOne(
+        'SELECT id, name, work_start_time::text AS work_start_time, work_end_time::text AS work_end_time FROM professionals WHERE id = $1',
+        [newProfId]
+      );
+      if (prof) {
+        const profEndStr = (prof.work_end_time || '19:30').slice(0, 5);
+        const [peh, pem] = profEndStr.split(':').map(Number);
+        const profEndMins = peh * 60 + pem;
+        const [eh, em] = newEnd.split(':').map(Number);
+        const endMins = eh * 60 + em;
+        if (endMins > profEndMins) {
+          return res.status(400).json({
+            error: `O término previsto (${newEnd}) ultrapassa o encerramento do expediente de ${prof.name} (${profEndStr}). Marque "Permitir encaixe" para salvar.`
+          });
+        }
       }
-    }
 
-    if (!allowOverlap && await hasConflict(newProfId, newDate, newStart, newEnd, appt.id))
-      return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
+      if (await hasConflict(newProfId, newDate, newStart, newEnd, appt.id))
+        return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
+    }
 
     const targetScope = (update_scope === 'future') ? 'future' : 'single';
     let futureCount = 0;
@@ -720,9 +745,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
       if (svcs.length > 0) {
         await client.query('DELETE FROM appointment_services WHERE appointment_id = $1', [req.params.id]);
         for (const s of svcs) {
+          const itemPrice = svcs.length === 1 && newPrice !== undefined ? newPrice : s.price;
           await client.query(
             'INSERT INTO appointment_services (appointment_id, service_id, price, duration) VALUES ($1, $2, $3, $4)',
-            [req.params.id, s.id, s.price, s.duration]
+            [req.params.id, s.id, itemPrice, s.duration]
           );
         }
       }
@@ -769,31 +795,41 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     });
 
-    // Gera receita ao concluir
-    if (status === 'completed' && appt.status !== 'completed') {
-      const existing = await getOne(
-        `SELECT id FROM transactions WHERE appointment_id=$1 AND type='income'`, [req.params.id]
+    const finalStatus = status || appt.status;
+    const existingTx = await getOne(
+      `SELECT id FROM transactions WHERE appointment_id=$1 AND type='income'`, [req.params.id]
+    );
+
+    // Sincronização financeira: gera ou atualiza receita caso o status final seja completed
+    if (finalStatus === 'completed') {
+      const updated = await getOne(
+        `SELECT *, date::text AS date FROM appointments WHERE id = $1`,
+        [req.params.id]
       );
-      if (!existing) {
-        const updated = await getOne(
-          `SELECT *, date::text AS date FROM appointments WHERE id = $1`,
-          [req.params.id]
-        );
-        const cl = await getOne('SELECT name FROM clients  WHERE id = $1', [updated.client_id]);
-        const sv = updated.service_id ? await getOne('SELECT name FROM services WHERE id = $1', [updated.service_id]) : null;
-        const svcTitle = updated.services_summary || sv?.name || 'Serviço';
-        const clTitle  = cl?.name || 'Cliente';
+      const cl = await getOne('SELECT name FROM clients WHERE id = $1', [updated.client_id]);
+      const sv = updated.service_id ? await getOne('SELECT name FROM services WHERE id = $1', [updated.service_id]) : null;
+      const svcTitle = updated.services_summary || sv?.name || 'Serviço';
+      const clTitle  = cl?.name || 'Cliente';
+      const payMethod = payment_method !== undefined ? payment_method : (updated.payment_method || null);
+
+      if (!existingTx) {
         await query(`
           INSERT INTO transactions
             (type,appointment_id,professional_id,description,category,amount,payment_method,date)
           VALUES ('income',$1,$2,$3,'Serviço',$4,$5,$6)
         `, [req.params.id, updated.professional_id, `${svcTitle} - ${clTitle}`,
-            updated.price, updated.payment_method || payment_method || null, updated.date]);
+            updated.price, payMethod, updated.date]);
+      } else {
+        await query(`
+          UPDATE transactions
+          SET description=$1, amount=$2, payment_method=$3, professional_id=$4, date=$5
+          WHERE id=$6
+        `, [`${svcTitle} - ${clTitle}`, updated.price, payMethod, updated.professional_id, updated.date, existingTx.id]);
       }
     }
 
     // Remove receita se revertido para cancelado/no_show
-    if (appt.status === 'completed' && (status === 'cancelled' || status === 'no_show')) {
+    if (existingTx && (finalStatus === 'cancelled' || finalStatus === 'no_show')) {
       await query(`DELETE FROM transactions WHERE appointment_id=$1 AND type='income'`, [req.params.id]);
     }
 
