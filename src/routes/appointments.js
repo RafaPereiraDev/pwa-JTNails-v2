@@ -15,14 +15,34 @@ function calcEndTime(start, mins) {
   return `${String(Math.floor(t / 60) % 24).padStart(2,'0')}:${String(t % 60).padStart(2,'0')}`;
 }
 
-// ── PLANO ANUAL ───────────────────────────────────────────────────────────────
+// ── RECORRÊNCIA E PLANOS ─────────────────────────────────────────────────────
 // Frequências suportadas: cada uma define o passo (em dias, ou 'month') e o total
-// de sessões que cobrem 12 meses.
+// padrão de sessões.
+// 1. Semanal (a cada 7 dias, default 52 sessões)
+// 2. Quinzenal (a cada 14 dias, default 26 sessões)
+// 3. A cada 21 dias (default 17 sessões)
+// 4. Mensal (mesmo dia do mês, default 12 sessões)
+// 5. Plano Anual (52 semanas consecutivas)
+// 6. Pacote Personalizado (N sessões com intervalo configurado)
+const RECURRENCE_FREQUENCIES = {
+  weekly:      { stepDays: 7,  defaultCount: 52, label: 'Semanal' },
+  biweekly:    { stepDays: 14, defaultCount: 26, label: 'Quinzenal' },
+  every21:     { stepDays: 21, defaultCount: 17, label: 'A cada 21 dias' },
+  monthly:     { stepMonth: true, defaultCount: 12, label: 'Mensal' },
+  annual:      { stepDays: 7,  defaultCount: 52, label: 'Plano Anual' },
+  plan_annual: { stepDays: 7,  defaultCount: 52, label: 'Plano Anual' },
+  custom:      { stepDays: 7,  defaultCount: 10, label: 'Personalizado' },
+};
+
+// Retrocompatibilidade para endpoints legados
 const PLAN_FREQUENCIES = {
-  weekly:     { stepDays: 7,  count: 52 }, // Semanal (52 semanas)
-  biweekly:   { stepDays: 14, count: 26 }, // Quinzenal (a cada 14 dias)
-  every21:    { stepDays: 21, count: 17 }, // A cada 21 dias
-  monthly:    { stepMonth: true, count: 12 }, // Mensal (1x por mês)
+  weekly:      { stepDays: 7,  count: 52 },
+  biweekly:    { stepDays: 14, count: 26 },
+  every21:     { stepDays: 21, count: 17 },
+  monthly:     { stepMonth: true, count: 12 },
+  annual:      { stepDays: 7,  count: 52 },
+  plan_annual: { stepDays: 7,  count: 52 },
+  custom:      { stepDays: 7,  count: 10 },
 };
 
 // Soma dias a uma data 'YYYY-MM-DD' e devolve 'YYYY-MM-DD' (sem fuso: usa UTC).
@@ -41,15 +61,26 @@ function addMonthsStr(dateStr, months) {
   d.setUTCDate(Math.min(day, lastDay));
   return d.toISOString().slice(0, 10);
 }
-// Gera as datas da série a partir da data inicial (inclusive), conforme a frequência.
-function generatePlanDates(startDate, plan) {
-  const freq = PLAN_FREQUENCIES[plan];
-  if (!freq) return [startDate];
+
+// Gera as datas da série a partir da data inicial (inclusive), conforme a frequência e quantidade de sessões.
+function generateRecurrenceDates(startDate, freqKey, countOverride, intervalOverride) {
+  const cfg = RECURRENCE_FREQUENCIES[freqKey] || PLAN_FREQUENCIES[freqKey];
+  if (!cfg) return [startDate];
+  const count = (countOverride && parseInt(countOverride, 10) > 0)
+    ? parseInt(countOverride, 10)
+    : (cfg.defaultCount || cfg.count || 1);
+  const stepDays = (intervalOverride && parseInt(intervalOverride, 10) > 0)
+    ? parseInt(intervalOverride, 10)
+    : (cfg.stepDays || 7);
   const dates = [];
-  for (let i = 0; i < freq.count; i++) {
-    dates.push(freq.stepMonth ? addMonthsStr(startDate, i) : addDaysStr(startDate, i * freq.stepDays));
+  for (let i = 0; i < count; i++) {
+    dates.push(cfg.stepMonth ? addMonthsStr(startDate, i) : addDaysStr(startDate, i * stepDays));
   }
   return dates;
+}
+
+function generatePlanDates(startDate, plan, customCount = null, customStepDays = null) {
+  return generateRecurrenceDates(startDate, plan, customCount, customStepDays);
 }
 
 async function recalculateClientReliability(client_id) {
@@ -100,7 +131,7 @@ const APPT_SELECT = `
     a.start_time::text  AS start_time,
     a.end_time::text    AS end_time,
     a.price, a.status, a.payment_method, a.notes, a.created_at,
-    a.series_id, a.is_encaixe, a.services_summary,
+    a.series_id, a.group_id, a.is_encaixe, a.services_summary,
     c.name  AS client_name,  c.phone AS client_phone,
     COALESCE(NULLIF(a.services_summary, ''), s.name, 'Serviço Removido') AS service_name,
     COALESCE(
@@ -370,7 +401,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { client_id, professional_id, service_id, service_ids, date, start_time,
-            price, payment_method, notes, status, plan, allow_overlap, simultaneous } = req.body;
+            price, payment_method, notes, status, plan, allow_overlap, simultaneous,
+            recurrence, frequency, sessions_count, recurrence_count, count, interval_days, step_days } = req.body;
 
     if (!client_id || !date || !start_time)
       return res.status(400).json({ error: 'Cliente, data e horário são obrigatórios' });
@@ -395,6 +427,29 @@ router.post('/', authenticateToken, async (req, res) => {
     if (date === today && startMin <= nowMin)
       return res.status(400).json({ error: 'Não é possível agendar em um horário que já passou hoje' });
 
+    // ── RECORRÊNCIA: extrai e unifica parâmetros de frequência e quantidade ──
+    const recFreq = (recurrence && typeof recurrence === 'object' ? recurrence.frequency : null)
+      || frequency
+      || req.body.recurrence_frequency
+      || plan
+      || (typeof recurrence === 'string' ? recurrence : null);
+
+    const rawCount = (recurrence && typeof recurrence === 'object' ? recurrence.count : null)
+      || sessions_count
+      || recurrence_count
+      || count
+      || req.body.sessions;
+    const parsedCount = rawCount ? parseInt(rawCount, 10) : null;
+
+    const rawInterval = (recurrence && typeof recurrence === 'object' ? recurrence.interval_days : null)
+      || interval_days
+      || step_days
+      || req.body.custom_interval;
+    const customIntervalDays = rawInterval ? parseInt(rawInterval, 10) : null;
+
+    const hasRecurrence = Boolean(recFreq && (RECURRENCE_FREQUENCIES[recFreq] || PLAN_FREQUENCIES[recFreq]));
+    const overlap = allow_overlap === true || allow_overlap === 'true';
+
     // ── AGENDAMENTO SIMULTÂNEO (2 profissionais no mesmo horário) ───────────
     const isSimultaneous = Array.isArray(simultaneous) && simultaneous.length >= 2 &&
       simultaneous.every(item => item.professional_id && (
@@ -407,7 +462,6 @@ router.post('/', authenticateToken, async (req, res) => {
         return res.status(400).json({ error: 'Selecione profissionais distintas para o agendamento simultâneo' });
       }
 
-      const overlap = allow_overlap === true || allow_overlap === 'true';
       const simultaneousItems = [];
 
       for (const item of simultaneous) {
@@ -440,7 +494,7 @@ router.post('/', authenticateToken, async (req, res) => {
         const finalPrice = item.price !== undefined && item.price !== null && item.price !== '' ? parseFloat(item.price) : totalDefaultPrice;
         const end_time = calcEndTime(start_time, totalDuration);
 
-        // Valida expediente se não for encaixe
+        // Valida expediente de cada profissional se não for encaixe
         if (!overlap) {
           const profEndStr = (prof.work_end_time || '19:30').slice(0, 5);
           const [peh, pem] = profEndStr.split(':').map(Number);
@@ -452,13 +506,6 @@ router.post('/', authenticateToken, async (req, res) => {
               error: `O término previsto (${end_time}) ultrapassa o encerramento do expediente de ${prof.name} (${profEndStr}). Marque "Permitir encaixe" para confirmar.`
             });
           }
-        }
-
-        // Valida conflito na agenda de cada profissional se não for encaixe
-        if (!overlap && await hasConflict(pId, date, start_time, end_time)) {
-          return res.status(409).json({
-            error: `Horário conflitante na agenda de ${prof.name}. A profissional já tem um compromisso neste horário.`
-          });
         }
 
         simultaneousItems.push({
@@ -473,42 +520,114 @@ router.post('/', authenticateToken, async (req, res) => {
         });
       }
 
-      // Cria ambos os agendamentos em transação
-      const createdApptIds = await withTransaction(async (client) => {
-        const ids = [];
-        for (const item of simultaneousItems) {
-          const result = await client.query(`
-            INSERT INTO appointments
-              (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes,is_encaixe,services_summary)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-            RETURNING id
-          `, [client_id, item.professional_id, item.primaryServiceId, date, start_time, item.end_time,
-              item.finalPrice, status || 'scheduled', payment_method || null, notes || null, overlap, item.servicesSummary]);
+      // Cálculo das datas da série (1 data se sem recorrência, N datas se recorrente)
+      const dates = hasRecurrence
+        ? generateRecurrenceDates(date, recFreq, parsedCount, customIntervalDays)
+        : [date];
 
-          const apptId = result.rows[0].id;
-          ids.push(apptId);
+      // Se "Permitir encaixe" estiver desmarcado, valida conflitos para ambas as profissionais em cada uma das datas
+      if (!overlap) {
+        const conflictingDates = [];
+        const conflictsDetail = [];
 
-          for (const s of item.svcs) {
-            await client.query(
-              `INSERT INTO appointment_services (appointment_id, service_id, price, duration) VALUES ($1, $2, $3, $4)`,
-              [apptId, s.id, s.price, s.duration]
-            );
+        for (const d of dates) {
+          let dateHasConflict = false;
+          for (const item of simultaneousItems) {
+            if (await hasConflict(item.professional_id, d, start_time, item.end_time)) {
+              dateHasConflict = true;
+              conflictsDetail.push({
+                date: d,
+                professional_id: item.professional_id,
+                professional_name: item.prof.name
+              });
+            }
+          }
+          if (dateHasConflict) {
+            conflictingDates.push(d);
           }
         }
+
+        if (conflictingDates.length > 0) {
+          const uniqueDates = [...new Set(conflictingDates)];
+          const dateListStr = uniqueDates.slice(0, 5).join(', ') + (uniqueDates.length > 5 ? ` e mais ${uniqueDates.length - 5} data(s)` : '');
+          const profNames = [...new Set(conflictsDetail.map(c => c.professional_name))].join(' e ');
+          return res.status(409).json({
+            error: `Conflito de horários para ${profNames} na(s) data(s): ${dateListStr}. Marque "Permitir encaixe" para agendar mesmo assim.`,
+            conflicting_dates: uniqueDates,
+            conflicts: conflictsDetail
+          });
+        }
+      }
+
+      // Identificador único da série para permitir alterações em lote futuras ("deste em diante")
+      const seriesId = (hasRecurrence || dates.length > 1)
+        ? `series_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+        : null;
+
+      // Criação em Paralelo e Atômica: executa a criação de todas as sessões dentro de withTransaction
+      const createdApptIds = await withTransaction(async (client) => {
+        const ids = [];
+
+        for (let idx = 0; idx < dates.length; idx++) {
+          const d = dates[idx];
+          // Vincula o par daquela data com o mesmo group_id (para exibir a badge de "👥 Simultâneo")
+          const groupId = `grp_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 8)}`;
+
+          for (const item of simultaneousItems) {
+            const result = await client.query(`
+              INSERT INTO appointments
+                (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes,series_id,group_id,is_encaixe,services_summary)
+              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+              RETURNING id
+            `, [
+              client_id,
+              item.professional_id,
+              item.primaryServiceId,
+              d,
+              start_time,
+              item.end_time,
+              item.finalPrice,
+              status || 'scheduled',
+              payment_method || null,
+              notes || null,
+              seriesId,
+              groupId,
+              overlap,
+              item.servicesSummary
+            ]);
+
+            const apptId = result.rows[0].id;
+            ids.push(apptId);
+
+            for (const s of item.svcs) {
+              await client.query(`
+                INSERT INTO appointment_services (appointment_id, service_id, price, duration)
+                VALUES ($1, $2, $3, $4)
+              `, [apptId, s.id, s.price, s.duration]);
+            }
+          }
+        }
+
         return ids;
       });
 
-      const createdRows = await getAll(APPT_SELECT + ' WHERE a.id = ANY($1::int[]) ORDER BY a.id', [createdApptIds]);
+      const createdRows = await getAll(APPT_SELECT + ' WHERE a.id = ANY($1::int[]) ORDER BY a.date, a.start_time, a.id', [createdApptIds]);
+
       return res.status(201).json({
-        message: 'Agendamentos simultâneos criados com sucesso!',
+        message: hasRecurrence
+          ? `Série simultânea criada com sucesso: ${dates.length} sessões (${createdRows.length} agendamentos).`
+          : 'Agendamentos simultâneos criados com sucesso!',
         simultaneous: true,
+        series_id: seriesId,
+        sessions_count: dates.length,
+        total_appointments: createdRows.length,
         created: createdRows.length,
         appointments: createdRows,
         primary: createdRows[0] || null
       });
     }
 
-    // ── Validação para agendamento individual ──────────────────────────────
+    // ── Validação para agendamento individual (1 profissional) ──────────────
     let sIds = Array.isArray(service_ids) ? service_ids.map(Number).filter(Boolean) : [];
     if (sIds.length === 0 && service_id) {
       sIds = [parseInt(service_id, 10)].filter(Boolean);
@@ -526,7 +645,6 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const finalPrice = price !== undefined && price !== null && price !== '' ? parseFloat(price) : totalDefaultPrice;
     const end_time   = calcEndTime(start_time, totalDuration);
-    const overlap    = allow_overlap === true || allow_overlap === 'true';
 
     // Valida encerramento de expediente da profissional se não for encaixe
     const prof = await getOne(
@@ -546,19 +664,31 @@ router.post('/', authenticateToken, async (req, res) => {
       }
     }
 
-    // ── PLANO ANUAL: cria a série inteira numa transação ─────────────────────
-    if (plan && PLAN_FREQUENCIES[plan]) {
-      const dates = generatePlanDates(date, plan);
-      const seriesId = `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    // ── RECORRÊNCIA INDIVIDUAL: cria a série inteira numa transação ──────────
+    if (hasRecurrence) {
+      const dates = generateRecurrenceDates(date, recFreq, parsedCount, customIntervalDays);
+      const seriesId = `series_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      if (!overlap) {
+        const conflictingDates = [];
+        for (const d of dates) {
+          if (await hasConflict(professional_id, d, start_time, end_time)) {
+            conflictingDates.push(d);
+          }
+        }
+        if (conflictingDates.length > 0) {
+          const uniqueDates = [...new Set(conflictingDates)];
+          const dateListStr = uniqueDates.slice(0, 5).join(', ') + (uniqueDates.length > 5 ? ` e mais ${uniqueDates.length - 5} data(s)` : '');
+          return res.status(409).json({
+            error: `Horário conflitante para ${prof.name} na(s) data(s): ${dateListStr}. Marque "Permitir encaixe" para agendar mesmo assim.`,
+            conflicting_dates: uniqueDates
+          });
+        }
+      }
 
       const created = await withTransaction(async (client) => {
-        const skipped = [];
         const insertedIds = [];
         for (const d of dates) {
-          if (!overlap && await hasConflict(professional_id, d, start_time, end_time)) {
-            skipped.push(d);
-            continue;
-          }
           const r = await client.query(`
             INSERT INTO appointments
               (client_id,professional_id,service_id,date,start_time,end_time,price,status,payment_method,notes,series_id,is_encaixe,services_summary)
@@ -577,18 +707,19 @@ router.post('/', authenticateToken, async (req, res) => {
             );
           }
         }
-        return { insertedIds, skipped };
+        return { insertedIds, skipped: [] };
       });
 
       return res.status(201).json({
         message: `Plano criado: ${created.insertedIds.length} agendamento(s).`,
         series_id: seriesId,
         created: created.insertedIds.length,
+        sessions_count: dates.length,
         skipped: created.skipped,
       });
     }
 
-    // ── Agendamento único ────────────────────────────────────────────────────
+    // ── Agendamento único (1 profissional) ───────────────────────────────────
     if (!overlap && await hasConflict(professional_id, date, start_time, end_time))
       return res.status(409).json({ error: 'Horário conflitante. A profissional já tem um compromisso neste horário.' });
 

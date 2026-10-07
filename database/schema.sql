@@ -61,6 +61,10 @@ CREATE TABLE IF NOT EXISTS appointments (
   price           NUMERIC(10,2) NOT NULL,
   status          TEXT DEFAULT 'scheduled'
                   CHECK(status IN ('scheduled','confirmed','in_progress','completed','cancelled','no_show')),
+  series_id       TEXT,
+  group_id        TEXT,
+  is_encaixe      BOOLEAN DEFAULT FALSE,
+  services_summary TEXT,
   payment_method  TEXT,
   notes           TEXT,
   created_at      TIMESTAMPTZ DEFAULT NOW()

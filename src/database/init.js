@@ -130,8 +130,10 @@ async function initDatabase() {
 
     -- Plano Anual (série de agendamentos recorrentes) e encaixe (permite sobreposição)
     ALTER TABLE appointments ADD COLUMN IF NOT EXISTS series_id  TEXT;
+    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS group_id   TEXT;
     ALTER TABLE appointments ADD COLUMN IF NOT EXISTS is_encaixe BOOLEAN DEFAULT FALSE;
     CREATE INDEX IF NOT EXISTS idx_appointments_series ON appointments(series_id);
+    CREATE INDEX IF NOT EXISTS idx_appointments_group  ON appointments(group_id);
 
     -- Migração: appointments.service_id aceita NULL e chave estrangeira usa ON DELETE SET NULL
     ALTER TABLE appointments ALTER COLUMN service_id DROP NOT NULL;

@@ -635,6 +635,12 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
             <span><strong>Agendamento Recorrente:</strong> Este atendimento faz parte de uma série/plano. Ao alterar serviços ou valor, você poderá estender para os agendamentos futuros.</span>
           </div>
         ` : ''}
+        ${isEdit && appt && appt.group_id ? `
+          <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#1d4ed8">
+            <span style="font-size:15px">👥</span>
+            <span><strong>Atendimento Simultâneo:</strong> Este agendamento faz parte de um atendimento simultâneo (2 profissionais no mesmo horário).</span>
+          </div>
+        ` : ''}
         <div class="appt-layout">
           <!-- BLOCO 1: Cliente & Serviços -->
         <div class="appt-block">
@@ -764,15 +770,37 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
           </div>
 
           ${!isEdit ? `
-          <div class="form-group">
-            <label>Plano Anual / Recorrência</label>
-            <select id="appt-plan">
-              <option value="">Sem recorrência (agendamento único)</option>
-              <option value="weekly">Semanal (52 sessões / 1 ano)</option>
-              <option value="biweekly">Quinzenal (a cada 14 dias / 26 sessões)</option>
-              <option value="every21">A cada 21 dias (~17 sessões)</option>
-              <option value="monthly">Mensal (12 sessões / 1x por mês)</option>
-            </select>
+          <div class="form-group appt-recurrence-group" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:12px">
+            <label style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--dark,#1f2937);margin-bottom:8px">
+              <i class="fa fa-sync-alt" style="color:var(--primary)"></i>
+              Recorrência / Plano de Atendimentos
+            </label>
+            <div style="display:grid;grid-template-columns:1fr;gap:8px">
+              <div>
+                <label style="font-size:12px;color:var(--gray-600);font-weight:600;margin-bottom:4px;display:block">Frequência</label>
+                <select id="appt-plan" style="width:100%">
+                  <option value="">Sem recorrência (agendamento único)</option>
+                  <option value="weekly">Semanal (a cada 7 dias)</option>
+                  <option value="biweekly">Quinzenal (a cada 14 dias)</option>
+                  <option value="every21">A cada 21 dias</option>
+                  <option value="monthly">Mensal (1x por mês)</option>
+                  <option value="annual">Plano Anual (52 semanas consecutivas)</option>
+                  <option value="custom">Pacote Personalizado</option>
+                </select>
+              </div>
+
+              <div id="appt-recurrence-details" style="display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+                <div id="appt-sessions-count-wrapper">
+                  <label style="font-size:12px;color:var(--gray-600);font-weight:600;margin-bottom:4px;display:block">Número de Sessões</label>
+                  <input type="number" id="appt-sessions-count" min="1" max="104" value="52" style="width:100%" />
+                </div>
+                <div id="appt-custom-interval-wrapper" style="display:none">
+                  <label style="font-size:12px;color:var(--gray-600);font-weight:600;margin-bottom:4px;display:block">Intervalo (dias)</label>
+                  <input type="number" id="appt-custom-interval" min="1" max="365" value="7" style="width:100%" />
+                </div>
+              </div>
+            </div>
+            <div id="appt-recurrence-badge-summary" style="display:none;margin-top:8px;font-size:12px;color:var(--primary);font-weight:600;background:rgba(78,103,84,0.08);padding:6px 10px;border-radius:6px"></div>
           </div>` : ''}
 
           ${isEdit ? `
@@ -822,6 +850,49 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
   if (timeInput) {
     timeInput.addEventListener('input', () => updateAppointmentSummary());
     timeInput.addEventListener('change', () => updateAppointmentSummary());
+  }
+
+  // Listeners para controle de recorrência e atualização em tempo real do resumo
+  const planSelect = document.getElementById('appt-plan');
+  const recDetails = document.getElementById('appt-recurrence-details');
+  const countInput = document.getElementById('appt-sessions-count');
+  const customIntervalWrapper = document.getElementById('appt-custom-interval-wrapper');
+  const customIntervalInput = document.getElementById('appt-custom-interval');
+
+  const defaultCountsByPlan = {
+    weekly: 52,
+    biweekly: 26,
+    every21: 17,
+    monthly: 12,
+    annual: 52,
+    custom: 10
+  };
+
+  if (planSelect) {
+    planSelect.addEventListener('change', () => {
+      const val = planSelect.value;
+      if (val && defaultCountsByPlan[val] !== undefined) {
+        if (recDetails) recDetails.style.display = 'grid';
+        if (countInput) countInput.value = defaultCountsByPlan[val];
+        if (customIntervalWrapper) {
+          customIntervalWrapper.style.display = (val === 'custom') ? 'block' : 'none';
+        }
+      } else {
+        if (recDetails) recDetails.style.display = 'none';
+        if (customIntervalWrapper) customIntervalWrapper.style.display = 'none';
+      }
+      updateAppointmentSummary();
+    });
+  }
+
+  if (countInput) {
+    countInput.addEventListener('input', () => updateAppointmentSummary());
+    countInput.addEventListener('change', () => updateAppointmentSummary());
+  }
+
+  if (customIntervalInput) {
+    customIntervalInput.addEventListener('input', () => updateAppointmentSummary());
+    customIntervalInput.addEventListener('change', () => updateAppointmentSummary());
   }
 
   const profSelect = document.getElementById('appt-professional');
@@ -924,9 +995,15 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
     }
 
     const planEl = document.getElementById('appt-plan');
+    const countEl = document.getElementById('appt-sessions-count');
+    const intervalEl = document.getElementById('appt-custom-interval');
     const encaixeEl = document.getElementById('appt-encaixe');
     const dateVal = document.getElementById('appt-date').value;
     const timeVal = document.getElementById('appt-time').value;
+
+    const selectedPlan = planEl ? (planEl.value || null) : null;
+    const sessionsCount = (selectedPlan && countEl && countEl.value) ? parseInt(countEl.value, 10) : null;
+    const customInterval = (selectedPlan === 'custom' && intervalEl && intervalEl.value) ? parseInt(intervalEl.value, 10) : null;
 
     const data = {
       client_id: parseInt(clientId),
@@ -935,9 +1012,21 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       status: (document.getElementById('appt-status') ? document.getElementById('appt-status').value : 'scheduled') || 'scheduled',
       payment_method: document.getElementById('appt-payment') ? (document.getElementById('appt-payment').value || null) : null,
       notes: document.getElementById('appt-notes') ? (document.getElementById('appt-notes').value || null) : null,
-      plan: planEl ? (planEl.value || null) : null,
+      plan: selectedPlan,
+      frequency: selectedPlan,
+      sessions_count: sessionsCount,
+      count: sessionsCount,
+      interval_days: customInterval,
       allow_overlap: encaixeEl ? encaixeEl.checked : false,
     };
+
+    if (selectedPlan) {
+      data.recurrence = {
+        frequency: selectedPlan,
+        count: sessionsCount,
+        interval_days: customInterval
+      };
+    }
 
     if (isSimultaneous) {
       const st = window._simultaneousState;
@@ -1157,7 +1246,11 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       } else {
         const r = await api.createAppointment(data);
         if (r && r.simultaneous) {
-          toast('Agendamentos simultâneos criados com sucesso!', 'success');
+          if (r.series_id) {
+            toast(r.message || `Série simultânea criada: ${r.sessions_count || (r.created / 2)} sessões (${r.created} atendimentos)!`, 'success');
+          } else {
+            toast('Agendamentos simultâneos criados com sucesso!', 'success');
+          }
         } else {
           toast('Agendamento criado!', 'success');
         }
@@ -1165,8 +1258,30 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
       closeModal();
       refreshCurrentPage();
     } catch (err) {
-      // Conflito de horário: oferece o encaixe explícito (não vale para planos).
-      if (err.status === 409 && !data.plan && !data.allow_overlap) {
+      // Conflito de horário: oferece o encaixe explícito
+      if (err.status === 409 && !data.allow_overlap) {
+        if (err.data && err.data.conflicting_dates && err.data.conflicting_dates.length > 0) {
+          const formatted = err.data.conflicting_dates.map(d => formatDate(d)).join(', ');
+          errEl.innerHTML = `
+            <div><strong>Horário conflitante!</strong> Há choque de agenda na(s) seguinte(s) data(s):</div>
+            <div style="margin:6px 0;font-size:12px;color:#991b1b;background:#fee2e2;padding:6px 10px;border-radius:6px;max-height:80px;overflow-y:auto">
+              ${formatted}
+            </div>
+            <a href="#" id="do-encaixe" style="font-weight:700;color:var(--primary);text-decoration:underline">
+              <i class="fa fa-check-square"></i> Marcar "Permitir encaixe" para confirmar todas as sessões
+            </a>
+          `;
+          errEl.style.display = '';
+          const link = document.getElementById('do-encaixe');
+          if (link) link.onclick = (ev) => {
+            ev.preventDefault();
+            if (encaixeEl) encaixeEl.checked = true;
+            updateAppointmentSummary();
+            document.getElementById('appt-form').requestSubmit();
+          };
+          return;
+        }
+
         errEl.innerHTML =
           (err.message || 'Este horário já está ocupado.') + ' ' +
           '<a href="#" id="do-encaixe" style="font-weight:700;color:var(--primary)">Encaixar mesmo assim?</a>';
@@ -1175,6 +1290,7 @@ function renderAppointmentForm(appt, { clients, professionals, services, prefill
         if (link) link.onclick = (ev) => {
           ev.preventDefault();
           if (encaixeEl) encaixeEl.checked = true;
+          updateAppointmentSummary();
           document.getElementById('appt-form').requestSubmit();
         };
         return;
@@ -1549,6 +1665,43 @@ function updateAppointmentSummary(knownMins = null, knownPrice = null) {
       prEl.textContent = formatCurrency(totalPrice);
     }
 
+    const planEl = document.getElementById('appt-plan');
+    const countEl = document.getElementById('appt-sessions-count');
+    const recBadgeEl = document.getElementById('appt-recurrence-badge-summary');
+    const selectedPlan = planEl ? planEl.value : '';
+    const defaultCountsByPlan = {
+      weekly: 52,
+      biweekly: 26,
+      every21: 17,
+      monthly: 12,
+      annual: 52,
+      custom: 10
+    };
+    const sessionsCount = (countEl && countEl.value) ? parseInt(countEl.value, 10) : (defaultCountsByPlan[selectedPlan] || 52);
+    const planLabels = {
+      weekly: 'Semanal',
+      biweekly: 'Quinzenal',
+      every21: 'A cada 21 dias',
+      monthly: 'Mensal',
+      annual: 'Plano Anual',
+      custom: 'Personalizado'
+    };
+    const planLabel = planLabels[selectedPlan] || 'Recorrente';
+    const hasRec = Boolean(selectedPlan);
+    const recLineText = hasRec
+      ? `Recorrência: ${planLabel} (${sessionsCount} sessões) para ${esc(p1.name)} + ${esc(p2.name)} (Total: ${sessionsCount * 2} atendimentos agendados)`
+      : '';
+
+    if (recBadgeEl) {
+      if (hasRec) {
+        recBadgeEl.style.display = 'block';
+        recBadgeEl.innerHTML = `<i class="fa fa-sync-alt"></i> <strong>Recorrência:</strong> ${planLabel} (${sessionsCount} sessões) para ${esc(p1.name)} + ${esc(p2.name)} (Total: ${sessionsCount * 2} atendimentos agendados)`;
+      } else {
+        recBadgeEl.style.display = 'none';
+        recBadgeEl.innerHTML = '';
+      }
+    }
+
     if (banner) {
       if (dur1 > 0 && dur2 > 0) {
         banner.innerHTML = `
@@ -1556,8 +1709,14 @@ function updateAppointmentSummary(knownMins = null, knownPrice = null) {
             <i class="fa fa-users" style="color:var(--primary);flex-shrink:0"></i>
             <strong>Atendimento Simultâneo:</strong>
           </div>
-          <span class="appt-summary-detail-line">• <strong>${esc(p1.name)}:</strong> ${dur1}m · ${formatCurrency(price1)}</span>
-          <span class="appt-summary-detail-line">• <strong>${esc(p2.name)}:</strong> ${dur2}m · ${formatCurrency(price2)}</span>
+          ${hasRec ? `
+            <div style="background:rgba(78,103,84,0.1);border:1px solid rgba(78,103,84,0.22);border-radius:8px;padding:6px 10px;margin:6px 0;font-size:12.5px;color:var(--primary);font-weight:700">
+              <i class="fa fa-sync-alt"></i> ${recLineText}
+            </div>
+          ` : ''}
+          <span class="appt-summary-detail-line">• <strong>${esc(p1.name)}:</strong> ${dur1}m · ${formatCurrency(price1)}${hasRec ? ' por sessão' : ''}</span>
+          <span class="appt-summary-detail-line">• <strong>${esc(p2.name)}:</strong> ${dur2}m · ${formatCurrency(price2)}${hasRec ? ' por sessão' : ''}</span>
+          ${hasRec ? `<span class="appt-summary-detail-line" style="font-weight:600;margin-top:2px">Soma por sessão: ${formatCurrency(totalPrice)} · Total previsto da série: ${formatCurrency(totalPrice * sessionsCount)}</span>` : ''}
         `;
         banner.style.display = 'flex';
       } else if (dur1 > 0 || dur2 > 0) {
@@ -1570,7 +1729,12 @@ function updateAppointmentSummary(knownMins = null, knownPrice = null) {
             <i class="fa fa-users" style="color:var(--primary);flex-shrink:0"></i>
             <strong>Atendimento Simultâneo:</strong>
           </div>
-          <span class="appt-summary-detail-line">• <strong>${activeName}:</strong> ${activeDur}m · ${formatCurrency(activePrice)}</span>
+          ${hasRec ? `
+            <div style="background:rgba(78,103,84,0.1);border:1px solid rgba(78,103,84,0.22);border-radius:8px;padding:6px 10px;margin:6px 0;font-size:12.5px;color:var(--primary);font-weight:700">
+              <i class="fa fa-sync-alt"></i> ${recLineText}
+            </div>
+          ` : ''}
+          <span class="appt-summary-detail-line">• <strong>${activeName}:</strong> ${activeDur}m · ${formatCurrency(activePrice)}${hasRec ? ' por sessão' : ''}</span>
           <span class="appt-summary-detail-line" style="color:#94a3b8">• <em>Aguardando serviços de ${waitingName}...</em></span>
         `;
         banner.style.display = 'flex';
@@ -1677,6 +1841,41 @@ function updateAppointmentSummary(knownMins = null, knownPrice = null) {
   if (prof) {
     profStartStr = (prof.work_start_time || '08:00').slice(0, 5);
     profEndStr   = (prof.work_end_time   || '19:30').slice(0, 5);
+  }
+
+  const planEl = document.getElementById('appt-plan');
+  const countEl = document.getElementById('appt-sessions-count');
+  const recBadgeEl = document.getElementById('appt-recurrence-badge-summary');
+  const selectedPlan = planEl ? planEl.value : '';
+  const defaultCountsByPlan = {
+    weekly: 52,
+    biweekly: 26,
+    every21: 17,
+    monthly: 12,
+    annual: 52,
+    custom: 10
+  };
+  const sessionsCount = (countEl && countEl.value) ? parseInt(countEl.value, 10) : (defaultCountsByPlan[selectedPlan] || 52);
+  const planLabels = {
+    weekly: 'Semanal',
+    biweekly: 'Quinzenal',
+    every21: 'A cada 21 dias',
+    monthly: 'Mensal',
+    annual: 'Plano Anual',
+    custom: 'Personalizado'
+  };
+  const planLabel = planLabels[selectedPlan] || 'Recorrente';
+  const hasRec = Boolean(selectedPlan);
+
+  if (recBadgeEl) {
+    if (hasRec) {
+      recBadgeEl.style.display = 'block';
+      const pName = esc(prof ? prof.name : 'Profissional');
+      recBadgeEl.innerHTML = `<i class="fa fa-sync-alt"></i> <strong>Recorrência:</strong> ${planLabel} (${sessionsCount} sessões) para ${pName} (Total: ${sessionsCount} atendimentos agendados)`;
+    } else {
+      recBadgeEl.style.display = 'none';
+      recBadgeEl.innerHTML = '';
+    }
   }
 
   if (startTime && totalMinutes > 0 && endTime !== '--:--') {

@@ -329,7 +329,7 @@ function renderDayView(container, date, appointments, blocked) {
         <div class="appt-block-title">${formatTime(a.start_time)} ${esc(a.client_name)}</div>
         <div class="appt-block-sub">${esc(a.service_name)} · ${formatCurrency(a.price)}</div>
         ${agendaProfFilter === 'all' ? `<div class="appt-block-sub">${esc(a.professional_name)}</div>` : ''}
-        <div class="appt-block-sub">${statusBadge(a.status)}</div>
+        <div class="appt-block-sub">${statusBadge(a.status)}${a.group_id ? ' <span class="badge" title="Atendimento Simultâneo">👥 Simultâneo</span>' : ''}</div>
       </div>`;
   }).join('');
 
@@ -575,7 +575,7 @@ function renderWeekView(container, range, appointments, blocked) {
                   <div class="appt-block-title">${formatTime(a.start_time)} ${esc(a.client_name)}</div>
                   <div class="appt-block-sub">${esc(a.service_name)} · ${formatCurrency(a.price)}</div>
                   ${agendaProfFilter === 'all' ? `<div class="appt-block-sub">${esc(a.professional_name)}</div>` : ''}
-                  <div class="appt-block-sub">${statusBadge(a.status)}</div>
+                  <div class="appt-block-sub">${statusBadge(a.status)}${a.group_id ? ' <span class="badge" title="Atendimento Simultâneo">👥 Simultâneo</span>' : ''}</div>
                 </div>`).join('')}
             </div>`;
   }).join('')}
