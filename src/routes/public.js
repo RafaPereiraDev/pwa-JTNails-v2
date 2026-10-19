@@ -34,7 +34,7 @@ function formatDateBR(iso) {
 
 const OPEN_HOUR  = 8;
 const CLOSE_MINS = 18 * 60 + 30; // 18:30
-const SLOT_STEP  = 30;
+const SLOT_STEP  = 45;
 
 // Dias em que o salão está fechado: 0=Domingo, 1=Segunda
 const CLOSED_DOW = [0, 1];

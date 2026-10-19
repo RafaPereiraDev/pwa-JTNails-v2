@@ -195,15 +195,47 @@ img { max-width: 100%; display: block; }
 .pub-slot {
   min-height: var(--touch);
   border-radius: var(--radius-sm);
-  background: var(--white); border: 1.5px solid var(--gray-200);
-  font-size: 15px; font-weight: 700; color: var(--gray-700);
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gray-700);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.12s ease, border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
-.pub-slot:active { border-color: var(--primary); }
-.pub-slot.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+@media (hover: hover) {
+  .pub-slot:hover {
+    border-color: var(--primary);
+    color: var(--primary-dark);
+  }
+}
+.pub-slot:active {
+  transform: scale(0.96);
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+.pub-slot.selected {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(73, 100, 81, 0.25);
+  transform: scale(1.02);
+}
 .pub-slots-empty {
   grid-column: 1 / -1;
   text-align: center; color: var(--gray-500); font-size: 14px;
   padding: 24px 12px; background: var(--gray-100); border-radius: var(--radius-sm);
+}
+@media (max-width: 360px) {
+  .pub-slots { gap: 8px; }
+  .pub-slot { font-size: 14px; min-height: 44px; }
 }
 
 /* ===== PASSO 4 — FORMULÁRIO ===== */

@@ -317,8 +317,11 @@ async function selectDate(dateStr) {
       return;
     }
     list.innerHTML = data.slots.map(t =>
-      `<button class="pub-slot" onclick="selectTime('${t}', this)">${t}</button>`
+      `<button class="pub-slot" type="button" aria-label="Horário ${t}" onclick="selectTime('${t}', this)">${t}</button>`
     ).join('');
+    if (window.innerWidth < 768) {
+      area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   } catch (e) {
     list.innerHTML = `<div class="pub-error" style="grid-column:1/-1">${esc(e.message)}</div>`;
   }
