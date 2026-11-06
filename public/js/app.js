@@ -81,8 +81,69 @@ document.querySelectorAll('.nav-item').forEach(item => {
   });
 });
 
+// ===== TEMA DINÂMICO (PERSONALIZAÇÃO VISUAL JT NAILS) =====
+const DEFAULT_NAILS_THEME = {
+  '--color-primary': '#4E6754',
+  '--color-logo-icon': '#C5A880',
+  '--color-bg-main': '#FAF8F4',
+  '--color-card': '#FFFFFF',
+  '--color-metric-card': '#A3B5A0',
+  '--color-navbar': '#FFFFFF',
+  '--color-sidebar': '#4E6754',
+  '--color-modal': '#FFFFFF',
+  '--color-text-main': '#212F27',
+  '--color-text-muted': '#6B7280',
+};
+
+function darkenHex(hex, amount = 0.18) {
+  const clean = String(hex || '').replace('#', '');
+  if (clean.length !== 6) return '#3A5141';
+  const r = Math.max(0, Math.round(parseInt(clean.slice(0, 2), 16) * (1 - amount)));
+  const g = Math.max(0, Math.round(parseInt(clean.slice(2, 4), 16) * (1 - amount)));
+  const b = Math.max(0, Math.round(parseInt(clean.slice(4, 6), 16) * (1 - amount)));
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+function applyThemeColorsToRoot(colors) {
+  const incoming = { ...(colors || {}) };
+  if (incoming.logo_icon && !incoming['--color-logo-icon']) {
+    incoming['--color-logo-icon'] = incoming.logo_icon;
+  }
+  const merged = { ...DEFAULT_NAILS_THEME, ...incoming };
+  const root = document.documentElement;
+  Object.entries(merged).forEach(([key, val]) => {
+    if (key.startsWith('--') && typeof val === 'string' && /^#[0-9A-Fa-f]{6}$/.test(val.trim())) {
+      root.style.setProperty(key, val.trim());
+    }
+  });
+  if (merged['--color-primary']) {
+    root.style.setProperty('--color-primary-hover', darkenHex(merged['--color-primary'], 0.18));
+  }
+}
+
+async function loadGlobalTheme() {
+  let cachedObj = null;
+  try {
+    const cached = localStorage.getItem('jtnails_theme_colors');
+    if (cached) {
+      cachedObj = JSON.parse(cached);
+      applyThemeColorsToRoot(cachedObj);
+    }
+  } catch (_) {}
+
+  try {
+    const res = await api.getThemeSettings();
+    if (res && res.colors) {
+      const merged = cachedObj ? { ...cachedObj, ...res.colors } : res.colors;
+      applyThemeColorsToRoot(merged);
+      localStorage.setItem('jtnails_theme_colors', JSON.stringify(merged));
+    }
+  } catch (_) {}
+}
+
 // Boot
 document.addEventListener('DOMContentLoaded', async () => {
+  loadGlobalTheme();
   await initAuth();
   if (getToken()) {
     navigateTo('dashboard');

@@ -142,6 +142,17 @@ const api = {
   getWelcomeMessage: () => api.get('/settings/welcome-message'),
   getResetMessage: () => api.get('/settings/reset-message'),
   updateBirthdayMessage: (message) => api.put('/settings/birthday-message', { message }),
+  getThemeSettings: () => api.get('/settings/theme'),
+  updateThemeSettings: (data) => {
+    const payload = data && data.colors ? { ...data, colors: { ...data.colors } } : { ...(data || {}) };
+    const target = payload.colors || payload;
+    if (target['--color-logo-icon'] && !target.logo_icon) {
+      target.logo_icon = target['--color-logo-icon'];
+    } else if (target.logo_icon && !target['--color-logo-icon']) {
+      target['--color-logo-icon'] = target.logo_icon;
+    }
+    return api.put('/settings/theme', payload);
+  },
 
   // Notificações (Web Push)
   getPushPublicKey: () => api.get('/settings/push/public-key'),

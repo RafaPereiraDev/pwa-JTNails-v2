@@ -17,9 +17,10 @@ async function loadSettings() {
       <h2>Configurações</h2>
     </div>
 
-    <div class="tabs mb-6">
+    <div class="tabs settings-tabs mb-6">
       <button class="tab-btn active" onclick="switchSettingsTab('account', this)">Minha Conta</button>
       ${currentUser.professional_id ? `<button class="tab-btn" onclick="switchSettingsTab('profile', this)">Meu Perfil</button>` : ''}
+      ${isAdminLevel() ? `<button class="tab-btn" onclick="switchSettingsTab('appearance', this)">Cores e Aparência</button>` : ''}
       ${isAdminLevel() ? `<button class="tab-btn" onclick="switchSettingsTab('messages', this)">Mensagens</button>` : ''}
       ${isAdminLevel() ? `<button class="tab-btn" onclick="switchSettingsTab('users', this)">Usuários</button>` : ''}
     </div>
@@ -63,7 +64,7 @@ async function loadSettings() {
 
       <div class="card mt-4">
         <div class="card-header">
-          <div class="card-title"><i class="fa fa-bell" style="color:#B29661"></i> Notificações</div>
+          <div class="card-title"><i class="fa fa-bell" style="color:var(--color-primary)"></i> Notificações</div>
         </div>
         <div class="card-body" style="max-width:480px">
           <p class="text-sm text-muted mb-4">Receba um aviso no celular quando uma cliente fizer um novo agendamento na sua agenda.</p>
@@ -96,17 +97,35 @@ async function loadSettings() {
 
     </div>` : ''}
 
+    <!-- Personalização Visual / Cores e Aparência (admin e master) -->
+    ${isAdminLevel() ? `
+    <div id="settings-appearance" class="tab-panel">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fa fa-palette" style="color:var(--primary)"></i> Personalização Visual (Cores e Aparência)</div>
+        </div>
+        <div class="card-body">
+          <p class="text-sm text-muted mb-4">
+            Personalize as cores do sistema. Ao escolher uma cor abaixo, a prévia no mini-smartphone ao lado muda instantaneamente. Clique em <strong>Salvar Alterações de Cor</strong> para aplicar no aplicativo.
+          </p>
+          <div id="theme-customizer-container">
+            <div class="loading"><i class="fa fa-spinner fa-spin"></i></div>
+          </div>
+        </div>
+      </div>
+    </div>` : ''}
+
     <!-- Mensagens (admin e master) -->
     ${isAdminLevel() ? `
     <div id="settings-messages" class="tab-panel">
       <div class="card">
         <div class="card-header">
-          <div class="card-title"><i class="fa fa-cake-candles" style="color:#B29661"></i> Mensagem de Aniversário</div>
+          <div class="card-title"><i class="fa fa-cake-candles" style="color:var(--color-primary)"></i> Mensagem de Aniversário</div>
         </div>
         <div class="card-body" style="max-width:560px">
           <p class="text-sm text-muted mb-4">
             Esta é a mensagem enviada pelo WhatsApp quando você clica em "Parabenizar" no card de aniversários do Dashboard.
-            Use a tag <strong style="color:#B29661">{nome}</strong> onde quiser que apareça o primeiro nome da aniversariante.
+            Use a tag <strong style="color:var(--color-primary)">{nome}</strong> onde quiser que apareça o primeiro nome da aniversariante.
           </p>
           <form id="birthday-msg-form">
             <div class="form-group">
@@ -270,6 +289,12 @@ function switchSettingsTab(tab, btn) {
     if (tab === 'profile') loadMyProfileForm();
   }
 
+  const appearancePanel = document.getElementById('settings-appearance');
+  if (appearancePanel) {
+    appearancePanel.classList.toggle('active', tab === 'appearance');
+    if (tab === 'appearance') loadThemeSettingsForm();
+  }
+
   const messagesPanel = document.getElementById('settings-messages');
   if (messagesPanel) {
     messagesPanel.classList.toggle('active', tab === 'messages');
@@ -280,6 +305,320 @@ function switchSettingsTab(tab, btn) {
   if (usersPanel) {
     usersPanel.classList.toggle('active', tab === 'users');
     if (tab === 'users') loadUsersTable();
+  }
+}
+
+// ===== PERSONALIZAÇÃO VISUAL (CORES E APARÊNCIA) =====
+const THEME_FIELDS_CONFIG = [
+  {
+    varName: '--color-primary',
+    pickerId: 'picker-primary',
+    label: 'Cor Principal / Destaques',
+    desc: 'Botões principais, abas ativas e links',
+    defaultVal: '#4E6754',
+  },
+  {
+    varName: '--color-logo-icon',
+    pickerId: 'picker-logo-icon',
+    label: 'Ícone da Marca / Mãozinha',
+    desc: 'Cor do logótipo de mãos na barra de navegação e cabeçalho',
+    defaultVal: '#C5A880',
+  },
+  {
+    varName: '--color-bg-main',
+    pickerId: 'picker-bg-main',
+    label: 'Fundo Geral do App',
+    desc: 'Cor de fundo principal das páginas (Creme / Off-white)',
+    defaultVal: '#FAF8F4',
+  },
+  {
+    varName: '--color-card',
+    pickerId: 'picker-card',
+    label: 'Fundo dos Cards e Caixas',
+    desc: 'Cards de agendamentos, tabelas e blocos',
+    defaultVal: '#FFFFFF',
+  },
+  {
+    varName: '--color-metric-card',
+    pickerId: 'picker-metric-card',
+    label: 'Cards de Indicadores',
+    desc: 'Fundo dos cards de resumo no topo do Dashboard',
+    defaultVal: '#A3B5A0',
+  },
+  {
+    varName: '--color-navbar',
+    pickerId: 'picker-navbar',
+    label: 'Barra Superior (Topbar)',
+    desc: 'Cabeçalho fixo no topo da tela',
+    defaultVal: '#FFFFFF',
+  },
+  {
+    varName: '--color-sidebar',
+    pickerId: 'picker-sidebar',
+    label: 'Menu Lateral (Sidebar)',
+    desc: 'Fundo da gaveta de navegação lateral',
+    defaultVal: '#4E6754',
+  },
+  {
+    varName: '--color-modal',
+    pickerId: 'picker-modal',
+    label: 'Fundo dos Modais',
+    desc: 'Janelas de confirmação e cadastros',
+    defaultVal: '#FFFFFF',
+  },
+  {
+    varName: '--color-text-main',
+    pickerId: 'picker-text-main',
+    label: 'Títulos e Texto Principal',
+    desc: 'Cabeçalhos, nomes de clientes e valores',
+    defaultVal: '#212F27',
+  },
+  {
+    varName: '--color-text-muted',
+    pickerId: 'picker-text-muted',
+    label: 'Subtítulos e Textos Secundários',
+    desc: 'Descrições, horários e rótulos auxiliares',
+    defaultVal: '#6B7280',
+  },
+];
+
+async function loadThemeSettingsForm() {
+  const container = document.getElementById('theme-customizer-container');
+  if (!container) return;
+
+  let currentColors = {};
+  let defaults = {};
+  THEME_FIELDS_CONFIG.forEach(f => {
+    defaults[f.varName] = f.defaultVal;
+    currentColors[f.varName] = f.defaultVal;
+  });
+  defaults.logo_icon = '#C5A880';
+
+  try {
+    const cached = localStorage.getItem('jtnails_theme_colors');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && typeof parsed === 'object') {
+        currentColors = { ...currentColors, ...parsed };
+        if (parsed.logo_icon && !parsed['--color-logo-icon']) {
+          currentColors['--color-logo-icon'] = parsed.logo_icon;
+        }
+      }
+    }
+  } catch (_) {}
+
+  try {
+    const res = await api.getThemeSettings();
+    if (res && res.defaults) defaults = { ...defaults, ...res.defaults };
+    if (res && res.colors) {
+      currentColors = { ...defaults, ...currentColors, ...res.colors };
+      if (res.colors.logo_icon && !res.colors['--color-logo-icon']) {
+        currentColors['--color-logo-icon'] = res.colors.logo_icon;
+      }
+    }
+  } catch (_) {}
+
+  container.innerHTML = `
+    <div class="theme-customizer-layout">
+      <div>
+        <div class="theme-pickers-grid">
+          ${THEME_FIELDS_CONFIG.map(field => {
+            const val = (currentColors[field.varName] || field.defaultVal).toUpperCase();
+            const inputId = field.pickerId || `picker-${field.varName.replace('--color-', '')}`;
+            return `
+              <div class="theme-picker-card">
+                <div class="theme-picker-info">
+                  <span class="theme-picker-label">${esc(field.label)}</span>
+                  <span class="theme-picker-desc">${esc(field.desc)}</span>
+                </div>
+                <div class="theme-picker-control">
+                  <span class="theme-hex-badge" data-hex-for="${field.varName}">${val}</span>
+                  <input
+                    type="color"
+                    id="${inputId}"
+                    class="theme-color-input"
+                    data-var="${field.varName}"
+                    value="${val}"
+                    title="Escolher ${esc(field.label)}"
+                  />
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+
+        <div class="theme-actions-bar">
+          <button type="button" class="btn btn-secondary" id="btn-restore-theme">
+            <i class="fa fa-rotate-left"></i> Restaurar Padrão JT Nails (Atelier Verde &amp; Creme)
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-save-theme">
+            <i class="fa fa-save"></i> Salvar Alterações de Cor
+          </button>
+        </div>
+      </div>
+
+      <!-- Mini-Mockup de Smartphone em Tempo Real -->
+      <div class="theme-mockup-wrapper">
+        <div class="theme-mockup-caption">
+          <i class="fa fa-mobile-screen-button"></i> Prévia ao Vivo
+        </div>
+        <div class="theme-phone-mockup">
+          <div class="theme-phone-notch"></div>
+          <div class="theme-phone-screen">
+            <div class="theme-phone-navbar">
+              <div class="theme-phone-brand">
+                <i class="fa fa-hand-sparkles"></i>
+                <span>Atelier Nails</span>
+              </div>
+              <span class="theme-phone-cta-mini">+ Agendar</span>
+            </div>
+            <div class="theme-phone-body">
+              <div class="theme-phone-sidebar">
+                <div class="theme-phone-nav-pill active"><i class="fa fa-home"></i></div>
+                <div class="theme-phone-nav-pill"><i class="fa fa-calendar"></i></div>
+                <div class="theme-phone-nav-pill"><i class="fa fa-users"></i></div>
+                <div class="theme-phone-nav-pill"><i class="fa fa-paintbrush"></i></div>
+                <div class="theme-phone-nav-pill"><i class="fa fa-cog"></i></div>
+              </div>
+              <div class="theme-phone-content">
+                <div class="theme-phone-metric-row">
+                  <div class="theme-phone-metric">
+                    <div class="theme-phone-metric-icon"><i class="fa fa-calendar-check"></i></div>
+                    <div>
+                      <div class="theme-phone-metric-val">12</div>
+                      <div class="theme-phone-metric-lbl">Hoje</div>
+                    </div>
+                  </div>
+                  <div class="theme-phone-metric">
+                    <div class="theme-phone-metric-icon"><i class="fa fa-coins"></i></div>
+                    <div>
+                      <div class="theme-phone-metric-val">R$ 840</div>
+                      <div class="theme-phone-metric-lbl">Receita</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="theme-phone-card">
+                  <div class="theme-phone-card-title">14:00 • Carolina Mendes</div>
+                  <div class="theme-phone-card-sub">Alongamento em Gel + Esmaltação</div>
+                  <span class="theme-phone-badge">Confirmado • R$ 160,00</span>
+                </div>
+
+                <div class="theme-phone-card">
+                  <div class="theme-phone-card-title">16:00 • Beatriz Souza</div>
+                  <div class="theme-phone-card-sub">Manicure + Pedicure Tradicional</div>
+                </div>
+
+                <div class="theme-phone-modal-preview">
+                  <div class="theme-phone-modal-hdr">
+                    <span>Confirmar Atendimento</span>
+                    <i class="fa fa-times" style="color:var(--color-text-muted)"></i>
+                  </div>
+                  <div class="theme-phone-btn">Salvar Alterações</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const inputs = container.querySelectorAll('.theme-color-input');
+  const previewMockup = container.querySelector('.theme-phone-mockup');
+
+  function collectFormColors() {
+    const map = {};
+    inputs.forEach(inp => {
+      map[inp.dataset.var] = inp.value.toUpperCase();
+    });
+    if (map['--color-logo-icon']) {
+      map.logo_icon = map['--color-logo-icon'];
+    }
+    return map;
+  }
+
+  function applyThemeColorsToPreview(colors) {
+    if (!previewMockup || !colors) return;
+    Object.entries(colors).forEach(([key, val]) => {
+      if (key.startsWith('--') && typeof val === 'string' && /^#[0-9A-Fa-f]{6}$/.test(val.trim())) {
+        previewMockup.style.setProperty(key, val.trim());
+      }
+    });
+    if (colors.logo_icon && !colors['--color-logo-icon'] && /^#[0-9A-Fa-f]{6}$/.test(colors.logo_icon.trim())) {
+      previewMockup.style.setProperty('--color-logo-icon', colors.logo_icon.trim());
+    }
+    if (colors['--color-primary'] && typeof darkenHex === 'function') {
+      previewMockup.style.setProperty('--color-primary-hover', darkenHex(colors['--color-primary'], 0.18));
+    }
+  }
+
+  // Inicializa o mini-mockup com as cores carregadas nos seletores
+  applyThemeColorsToPreview(collectFormColors());
+
+  inputs.forEach(inp => {
+    inp.addEventListener('input', () => {
+      const varName = inp.dataset.var;
+      const val = inp.value.toUpperCase();
+      const badge = container.querySelector(`[data-hex-for="${varName}"]`);
+      if (badge) badge.textContent = val;
+      // Atualiza SOMENTE a prévia (mini-smartphone), sem alterar a tela principal até clicar em Salvar
+      applyThemeColorsToPreview(collectFormColors());
+    });
+  });
+
+  const btnSave = document.getElementById('btn-save-theme');
+  if (btnSave) {
+    btnSave.addEventListener('click', async () => {
+      const colors = collectFormColors();
+      btnSave.disabled = true;
+      try {
+        const res = await api.updateThemeSettings({ colors });
+        const saved = (res && res.colors) ? { ...colors, ...res.colors } : colors;
+        if (colors['--color-logo-icon']) {
+          saved['--color-logo-icon'] = colors['--color-logo-icon'];
+          saved.logo_icon = colors['--color-logo-icon'];
+        }
+        applyThemeColorsToPreview(saved);
+        if (typeof applyThemeColorsToRoot === 'function') applyThemeColorsToRoot(saved);
+        localStorage.setItem('jtnails_theme_colors', JSON.stringify(saved));
+        toast('Cores e aparência salvas com sucesso!', 'success');
+      } catch (err) {
+        toast(err.message || 'Erro ao salvar cores', 'error');
+      } finally {
+        btnSave.disabled = false;
+      }
+    });
+  }
+
+  const btnRestore = document.getElementById('btn-restore-theme');
+  if (btnRestore) {
+    btnRestore.addEventListener('click', async () => {
+      defaults['--color-logo-icon'] = '#C5A880';
+      defaults.logo_icon = '#C5A880';
+      defaults['--color-primary'] = '#4E6754';
+      defaults['--color-bg-main'] = '#FAF8F4';
+      defaults['--color-sidebar'] = '#4E6754';
+      inputs.forEach(inp => {
+        const defVal = (defaults[inp.dataset.var] || '#FFFFFF').toUpperCase();
+        inp.value = defVal;
+        const badge = container.querySelector(`[data-hex-for="${inp.dataset.var}"]`);
+        if (badge) badge.textContent = defVal;
+      });
+      applyThemeColorsToPreview(defaults);
+      if (typeof applyThemeColorsToRoot === 'function') applyThemeColorsToRoot(defaults);
+      btnRestore.disabled = true;
+      try {
+        const res = await api.updateThemeSettings({ colors: defaults });
+        const saved = (res && res.colors) ? res.colors : defaults;
+        localStorage.setItem('jtnails_theme_colors', JSON.stringify(saved));
+        toast('Padrão Atelier JT Nails restaurado!', 'success');
+      } catch (err) {
+        toast(err.message || 'Erro ao restaurar padrão', 'error');
+      } finally {
+        btnRestore.disabled = false;
+      }
+    });
   }
 }
 

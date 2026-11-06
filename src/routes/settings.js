@@ -32,6 +32,84 @@ const DEFAULT_RESET_MSG =
   '\uD83D\uDC49 {url}\n\n' +
   'Se precisar de algo, estamos \u00e0 disposi\u00e7\u00e3o!';
 
+// Paleta padrão nativa do JT Nails (Atelier Verde & Creme)
+const DEFAULT_THEME_COLORS = {
+  '--color-primary': '#4E6754',
+  '--color-logo-icon': '#C5A880',
+  '--color-bg-main': '#FAF8F4',
+  '--color-card': '#FFFFFF',
+  '--color-metric-card': '#A3B5A0',
+  '--color-navbar': '#FFFFFF',
+  '--color-sidebar': '#4E6754',
+  '--color-modal': '#FFFFFF',
+  '--color-text-main': '#212F27',
+  '--color-text-muted': '#6B7280',
+  logo_icon: '#C5A880',
+};
+
+// GET /api/settings/theme — público para carregar o tema ao inicializar o app
+router.get('/theme', async (req, res) => {
+  try {
+    const row = await getOne(`SELECT value FROM settings WHERE key = 'theme_colors'`);
+    let colors = { ...DEFAULT_THEME_COLORS };
+    if (row && row.value) {
+      try {
+        const parsed = JSON.parse(row.value);
+        if (parsed && typeof parsed === 'object') {
+          for (const k of Object.keys(DEFAULT_THEME_COLORS)) {
+            if (typeof parsed[k] === 'string' && /^#[0-9A-Fa-f]{6}$/.test(parsed[k].trim())) {
+              colors[k] = parsed[k].trim().toUpperCase();
+            }
+          }
+          const logoHex = parsed['--color-logo-icon'] || parsed.logo_icon;
+          if (typeof logoHex === 'string' && /^#[0-9A-Fa-f]{6}$/.test(logoHex.trim())) {
+            const normLogo = logoHex.trim().toUpperCase();
+            colors['--color-logo-icon'] = normLogo;
+            colors.logo_icon = normLogo;
+          }
+        }
+      } catch (_) {}
+    }
+    res.json({ colors, defaults: DEFAULT_THEME_COLORS });
+  } catch (e) {
+    console.error('[settings/theme GET]', e.message);
+    res.json({ colors: DEFAULT_THEME_COLORS, defaults: DEFAULT_THEME_COLORS });
+  }
+});
+
+// PUT /api/settings/theme — apenas admin/master pode salvar o tema personalizado
+router.put('/theme', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const incoming = req.body && req.body.colors ? req.body.colors : req.body;
+    const sanitized = { ...DEFAULT_THEME_COLORS };
+    if (incoming && typeof incoming === 'object') {
+      for (const k of Object.keys(DEFAULT_THEME_COLORS)) {
+        if (typeof incoming[k] === 'string' && /^#[0-9A-Fa-f]{6}$/.test(incoming[k].trim())) {
+          sanitized[k] = incoming[k].trim().toUpperCase();
+        }
+      }
+      const logoHex = incoming['--color-logo-icon'] || incoming.logo_icon;
+      if (typeof logoHex === 'string' && /^#[0-9A-Fa-f]{6}$/.test(logoHex.trim())) {
+        const normLogo = logoHex.trim().toUpperCase();
+        sanitized['--color-logo-icon'] = normLogo;
+        sanitized.logo_icon = normLogo;
+      }
+    }
+
+    const jsonVal = JSON.stringify(sanitized);
+    await query(`
+      INSERT INTO settings (key, value, updated_at)
+      VALUES ('theme_colors', $1, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()
+    `, [jsonVal]);
+
+    res.json({ message: 'Tema visual salvo com sucesso!', colors: sanitized });
+  } catch (e) {
+    console.error('[settings/theme PUT]', e.message);
+    res.status(500).json({ error: 'Erro ao salvar tema visual' });
+  }
+});
+
 // GET /api/settings/birthday-message — qualquer usuário autenticado pode ler
 // (o dashboard precisa da mensagem para montar o link de WhatsApp)
 router.get('/birthday-message', authenticateToken, async (req, res) => {

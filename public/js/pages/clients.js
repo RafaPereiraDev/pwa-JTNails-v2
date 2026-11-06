@@ -106,7 +106,7 @@ async function renderClientsTable(search = '') {
                         <i class="fab fa-whatsapp"></i>
                       </button>` : ''}
                       ${isAdminLevel() ? (inativo ? `
-                      <button class="btn btn-xs" style="background:#4B6651;color:#fff" onclick="reactivateClient(${c.id})" title="Reativar Cliente">
+                      <button class="btn btn-xs" style="background:var(--color-primary);color:#fff" onclick="reactivateClient(${c.id})" title="Reativar Cliente">
                         <i class="fa fa-rotate-left"></i>
                       </button>` : `
                       <button class="btn btn-danger btn-xs" onclick="deleteClientConfirm(${c.id})" title="Inativar ou excluir">
@@ -431,7 +431,7 @@ async function showWelcomeModal(name, phone, senha) {
 
   openModal('Cliente cadastrada! ' + String.fromCodePoint(0x1F389), `
     <div style="text-align:center;margin-bottom:16px">
-      <div style="font-size:44px;line-height:1;color:#4E6754">
+      <div style="font-size:44px;line-height:1;color:var(--color-primary)">
         <i class="fa fa-circle-check"></i>
       </div>
       <p style="color:var(--gray-600);line-height:1.5;margin-top:8px">

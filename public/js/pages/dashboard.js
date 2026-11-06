@@ -25,17 +25,17 @@ async function loadDashboard() {
 
       <div class="quick-actions mb-6">
         <button class="quick-btn" onclick="openNewAppointment()">
-          <i class="fa fa-calendar-plus" style="color:var(--primary)"></i> Novo Agendamento
+          <i class="fa fa-calendar-plus"></i> Novo Agendamento
         </button>
         <button class="quick-btn" onclick="openNewClientModal()">
-          <i class="fa fa-user-plus" style="color:var(--secondary)"></i> Novo Cliente
+          <i class="fa fa-user-plus"></i> Novo Cliente
         </button>
         ${currentUser.role !== 'professional' ? `
         <button class="quick-btn" onclick="navigateTo('services')">
-          <i class="fa fa-paintbrush" style="color:var(--success)"></i> Ver Serviços
+          <i class="fa fa-paintbrush"></i> Ver Serviços
         </button>` : ''}
         <button class="quick-btn" onclick="navigateTo('agenda')">
-          <i class="fa fa-calendar" style="color:var(--info)"></i> Ver Agenda
+          <i class="fa fa-calendar"></i> Ver Agenda
         </button>
       </div>
 
