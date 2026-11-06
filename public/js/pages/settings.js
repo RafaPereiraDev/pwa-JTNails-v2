@@ -104,12 +104,9 @@ async function loadSettings() {
         <div class="card-header">
           <div class="card-title"><i class="fa fa-palette" style="color:var(--primary)"></i> Personalização Visual (Cores e Aparência)</div>
         </div>
-        <div class="card-body">
-          <p class="text-sm text-muted mb-4">
-            Personalize as cores do sistema. Ao escolher uma cor abaixo, a prévia no mini-smartphone ao lado muda instantaneamente. Clique em <strong>Salvar Alterações de Cor</strong> para aplicar no aplicativo.
-          </p>
+        <div class="card-body" style="padding:0">
           <div id="theme-customizer-container">
-            <div class="loading"><i class="fa fa-spinner fa-spin"></i></div>
+            <div class="loading" style="padding:24px"><i class="fa fa-spinner fa-spin"></i></div>
           </div>
         </div>
       </div>
@@ -420,19 +417,31 @@ async function loadThemeSettingsForm() {
 
   container.innerHTML = `
     <div class="theme-customizer-layout">
-      <div>
-        <div class="theme-pickers-grid">
+      <div class="theme-customizer-main">
+        <p class="text-sm text-muted" style="margin:0 0 4px 0;line-height:1.45">
+          Personalize as cores do sistema. Ao escolher uma cor abaixo, a prévia no mini-smartphone muda instantaneamente. Clique em <strong>Salvar Alterações de Cor</strong> para aplicar no aplicativo.
+        </p>
+
+        <div class="theme-pickers-list">
           ${THEME_FIELDS_CONFIG.map(field => {
             const val = (currentColors[field.varName] || field.defaultVal).toUpperCase();
             const inputId = field.pickerId || `picker-${field.varName.replace('--color-', '')}`;
             return `
               <div class="theme-picker-card">
                 <div class="theme-picker-info">
-                  <span class="theme-picker-label">${esc(field.label)}</span>
-                  <span class="theme-picker-desc">${esc(field.desc)}</span>
+                  <h4 class="theme-picker-title">${esc(field.label)}</h4>
+                  <p class="theme-picker-desc">${esc(field.desc)}</p>
                 </div>
-                <div class="theme-picker-control">
-                  <span class="theme-hex-badge" data-hex-for="${field.varName}">${val}</span>
+                <div class="theme-picker-controls">
+                  <input
+                    type="text"
+                    class="theme-hex-input"
+                    data-hex-for="${field.varName}"
+                    value="${val}"
+                    maxlength="7"
+                    spellcheck="false"
+                    aria-label="Código hexadecimal de ${esc(field.label)}"
+                  />
                   <input
                     type="color"
                     id="${inputId}"
@@ -448,11 +457,11 @@ async function loadThemeSettingsForm() {
         </div>
 
         <div class="theme-actions-bar">
-          <button type="button" class="btn btn-secondary" id="btn-restore-theme">
-            <i class="fa fa-rotate-left"></i> Restaurar Padrão JT Nails (Atelier Verde &amp; Creme)
-          </button>
           <button type="button" class="btn btn-primary" id="btn-save-theme">
             <i class="fa fa-save"></i> Salvar Alterações de Cor
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-restore-theme">
+            <i class="fa fa-rotate-left"></i> Restaurar Padrão JT Nails (Atelier Verde &amp; Creme)
           </button>
         </div>
       </div>
@@ -525,6 +534,7 @@ async function loadThemeSettingsForm() {
   `;
 
   const inputs = container.querySelectorAll('.theme-color-input');
+  const hexInputs = container.querySelectorAll('.theme-hex-input');
   const previewMockup = container.querySelector('.theme-phone-mockup');
 
   function collectFormColors() {
@@ -560,10 +570,31 @@ async function loadThemeSettingsForm() {
     inp.addEventListener('input', () => {
       const varName = inp.dataset.var;
       const val = inp.value.toUpperCase();
-      const badge = container.querySelector(`[data-hex-for="${varName}"]`);
-      if (badge) badge.textContent = val;
+      const hexInp = container.querySelector(`[data-hex-for="${varName}"]`);
+      if (hexInp) {
+        if ('value' in hexInp) hexInp.value = val;
+        else hexInp.textContent = val;
+      }
       // Atualiza SOMENTE a prévia (mini-smartphone), sem alterar a tela principal até clicar em Salvar
       applyThemeColorsToPreview(collectFormColors());
+    });
+  });
+
+  hexInputs.forEach(hexInp => {
+    hexInp.addEventListener('input', () => {
+      let raw = hexInp.value.trim().toUpperCase();
+      if (raw && !raw.startsWith('#')) raw = '#' + raw;
+      if (/^#[0-9A-F]{6}$/.test(raw)) {
+        const varName = hexInp.getAttribute('data-hex-for');
+        const colorInp = container.querySelector(`.theme-color-input[data-var="${varName}"]`);
+        if (colorInp) colorInp.value = raw;
+        applyThemeColorsToPreview(collectFormColors());
+      }
+    });
+    hexInp.addEventListener('blur', () => {
+      const varName = hexInp.getAttribute('data-hex-for');
+      const colorInp = container.querySelector(`.theme-color-input[data-var="${varName}"]`);
+      if (colorInp) hexInp.value = colorInp.value.toUpperCase();
     });
   });
 
@@ -602,8 +633,11 @@ async function loadThemeSettingsForm() {
       inputs.forEach(inp => {
         const defVal = (defaults[inp.dataset.var] || '#FFFFFF').toUpperCase();
         inp.value = defVal;
-        const badge = container.querySelector(`[data-hex-for="${inp.dataset.var}"]`);
-        if (badge) badge.textContent = defVal;
+        const hexInp = container.querySelector(`[data-hex-for="${inp.dataset.var}"]`);
+        if (hexInp) {
+          if ('value' in hexInp) hexInp.value = defVal;
+          else hexInp.textContent = defVal;
+        }
       });
       applyThemeColorsToPreview(defaults);
       if (typeof applyThemeColorsToRoot === 'function') applyThemeColorsToRoot(defaults);
