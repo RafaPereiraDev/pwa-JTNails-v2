@@ -9,7 +9,7 @@ async function loadReports() {
       <h2>Relatórios</h2>
     </div>
 
-    <div class="tabs mb-6">
+    <div class="tabs reports-tabs mb-6">
       <button class="tab-btn active" onclick="switchReportTab('appointments', this)">Atendimentos</button>
       <button class="tab-btn" onclick="switchReportTab('financial', this)">Financeiro</button>
       <button class="tab-btn" onclick="switchReportTab('inactive', this)">Clientes Inativas</button>
@@ -17,24 +17,24 @@ async function loadReports() {
 
     <!-- Appointments Report -->
     <div id="report-appointments" class="tab-panel active">
-      <div class="card mb-4">
+      <div class="card card-filter mb-4">
         <div class="card-body">
-          <div class="report-filters">
-            <div class="form-group">
+          <div class="report-filters reports-filter filters-grid">
+            <div class="form-group filter-group">
               <label>Data início</label>
               <input type="date" id="ra-start" value="${y}-${m}-01" />
             </div>
-            <div class="form-group">
+            <div class="form-group filter-group">
               <label>Data fim</label>
               <input type="date" id="ra-end" value="${today}" />
             </div>
-            <div class="form-group" style="min-width:180px" id="ra-prof-wrap">
+            <div class="form-group filter-group" id="ra-prof-wrap">
               <label>Profissional</label>
               <select id="ra-professional">
                 <option value="">Todas</option>
               </select>
             </div>
-            <div class="form-group" style="min-width:180px">
+            <div class="form-group filter-group">
               <label>Status</label>
               <select id="ra-status">
                 <option value="">Todos</option>
@@ -45,7 +45,7 @@ async function loadReports() {
                 <option value="no_show">Não compareceu</option>
               </select>
             </div>
-            <button class="btn btn-primary" onclick="runAppointmentsReport()">
+            <button class="btn btn-primary btn-search" onclick="runAppointmentsReport()">
               <i class="fa fa-search"></i> Buscar
             </button>
           </div>
@@ -56,24 +56,24 @@ async function loadReports() {
 
     <!-- Financial Report -->
     <div id="report-financial" class="tab-panel">
-      <div class="card mb-4">
+      <div class="card card-filter mb-4">
         <div class="card-body">
-          <div class="report-filters">
-            <div class="form-group">
+          <div class="report-filters reports-filter filters-grid">
+            <div class="form-group filter-group">
               <label>Data início</label>
               <input type="date" id="rf-start" value="${y}-${m}-01" />
             </div>
-            <div class="form-group">
+            <div class="form-group filter-group">
               <label>Data fim</label>
               <input type="date" id="rf-end" value="${today}" />
             </div>
-            <div class="form-group" style="min-width:180px" id="rf-prof-wrap">
+            <div class="form-group filter-group" id="rf-prof-wrap">
               <label>Profissional</label>
               <select id="rf-professional">
                 <option value="">Todas</option>
               </select>
             </div>
-            <button class="btn btn-primary" onclick="runFinancialReport()">
+            <button class="btn btn-primary btn-search" onclick="runFinancialReport()">
               <i class="fa fa-search"></i> Buscar
             </button>
           </div>
@@ -84,10 +84,10 @@ async function loadReports() {
 
     <!-- Inactive Clients Report -->
     <div id="report-inactive" class="tab-panel">
-      <div class="card mb-4">
+      <div class="card card-filter mb-4">
         <div class="card-body">
-          <div class="report-filters">
-            <div class="form-group">
+          <div class="report-filters reports-filter filters-grid">
+            <div class="form-group filter-group">
               <label>Inativas há mais de</label>
               <select id="ri-days">
                 <option value="30">30 dias</option>
@@ -97,7 +97,7 @@ async function loadReports() {
                 <option value="365">1 ano</option>
               </select>
             </div>
-            <button class="btn btn-primary" onclick="runInactiveReport()">
+            <button class="btn btn-primary btn-search" onclick="runInactiveReport()">
               <i class="fa fa-search"></i> Buscar
             </button>
           </div>

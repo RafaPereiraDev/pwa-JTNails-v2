@@ -3584,35 +3584,52 @@ div[onclick*="openEditAppointment"].appt-block {
 
 /* ===== TABS ===== */
 .tabs,
-.settings-tabs {
-  display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none; /* Firefox */
-  gap: 0;
-  border-bottom: 2px solid var(--gray-200);
-  margin-bottom: 24px;
+.settings-tabs,
+.reports-tabs,
+.nav-tabs {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important; /* IMPEDE A BARRA DE MEXER PARA CIMA/BAIXO */
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-y: contain !important;
+  touch-action: pan-x !important;
+  align-items: flex-end !important;
+  height: 48px !important;
+  max-height: 48px !important;
+  gap: 16px !important;
+  padding: 0 16px !important;
+  margin-bottom: 20px !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+  scrollbar-width: none !important; /* Firefox */
 }
 
 .tabs::-webkit-scrollbar,
-.settings-tabs::-webkit-scrollbar {
-  display: none;
+.settings-tabs::-webkit-scrollbar,
+.reports-tabs::-webkit-scrollbar,
+.nav-tabs::-webkit-scrollbar {
+  display: none !important;
 }
 
 .tab-btn,
 .settings-tab-btn,
 .tab-item,
+.tabs button,
 .tabs-nav button {
-  padding: 10px 20px;
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+  height: 100% !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 0 8px 10px 8px !important;
+  margin-bottom: 0 !important;
+  box-sizing: border-box !important;
   font-size: 14px;
   font-weight: 600;
   color: var(--gray-500);
   border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
   transition: all var(--transition);
-  flex-shrink: 0;
-  white-space: nowrap;
 }
 
 .tab-btn.active {
@@ -3969,34 +3986,84 @@ div[onclick*="openEditAppointment"].appt-block {
 
 /* ===== FILTROS DE RELATÓRIOS (responsivo) ===== */
 /* Desktop: campos e botão "Buscar" lado a lado, alinhados pela base. */
-.report-filters {
+.report-filters,
+.reports-filter,
+.filters-grid {
   display: flex;
   gap: 16px;
   align-items: flex-end;
   flex-wrap: wrap;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.report-filters .form-group {
+.report-filters .form-group,
+.reports-filter .filter-group {
   margin: 0;
-  min-width: 140px;
+  min-width: 160px;
+  flex: 1 1 160px;
+  box-sizing: border-box;
 }
 
 /* Mobile: empilha tudo em coluna e o botão ocupa a largura total. */
 @media (max-width: 768px) {
-  .report-filters {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
+  .report-filters,
+  .reports-filter,
+  .filters-grid,
+  .filter-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    gap: 12px !important;
   }
 
-  .report-filters .form-group {
-    min-width: 0;
-    width: 100%;
+  .report-filters .form-group,
+  .report-filters .filter-group,
+  .reports-filter .filter-group,
+  .reports-filter .form-group,
+  .filters-grid .filter-group,
+  .filters-grid .form-group {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
   }
 
-  .report-filters .btn {
-    width: 100%;
-    margin-top: 4px;
+  .filter-group input,
+  .filter-group select,
+  .report-filters input[type="date"],
+  .report-filters select,
+  .reports-filter input[type="date"],
+  .reports-filter select {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    -webkit-min-logical-width: 0 !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    height: 44px !important;
+    font-size: 16px !important; /* evita auto-zoom no iOS */
+    margin: 0 !important;
+    text-align: left !important;
+  }
+
+  .report-filters .btn,
+  .report-filters .btn-search,
+  .reports-filter .btn-search,
+  .reports-filter button[type="submit"],
+  .reports-filter .btn {
+    width: 100% !important;
+    height: 44px !important;
+    margin-top: 4px !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
   }
 }
 

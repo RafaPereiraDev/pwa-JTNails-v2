@@ -1,5 +1,5 @@
 // ===== SERVICE WORKER — Juliana & Tainara Atelier Nails =====
-const CACHE_NAME = 'jtnails-v1.3.2';
+const CACHE_NAME = 'jtnails-v1.3.3';
 
 // Assets estáticos que serão cacheados na instalação
 const STATIC_ASSETS = [
