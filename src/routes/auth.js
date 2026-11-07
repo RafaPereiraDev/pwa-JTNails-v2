@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
-const { getOne }                         = require('../database/db');
+const { query, getOne }                  = require('../database/db');
 const { JWT_SECRET, authenticateToken }  = require('../middleware/auth');
 
 // POST /api/auth/login
@@ -89,6 +89,8 @@ router.post('/change-password', authenticateToken, async (req, res) => {
 
     // Busca só o hash para comparar — não mantém dados desnecessários em memória
     const userRow = await getOne('SELECT id, password FROM users WHERE id = $1', [req.user.id]);
+    if (!userRow)
+      return res.status(404).json({ error: 'Usuário não encontrado' });
     if (!bcrypt.compareSync(current_password, userRow.password))
       return res.status(401).json({ error: 'Senha atual incorreta' });
 
