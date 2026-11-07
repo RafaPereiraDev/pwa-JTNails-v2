@@ -457,11 +457,11 @@ async function loadThemeSettingsForm() {
         </div>
 
         <div class="theme-actions-bar">
-          <button type="button" class="btn btn-primary" id="btn-save-theme">
-            <i class="fa fa-save"></i> Salvar Alterações de Cor
+          <button type="button" class="btn btn-primary btn-theme-save" id="btn-save-theme">
+            <i class="fas fa-save"></i> <span>Salvar Alterações de Cor</span>
           </button>
-          <button type="button" class="btn btn-secondary" id="btn-restore-theme">
-            <i class="fa fa-rotate-left"></i> Restaurar Padrão JT Nails (Atelier Verde &amp; Creme)
+          <button type="button" class="btn btn-secondary btn-theme-reset" id="btn-reset-theme">
+            <i class="fas fa-undo-alt"></i> <span>Restaurar Cores Originais</span>
           </button>
         </div>
       </div>
@@ -622,7 +622,7 @@ async function loadThemeSettingsForm() {
     });
   }
 
-  const btnRestore = document.getElementById('btn-restore-theme');
+  const btnRestore = document.getElementById('btn-reset-theme') || document.getElementById('btn-restore-theme');
   if (btnRestore) {
     btnRestore.addEventListener('click', async () => {
       defaults['--color-logo-icon'] = '#C5A880';
